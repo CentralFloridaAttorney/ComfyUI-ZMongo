@@ -1,0 +1,187 @@
+{
+  "groups": [
+    {
+      "name": "Image",
+      "presets": [
+        {
+          "id": "ace_turbo",
+          "label": "ACE Turbo",
+          "updates": {
+            "MAIN_MODEL": {
+              "ckpt_name": "ace_step_1.5_turbo_aio.safetensors"
+            },
+            "MAIN_SAMPLER": {
+              "steps": 6,
+              "cfg": 1.8,
+              "sampler_name": "euler",
+              "scheduler": "sgm_uniform"
+            },
+            "IMAGE_SETTINGS": {
+              "width": 832,
+              "height": 1216
+            }
+          }
+        },
+        {
+          "id": "sdxl_fast_4",
+          "label": "SDXL Lightning 4",
+          "updates": {
+            "MAIN_MODEL": {
+              "ckpt_name": "Juggernaut-XI-byRunDiffusion.safetensors"
+            },
+            "MAIN_LORA": {
+              "lora_name": "SDXL-Lightning/sdxl_lightning_4step_lora.safetensors",
+              "strength_model": 1.0,
+              "strength_clip": 1.0
+            },
+            "MAIN_SAMPLER": {
+              "steps": 4,
+              "cfg": 1.5,
+              "sampler_name": "euler",
+              "scheduler": "sgm_uniform"
+            },
+            "IMAGE_SETTINGS": {
+              "width": 832,
+              "height": 1216
+            }
+          }
+        },
+        {
+          "id": "qwen_edit_4",
+          "label": "Qwen Edit 4",
+          "updates": {
+            "MAIN_LORA": {
+              "lora_name": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+              "strength_model": 1.0,
+              "strength_clip": 1.0
+            },
+            "MAIN_SAMPLER": {
+              "steps": 4,
+              "cfg": 1.5
+            }
+          }
+        },
+        {
+          "id": "qwen_edit_8",
+          "label": "Qwen Edit 8",
+          "updates": {
+            "MAIN_LORA": {
+              "lora_name": "Qwen-Image-Edit-2509-Lightning-8steps-V1.0-bf16.safetensors",
+              "strength_model": 1.0,
+              "strength_clip": 1.0
+            },
+            "MAIN_SAMPLER": {
+              "steps": 8,
+              "cfg": 2.0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Video",
+      "presets": [
+        {
+          "id": "ltx_fast",
+          "label": "LTX Fast",
+          "updates": {
+            "VIDEO_MODEL": {
+              "ckpt_name": "ltx-video-2b-v0.9.safetensors"
+            },
+            "VIDEO_SAMPLER": {
+              "steps": 8,
+              "cfg": 1.5
+            },
+            "VIDEO_SETTINGS": {
+              "width": 704,
+              "height": 480,
+              "frames": 21,
+              "fps": 16
+            }
+          }
+        },
+        {
+          "id": "wan_low_noise_4",
+          "label": "Wan Low 4",
+          "updates": {
+            "VIDEO_UNET": {
+              "unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
+            },
+            "VIDEO_LORA": {
+              "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+              "strength_model": 1.0,
+              "strength_clip": 1.0
+            },
+            "VIDEO_SAMPLER": {
+              "steps": 4,
+              "cfg": 1.5
+            },
+            "VIDEO_SETTINGS": {
+              "width": 704,
+              "height": 480,
+              "frames": 21,
+              "fps": 16
+            }
+          }
+        },
+        {
+          "id": "wan_high_noise_4",
+          "label": "Wan High 4",
+          "updates": {
+            "VIDEO_UNET": {
+              "unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+            },
+            "VIDEO_LORA": {
+              "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+              "strength_model": 1.0,
+              "strength_clip": 1.0
+            },
+            "VIDEO_SAMPLER": {
+              "steps": 4,
+              "cfg": 1.5
+            },
+            "VIDEO_SETTINGS": {
+              "width": 704,
+              "height": 480,
+              "frames": 21,
+              "fps": 16
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Actions",
+      "presets": [
+        {
+          "id": "draft_mode",
+          "label": "Draft Mode",
+          "updates": {
+            "MAIN_SAMPLER": {
+              "steps": 4,
+              "cfg": 1.5
+            },
+            "VIDEO_SAMPLER": {
+              "steps": 4,
+              "cfg": 1.5
+            }
+          }
+        },
+        {
+          "id": "quality_mode",
+          "label": "Quality Mode",
+          "updates": {
+            "MAIN_SAMPLER": {
+              "steps": 12,
+              "cfg": 3.0
+            },
+            "VIDEO_SAMPLER": {
+              "steps": 12,
+              "cfg": 3.0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

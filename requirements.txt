@@ -1,0 +1,15 @@
+pymongo
+motor
+numpy
+pandas
+langchain
+langchain-community
+sentence-transformers
+hnswlib; platform_machine != "ARM64" or platform_system != "Windows"
+tiktoken
+google-genai
+python-snappy
+docx2txt
+nest_asyncio
+tkhtmlview
+beautifulsoup4
