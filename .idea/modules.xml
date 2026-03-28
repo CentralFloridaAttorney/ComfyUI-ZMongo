@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/ComfyUI_ZMongo.iml" filepath="$PROJECT_DIR$/.idea/ComfyUI_ZMongo.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/ComfyUI-ZMongo.iml" filepath="$PROJECT_DIR$/.idea/ComfyUI-ZMongo.iml" />
     </modules>
   </component>
 </project>
