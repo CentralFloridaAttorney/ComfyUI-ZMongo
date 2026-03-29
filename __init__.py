@@ -22,7 +22,7 @@ try:
 except ImportError as e:
     print(f"ZMongo Load Error: {e}")
     # Fallback attempt if they are in a sub-file called nodes.py
-    from zmongo_nodes import (
+    from src.zmongo_nodes import (
         ZMongoConfigNode,
         ZMongoOperationsNode,
         ZMongoRecordSplitter,
