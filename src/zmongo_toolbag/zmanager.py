@@ -11,7 +11,7 @@ from pathlib import Path
 from tkinter import ttk, filedialog, Tk, Listbox, Entry, Button, Frame, Toplevel, END, BOTH, LEFT, RIGHT, Y, X, TOP
 from tkinter.scrolledtext import ScrolledText
 
-from bson import errors
+from bson import errors, BSON, decode_file_iter
 from bson.objectid import ObjectId
 from bson import json_util
 from dotenv import load_dotenv
@@ -19,21 +19,15 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient, InsertOne, ReplaceOne
 from pymongo.errors import BulkWriteError
 
+from preset_api import HAVE_BSON_STREAM
+from data_processor import DataProcessor
+from safe_result import SafeResult
+from zmongo import ZMongo
+
 # --- Local Toolbag Imports ---
 # Assuming these exist in your project structure
-try:
-    from safe_result import SafeResult
-    from data_processor import DataProcessor
-    from zmongo import ZMongo
-except ImportError:
-    logging.warning("ZMongo toolbag modules not found. Ensure paths are correct.")
 
-try:
-    from bson import BSON, decode_file_iter
 
-    HAVE_BSON_STREAM = True
-except Exception:
-    HAVE_BSON_STREAM = False
 
 load_dotenv(Path.home() / '.resources' / '.env')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

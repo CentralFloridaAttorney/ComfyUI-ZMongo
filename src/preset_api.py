@@ -9,9 +9,9 @@ except Exception:
     from zmongo_manager import ZMongoManager
 
 try:
-    from .zmongo_toolbag.data_processing import DataProcessor
+    from .zmongo_toolbag.data_processor import DataProcessor
 except Exception:
-    from zmongo_toolbag.data_processing import DataProcessor
+    from zmongo_toolbag.data_processor import DataProcessor
 
 try:
     from .zmongo_toolbag.zembedder import ZEmbedder

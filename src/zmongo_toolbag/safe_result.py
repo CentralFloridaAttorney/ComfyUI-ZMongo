@@ -3,7 +3,7 @@ import json
 from typing import Any, Dict, Optional, Union
 from quart import jsonify, Response
 
-from zmongo_toolbag.data_processing import DataProcessor
+from zmongo_toolbag.data_processor import DataProcessor
 
 logger = logging.getLogger(__name__)
 

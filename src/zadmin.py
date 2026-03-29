@@ -4,8 +4,8 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-from .zmongo_admin_tabs import ZMongoAdminTabs
-from .zmongo_manager import ZMongoManager
+from zmongo_admin_tabs import ZMongoAdminTabs
+from zmongo_manager import ZMongoManager
 
 
 class ZAdminGUI(tk.Tk):
@@ -36,7 +36,7 @@ class ZAdminGUI(tk.Tk):
         Initialize the async singleton correctly and wait for the real instance.
         """
         future = asyncio.run_coroutine_threadsafe(
-            ZMongoManager.get_instance(self.loop),
+            ZMongoManager.get_instance(),
             self.loop,
         )
         return future.result()

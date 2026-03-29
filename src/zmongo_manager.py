@@ -21,11 +21,11 @@ from pymongo.errors import BulkWriteError
 
 # Handle dynamic imports for the toolbag
 try:
-    from .zmongo_toolbag.data_processing import DataProcessor
+    from .zmongo_toolbag.data_processor import DataProcessor
     from .zmongo_toolbag.zmongo import ZMongo
     from .zmongo_toolbag.safe_result import SafeResult
 except (ImportError, ValueError):
-    from zmongo_toolbag.data_processing import DataProcessor
+    from zmongo_toolbag.data_processor import DataProcessor
     from zmongo_toolbag.zmongo import ZMongo
     from zmongo_toolbag.safe_result import SafeResult
 

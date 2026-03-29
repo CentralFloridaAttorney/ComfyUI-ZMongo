@@ -5,12 +5,18 @@ import weakref
 import logging
 import time
 from datetime import timezone, datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from dotenv import load_dotenv
 from motor import motor_asyncio
 from bson import ObjectId
 
 from zmongo_toolbag.safe_result import SafeResult
+
+ENV_PATH = Path.home() / ".resources" / ".env"
+load_dotenv(ENV_PATH)
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 
-from zmongo_toolbag.data_processing import DataProcessor
+from zmongo_toolbag.data_processor import DataProcessor
 from zmongo_toolbag.local_vector_search import LocalVectorSearch
 from zmongo_toolbag.safe_result import SafeResult
 from zmongo_toolbag.zmongo import ZMongo

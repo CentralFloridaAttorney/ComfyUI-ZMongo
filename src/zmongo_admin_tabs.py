@@ -30,7 +30,7 @@ import tkinter as tk
 from bson import errors
 from bson.objectid import ObjectId
 
-from zmongo_toolbag.data_processing import DataProcessor
+from zmongo_toolbag.data_processor import DataProcessor
 from zmongo_toolbag.safe_result import SafeResult
 
 try:
