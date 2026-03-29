@@ -3,10 +3,16 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ComfyUI_ZMongo"
-version = "0.1.0"
+name = "ComfyUI-ZMongo"
+version = "0.1.1"
 description = "Professional ZMongo Legal Operations suite for ComfyUI"
+readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "comfyuser"}
+]
+keywords = ["comfyui", "mongodb", "legal-ops", "zmongo"]
 dependencies = [
     "motor>=3.4",
     "pymongo>=4.6",
@@ -21,11 +27,15 @@ dependencies = [
     "langchain-community"
 ]
 
+[project.urls]
+"Repository" = "https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo"
+
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.package-dir]
-"ComfyUI_ZMongo" = "src"
+# Maps the distribution name to the 'src' directory
+"ComfyUI-ZMongo" = "src"
 
 [tool.setuptools.packages.find]
 where = ["src"]
