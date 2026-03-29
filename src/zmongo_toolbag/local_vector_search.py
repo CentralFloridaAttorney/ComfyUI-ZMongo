@@ -12,9 +12,10 @@ from concurrent.futures import Future
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from bson.objectid import ObjectId
 
-from safe_result import SafeResult
+from zmongo_retriever.zmongo_toolbag.safe_result import SafeResult
+from core.zmongo import ZMongo
+from core.zembedder import ZEmbedder
 # Standard imports without leading dots for this environment
 
 logger = logging.getLogger(__name__)
@@ -67,10 +68,9 @@ class LocalVectorSearch:
 
     async def _find_all_docs(self) -> SafeResult:
         try:
-            # Ensure find_many actually returns a list of docs in its .data field
+            # Standardizing on ZMongo find_many
             repo_call = self.repo.find_many(self.collection, query={}, limit=self.max_docs)
-            res = await self._await_repo_result(repo_call)
-            return res
+            return await self._await_repo_result(repo_call)
         except Exception as e:
             return SafeResult.fail(f"find_many failed: {e}")
 
@@ -108,14 +108,20 @@ class LocalVectorSearch:
         except RuntimeError: pass
         return asyncio.run(self.rebuild_index())
 
-    async def search(self, query_vector: List[float], top_k: int = 5) -> SafeResult:
+    async def search(self, query_vector: Any, top_k: int = 5) -> SafeResult:
         ensure_res = await self._ensure_index()
         if not ensure_res.success: return ensure_res
-        if self._index_matrix is None or self._index_matrix.size == 0: return SafeResult.ok([])
+
+        if self._index_matrix is None or self._index_matrix.size == 0:
+            return SafeResult.ok([])
+
         try:
-            q = np.array(query_vector, dtype=float)
+            # FORCE conversion to a 1D float array regardless of input type
+            q = np.array(query_vector, dtype=float).flatten()
+
             dim = int(self._index_matrix.shape[1])
-            if q.shape[0] != dim: return SafeResult.fail(f"Dimension mismatch.")
+            if q.shape[0] != dim:
+                return SafeResult.fail(f"Dimension mismatch: Query {q.shape[0]} != Index {dim}")
             M = self._index_matrix
             qn, Mn = np.linalg.norm(q), np.linalg.norm(M, axis=1)
             denom = Mn * qn
@@ -137,121 +143,139 @@ class LocalVectorSearch:
 
     async def rebuild_index(self) -> SafeResult:
         """
-        Fetches all documents and builds the in-memory vector index.
-        Explicitly unwraps SafeResult data to prevent iteration errors.
+        Fetches all documents from the repository, extracts vectors,
+        and builds the in-memory NumPy search matrix.
         """
         try:
-            # 1. Fetch documents
+            # 1. Fetch documents from the ZMongo repository
             docs_res = await self._find_all_docs()
-
-            # 2. Check for failure early
             if not docs_res.success:
-                logger.error(f"Index rebuild failed at fetch: {docs_res.error}")
                 return docs_res
 
-            # 3. CRITICAL FIX: Ensure we are iterating over the LIST inside the result
-            # We access .data and fallback to an empty list if it's None.
-            docs = docs_res.data
-            if isinstance(docs, SafeResult):  # Handle accidental nesting
-                docs = docs.data
+            all_docs = docs_res.data if isinstance(docs_res.data, list) else []
 
-            if not isinstance(docs, list):
-                # If ZMongo returns a dict (like the 'deleted_count' one in your logs),
-                # we need to make sure we aren't trying to iterate over it like a list of docs.
-                if isinstance(docs, dict) and "documents" in docs:
-                    docs = docs["documents"]
-                else:
-                    docs = []
+            temp_vectors = []
+            temp_meta = []
+            expected_dim = None
 
-            meta, vecs = [], []
-            for d in docs:  # This will no longer throw TypeError
-                if not isinstance(d, dict):
-                    continue
+            # 2. Extract vectors and maintain metadata mapping
+            for doc in all_docs:
+                extracted_vectors = self._extract_vectors_from_doc(doc)
+                for vec in extracted_vectors:
+                    # Validate consistency of dimensions
+                    current_dim = len(vec)
+                    if expected_dim is None:
+                        expected_dim = current_dim
+                    elif current_dim != expected_dim:
+                        logger.warning(
+                            f"Skipping vector with mismatched dimension: {current_dim} (expected {expected_dim})")
+                        continue
 
-                extracted = self._extract_vectors_from_doc(d)
-                for v in extracted:
-                    vecs.append(v)
-                    meta.append(d)
+                    temp_vectors.append(vec)
+                    temp_meta.append(doc)
 
-            # 4. Final Matrix Assembly
-            if not vecs:
-                self._index_matrix = np.zeros((0, 0), dtype=float)
+            # 3. Handle empty datasets gracefully
+            if not temp_vectors:
+                self._index_matrix = np.empty((0, 0), dtype=float)
                 self._meta_docs = []
-                return SafeResult.ok({"count": 0})
+                logger.info("Rebuild finished: No vectors found.")
+                return SafeResult.ok({"count": 0, "dim": 0})
 
-            M = np.array(vecs, dtype=float)
-            if M.dtype == object:
-                return SafeResult.fail("Embeddings have inconsistent dimensions.")
+            # 4. Convert to NumPy matrix for fast similarity math
+            matrix = np.array(temp_vectors, dtype=float)
 
-            self._index_matrix, self._meta_docs = M, meta
-            logger.info(f"Successfully indexed {M.shape[0]} vectors.")
-            return SafeResult.ok({"count": int(M.shape[0]), "dim": int(M.shape[1])})
+            # Final safety check for malformed numpy arrays (e.g., ragged nested sequences)
+            if matrix.dtype == object:
+                return SafeResult.fail("Failed to build index: Vectors have inconsistent lengths.")
+
+            self._index_matrix = matrix
+            self._meta_docs = temp_meta
+
+            logger.info(f"Index rebuilt successfully: {matrix.shape[0]} vectors, {matrix.shape[1]} dimensions.")
+            return SafeResult.ok({
+                "count": int(matrix.shape[0]),
+                "dim": int(matrix.shape[1])
+            })
 
         except Exception as e:
-            logger.exception("Rebuild index crashed")
-            return SafeResult.fail(str(e))
-
-async def setup_demo():
-    print("--- Initializing test_vector_search Demo ---")
-    from zmongo_toolbag.zmongo import ZMongo
-    db = ZMongo()
-    from zmongo_toolbag.zembedder import ZEmbedder
-    embedder = ZEmbedder()
-    collection = "test_vector_search"
-
-    # 1. Clean the collection
-    db.delete_all_documents(collection)
-
-    # 2. Sample records for testing
-    records = [
-        {
-            "_id": ObjectId(),
-            "citation": "Binger v. King Pest Control",
-            "text": "Landmark Florida case regarding pre-trial disclosure of expert witnesses."
-        },
-        {
-            "_id": ObjectId(),
-            "citation": "Negligence Overview",
-            "text": "The four elements of negligence are duty, breach, causation, and damages."
-        },
-        {
-            "_id": ObjectId(),
-            "citation": "Premises Liability",
-            "text": "Property owners owe a duty of care to invited guests to maintain safe conditions."
-        }
-    ]
-
-    # 3. Batch insert and embed
-    for doc in records:
-        print(f"Persisting and embedding: {doc['citation']}")
-        await db.insert_one_async(collection, doc)
-
-        # Generate embeddings in the retrieval.document style
-        await embedder.get_embedding(
-            collection=collection,
-            document_id=doc["_id"],
-            text_field="text",
-            embedding_field="embedding.text"
-        )
-
-    print("--- Rebuilding Local Search Index ---")
-    await embedder.vector_search.rebuild_index()
-    print("Demo setup complete. Collection 'test_vector_search' is ready for testing.")
-    embedder.close()
+            logger.exception("Failed to rebuild local vector index")
+            return SafeResult.fail(f"Rebuild index error: {str(e)}")
 
 
 if __name__ == "__main__":
-    # Import inside main to prevent top-level circular dependency
-    asyncio.run(setup_demo())
 
-    async def demo():
-        print("\n=== LocalVectorSearch Demo ===")
-        from zmongo_toolbag.zmongo import ZMongo
-        repo = ZMongo()
-        from zmongo_toolbag.zembedder import ZEmbedder
-        embedder = ZEmbedder()
-        searcher = LocalVectorSearch(repository=repo, collection="knowledge_base")
-        await searcher.rebuild_index()
-        embedder.close()
+    # 1. Setup logging
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    logger = logging.getLogger(__name__)
 
-    asyncio.run(demo())
+
+    async def run_real_data_demo():
+        logger.info("--- Starting LocalVectorSearch REAL DATA Demo ---")
+
+        # 2. Initialize Real Components
+        db_client = ZMongo()
+        embedder = ZEmbedder()  # Used to turn your query text into a vector
+
+        # Configuration - Adjust these to match your actual DB schema
+        TARGET_DB_NAME = "wiki_kb"
+        TARGET_COLLECTION = "knowledge_base"
+        EMBEDDING_FIELD = "embedding"  # The root field where embeddings are stored
+        VECTOR_KEY = "vectors"  # The sub-field containing the list of floats
+
+        lvs = LocalVectorSearch(
+            repository=db_client,
+            collection=TARGET_COLLECTION,
+            embedding_field=EMBEDDING_FIELD,
+            vector_key=VECTOR_KEY
+        )
+
+        # 3. Build Index from MongoDB
+        logger.info(f"Fetching vectors from collection '{TARGET_COLLECTION}'...")
+        rb_res = await lvs.rebuild_index()
+
+        if not rb_res.success or rb_res.data['count'] == 0:
+            logger.error(f"Failed to build index. Success: {rb_res.success}, Count: {rb_res.data.get('count', 0)}")
+            logger.info("Ensure your documents have vectors in the specified field.")
+            return
+
+        print(f"✅ Index Ready: {rb_res.data['count']} documents loaded into memory.")
+
+        # 4. Perform a Real Search
+        query_text = "What is the largest planet in our solar system?"
+        logger.info(f"Querying: '{query_text}'")
+
+        # Get query vector from Gemini
+        q_res = await embedder.get_embedding(
+            text=query_text,
+            embedding_style=EMBEDDING_STYLE_RETRIEVAL_QUERY
+        )
+
+        if q_res.success:
+            # LocalVectorSearch expects the vector itself
+            # get_embedding returns {"vectors": [[...]]}
+            query_vector = q_res.data["vectors"][0]
+
+            search_res = await lvs.search(query_vector, top_k=3)
+
+            if search_res.success:
+                print(f"\n--- Search Results for: '{query_text}' ---")
+                for i, hit in enumerate(search_res.data):
+                    doc = hit['document']
+                    score = hit['retrieval_score']
+                    # Use .get() to safely access your text field (e.g., 'text' or 'content')
+                    content = doc.get('text') or doc.get('content') or str(doc.get('_id'))
+                    print(f"{i + 1}. [{score:.4f}] {content}")
+            else:
+                print(f"Search failed: {search_res.error}")
+
+        # 5. Cleanup
+        lvs.clear_index()
+        db_client.close()
+        logger.info("--- Demo Completed ---")
+
+
+    # Run the demo
+    try:
+        asyncio.run(run_real_data_demo())
+    except KeyboardInterrupt:
+        pass

@@ -1,136 +1,214 @@
 """
-ZEmbedder – Gemini-based embedding manager with chunking, caching, SafeResult and ZMongo compatibility.
+ZEmbedder – Local BGE-M3 Hybrid Embedding manager for Blackwell RTX 5080.
+Integrates with ZMongo, LocalVectorSearch, and SafeResult.
 """
 
 import asyncio
 import logging
+import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Literal
+from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
+from pymilvus.model.hybrid import BGEM3EmbeddingFunction
 
-from data_processing import DataProcessor
-# Fixed imports without leading dots
+# Internal toolbag imports
+from zmongo_retriever.zmongo_toolbag.data_processor import DataProcessor
+from zmongo_retriever.zmongo_toolbag.safe_result import SafeResult
+from zmongo_retriever.zmongo_toolbag.zmongo import ZMongo
+from zmongo_retriever.zmongo_toolbag.local_vector_search import LocalVectorSearch
 
-from gemini_embedding_model import (
-    EMBEDDING_STYLE_RETRIEVAL_DOCUMENT,
-    EMBEDDING_STYLE_RETRIEVAL_QUERY, GeminiEmbeddingModel,
-)
-from local_vector_search import LocalVectorSearch
-from safe_result import SafeResult
-from zmongo import ZMongo
+# Load environment resources
+RESOURCE_PATH = Path.home() / ".resources"
+load_dotenv(RESOURCE_PATH / ".env")
+load_dotenv(RESOURCE_PATH / ".secrets")
 
-load_dotenv(Path.home() / ".resources" / ".env")
-load_dotenv(Path.home() / ".resources" / ".secrets")
 logger = logging.getLogger(__name__)
 
-CHUNK_STYLE_FIXED: Literal["fixed"] = "fixed"
-CHUNK_STYLE_SENTENCE: Literal["sentence"] = "sentence"
-CHUNK_STYLE_PARAGRAPH: Literal["paragraph"] = "paragraph"
-ChunkStyle = Literal["fixed", "sentence", "paragraph"]
-
-# --- CONFIGURATION ---
-collection = "cases"
-text_field = "citation"
-embedding_field = "embedding.citation"
-doc_id_str = "6941b65ba887fa041899b125"
-output_dim = 768
-
+# Constants for BGE-M3
+DEFAULT_MODEL_PATH = "/home/comfyuser/.resources/preserved_models/encoders/bge-m3"
+DEFAULT_DB_NAME = "wiki_kb"
 class ZEmbedder:
-    def __init__(self, model: Optional[Any] = None, output_dimensionality: Optional[int] = 768):
-        self.repository = ZMongo()
-        embedding_root = "embedding"
-        field_key = embedding_field.split('.')[-1] if '.' in embedding_field else embedding_field
+    """
+    Local BGE-M3 Embedding manager.
+    Produces Dense and Sparse vectors for hybrid RAG pipelines.
+    """
+    def __init__(
+        self,
+        db_name: str = DEFAULT_DB_NAME,
+        model_path: str = DEFAULT_MODEL_PATH,
+        device: str = "cuda:0",
+        output_dimensionality: int = 1024 # BGE-M3 default dense dim
+    ):
+        self.repository = ZMongo(db_name=db_name)
+        self.device = device
+        self.default_output_dim = output_dimensionality
 
-        self.vector_search = LocalVectorSearch(
-            repository=self.repository,
-            collection=collection,
-            embedding_field=embedding_root,
-            field_key=field_key,
-            vector_key="vectors"
+        # Verify local model path
+        if not os.path.exists(model_path):
+            logger.error(f"❌ Model not found at {model_path}. Please download it first.")
+            raise FileNotFoundError(f"BGE-M3 not found at {model_path}")
+
+        # Initialize the Hybrid Model on Blackwell GPU
+        self.model = BGEM3EmbeddingFunction(
+            model_name=model_path,
+            device=device,
+            use_fp16=True  # Optimized for RTX 5080
         )
 
-        self.model = model or self._load_default_model(output_dimensionality)
-        self.default_output_dim = output_dimensionality
-        logger.info("✅ ZEmbedder initialized (dim=%s)", getattr(self.model, "output_dimensionality", "default"))
+        # Internal searcher for backward compatibility
+        self.vector_search = LocalVectorSearch(
+            repository=self.repository,
+            collection="knowledge_base",
+            embedding_field="embedding.dense",
+            vector_key="vectors"
+        )
+        logger.info(f"✅ ZEmbedder (BGE-M3) initialized on {device}")
 
     @staticmethod
-    def _load_default_model(output_dimensionality: Optional[int]) -> GeminiEmbeddingModel:
-        return GeminiEmbeddingModel(model_name="gemini-embedding-001", output_dimensionality=output_dimensionality)
+    def _to_dense_list(vec: Any) -> List[float]:
+        if hasattr(vec, "tolist"):
+            return vec.tolist()
+        return list(vec)
 
-    async def _await_repo_result(self, maybe_result: Any) -> SafeResult:
-        if asyncio.iscoroutine(maybe_result): maybe_result = await maybe_result
-        return maybe_result if isinstance(maybe_result, SafeResult) else SafeResult.ok(maybe_result)
+    @staticmethod
+    def _to_sparse_dict(sparse: Any) -> Dict[str, float]:
+        """
+        Normalize BGE-M3 sparse output into a plain dict[str, float].
+        Handles dict-like outputs and scipy sparse-style objects.
+        """
+        if sparse is None:
+            return {}
 
-    def _split_text_into_chunks(self, text: str, *, chunk_style: ChunkStyle = CHUNK_STYLE_FIXED, chunk_size: int = 1500, overlap: int = 150) -> List[str]:
-        if not text: return []
-        if chunk_style == CHUNK_STYLE_FIXED: return self._split_fixed(text, chunk_size=chunk_size, overlap_chars=overlap)
-        return [text]
+        if isinstance(sparse, dict):
+            return {str(k): float(v) for k, v in sparse.items()}
 
-    def _split_fixed(self, text: str, *, chunk_size: int, overlap_chars: int) -> List[str]:
-        chunks, n = [], len(text)
-        if n == 0: return chunks
-        start, step = 0, max(1, chunk_size - max(0, overlap_chars))
-        while start < n:
-            end = min(n, start + chunk_size)
-            chunks.append(text[start:end])
-            if end >= n: break
-            start += step
-        return chunks
+        # scipy sparse row / matrix style
+        if hasattr(sparse, "tocoo"):
+            coo = sparse.tocoo()
+            return {str(int(col)): float(val) for col, val in zip(coo.col, coo.data)}
 
-    async def _get_embeddings_from_chunks(self, chunks: List[str], *, embedding_style: str, output_dimensionality: Optional[int]) -> Dict[str, List[float]]:
-        if not chunks: return {}
-        # Delegate to model
-        vectors = await self.model.embed(chunks, style=embedding_style, output_dimensionality=output_dimensionality)
-        return dict(zip(chunks, vectors))
+        # some libs may expose indices/data separately
+        indices = getattr(sparse, "indices", None)
+        data = getattr(sparse, "data", None)
+        if indices is not None and data is not None:
+            return {str(int(i)): float(v) for i, v in zip(indices, data)}
 
-    async def get_embedding(self, text: Optional[str] = None, *, collection: Optional[str] = None, document_id: Optional[Any] = None, text_field: str = "text", embedding_field: str = "embedding", skip_if_present: bool = False, as_safe_result: bool = True, **kwargs) -> Any:
-        style = kwargs.get("embedding_style") or EMBEDDING_STYLE_RETRIEVAL_DOCUMENT
-        dim = kwargs.get("output_dimensionality") or self.default_output_dim
+        raise TypeError(f"Unsupported sparse vector type: {type(sparse)!r}")
 
-        if not text and collection and document_id:
-            fetch_res = await self._await_repo_result(self.repository.find_one(collection, {"_id": document_id}))
-            if not fetch_res.success: return fetch_res if as_safe_result else fetch_res.to_dict()
-            text = DataProcessor.get_value(fetch_res.data, text_field)
+    async def embed_many(self, texts: List[str]) -> SafeResult:
+        """Embeds multiple texts using hybrid logic."""
+        try:
+            if not texts:
+                return SafeResult.ok({"dense": [], "sparse": [], "count": 0})
 
-        chunks = self._split_text_into_chunks(text)
-        embedding_map = await self._get_embeddings_from_chunks(chunks, embedding_style=style, output_dimensionality=dim)
-        vectors = [embedding_map[c] for c in chunks if c in embedding_map]
+            loop = asyncio.get_running_loop()
+            embeddings = await loop.run_in_executor(
+                None,
+                self.model.encode_documents,
+                texts,
+            )
 
-        if collection and document_id:
-            update_payload = {}
-            DataProcessor.set_value(update_payload, embedding_field, vectors)
-            # Safe unique insert/update logic
-            await self._await_repo_result(self.repository.insert_or_update(collection, {"_id": document_id}, update_payload))
+            dense_vectors = [self._to_dense_list(vec) for vec in embeddings["dense"]]
+            sparse_vectors = [self._to_sparse_dict(vec) for vec in embeddings["sparse"]]
 
-        result = SafeResult.ok({"vectors": vectors, "dimensionality": len(vectors[0]) if vectors else 0})
-        return result if as_safe_result else result.data
+            return SafeResult.ok({
+                "dense": dense_vectors,
+                "sparse": sparse_vectors,
+                "count": len(texts),
+            })
+        except Exception as e:
+            logger.exception("Batch embedding failed")
+            return SafeResult.fail(e)
 
-    def get_embedding_sync(self, *args, **kwargs) -> SafeResult:
-        try: return asyncio.run(self.get_embedding(*args, **kwargs))
-        except Exception as e: return SafeResult.fail(str(e))
+    async def get_embedding(
+            self,
+            text: Optional[str] = None,
+            *,
+            collection: Optional[str] = None,
+            document_id: Optional[Any] = None,
+            text_field: str = "text",
+            embedding_field: str = "embedding",
+            **kwargs,
+    ) -> SafeResult:
+        """
+        Fetches or embeds text. Returns a SafeResult containing
+        BSON-safe dense and sparse vectors.
+        """
+        try:
+            if not text and collection and document_id is not None:
+                fetch_res = await self.repository.find_one_async(
+                    collection,
+                    {"_id": document_id},
+                )
+                if not fetch_res.success:
+                    return fetch_res
 
-    async def find_similar_documents(self, query_text: str, n_results: int = 5, target_collection: str = collection, **kwargs) -> Any:
-        dim = kwargs.get("output_dimensionality") or self.default_output_dim
-        # 1. Embed query
-        q_emb_res = await self.get_embedding(query_text, embedding_style=EMBEDDING_STYLE_RETRIEVAL_QUERY, output_dimensionality=dim)
-        if not q_emb_res.success: return q_emb_res
+                text = DataProcessor.get_value(fetch_res.data, text_field)
 
-        # 2. Search using LocalVectorSearch index
-        search_res = await self.vector_search.search(query_vector=q_emb_res.data["vectors"][0], top_k=n_results)
-        if not search_res.success: return search_res
+            if not text:
+                return SafeResult.fail("No text content provided or found.")
 
-        payload = {"query": query_text, "results": search_res.data}
-        return SafeResult.ok(payload)
+            loop = asyncio.get_running_loop()
+            embs = await loop.run_in_executor(
+                None,
+                self.model.encode_queries,
+                [text],
+            )
+
+            dense_vec = self._to_dense_list(embs["dense"][0])
+            sparse_vec = self._to_sparse_dict(embs["sparse"][0])
+
+            if collection and document_id is not None:
+                update_payload = {
+                    text_field: text,
+                    embedding_field: {
+                        "dense": dense_vec,
+                        "sparse": sparse_vec,
+                        "model": "bge-m3-local",
+                        "dimensionality": len(dense_vec),
+                    },
+                }
+
+                persist_res = await self.repository.insert_or_update(
+                    collection,
+                    {"_id": document_id},
+                    update_payload,
+                )
+                if not persist_res.success:
+                    return persist_res
+
+            return SafeResult.ok({
+                "dense": dense_vec,
+                "sparse": sparse_vec,
+                "text": text,
+                "dimensionality": len(dense_vec),
+            })
+        except Exception as e:
+            logger.exception("Single embedding generation failed")
+            return SafeResult.fail(e)
 
     def close(self):
-        """Standardize shutdown sequence."""
-        if hasattr(self, "repository"): self.repository.close()
-        if hasattr(self, "vector_search"): self.vector_search.clear_index()
+        """Cleanup resources."""
+        if hasattr(self, "repository"):
+            self.repository.close()
+        if hasattr(self, "vector_search"):
+            self.vector_search.clear_index()
 
+
+# --- Async Demo ---
 if __name__ == "__main__":
-   embedder = ZEmbedder(output_dimensionality=output_dim)
-   # Print results to console as seen in the execution log
-   results = asyncio.run(embedder.find_similar_documents(query_text="Binger v. King Pest Control", n_results=3))
-   print(results)
-   embedder.close()
+    async def run_demo():
+        embedder = ZEmbedder()
+
+        test_text = "Legal compliance for AI Blackwell architecture."
+        res = await embedder.get_embedding(text=test_text)
+
+        if res.success:
+            print(f"✅ Successfully generated hybrid embeddings.")
+            print(f"Dense Dim: {res.data['dimensionality']}")
+            print(f"Sparse Keys: {list(res.data['sparse'].keys())[:5]}...")
+
+        embedder.close()
+
+    asyncio.run(run_demo())
