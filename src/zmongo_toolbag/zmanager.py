@@ -22,9 +22,9 @@ from pymongo.errors import BulkWriteError
 # --- Local Toolbag Imports ---
 # Assuming these exist in your project structure
 try:
-    from zmongo_retriever.zmongo_toolbag.safe_result import SafeResult
-    from zmongo_retriever.zmongo_toolbag.data_processor import DataProcessor
-    from zmongo_retriever.zmongo_toolbag.zmongo import ZMongo
+    from safe_result import SafeResult
+    from data_processor import DataProcessor
+    from zmongo import ZMongo
 except ImportError:
     logging.warning("ZMongo toolbag modules not found. Ensure paths are correct.")
 

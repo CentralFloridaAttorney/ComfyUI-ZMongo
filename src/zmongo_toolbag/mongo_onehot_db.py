@@ -4,8 +4,8 @@ import numpy as np
 from typing import List, Optional, Sequence
 from datetime import datetime
 
-from .safe_result import SafeResult
-from .zmongo import ZMongo
+from safe_result import SafeResult
+from zmongo import ZMongo
 
 
 class MongoOneHotDB:

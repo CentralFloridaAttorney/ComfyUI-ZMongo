@@ -3,7 +3,8 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from .zmongo import ZMongo, SafeResult
+from zmongo import ZMongo
+from safe_result import SafeResult
 
 logger = logging.getLogger(__name__)
 

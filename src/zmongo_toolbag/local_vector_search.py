@@ -13,9 +13,10 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from zmongo_retriever.zmongo_toolbag.safe_result import SafeResult
-from core.zmongo import ZMongo
-from core.zembedder import ZEmbedder
+from safe_result import SafeResult
+from zmongo import ZMongo
+from gemini_embedding_model import EMBEDDING_STYLE_RETRIEVAL_QUERY
+
 # Standard imports without leading dots for this environment
 
 logger = logging.getLogger(__name__)
@@ -214,6 +215,7 @@ if __name__ == "__main__":
 
         # 2. Initialize Real Components
         db_client = ZMongo()
+        from zmongo_toolbag.zembedder import ZEmbedder
         embedder = ZEmbedder()  # Used to turn your query text into a vector
 
         # Configuration - Adjust these to match your actual DB schema

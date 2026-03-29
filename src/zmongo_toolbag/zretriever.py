@@ -9,10 +9,10 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from pydantic import ConfigDict, Field
 
-from zmongo_retriever.zmongo_toolbag.local_vector_search import LocalVectorSearch
-from zmongo_retriever.zmongo_toolbag.safe_result import SafeResult
-from zmongo_retriever.zmongo_toolbag.zembedder import ZEmbedder
-from zmongo_retriever.zmongo_toolbag.zmongo import ZMongo
+from zmongo_toolbag.local_vector_search import LocalVectorSearch
+from zmongo_toolbag.safe_result import SafeResult
+from zmongo_toolbag.zembedder import ZEmbedder
+from zmongo_toolbag.zmongo import ZMongo
 
 # ----------------------------------------------------------------------
 # Constants / Default Values
@@ -38,6 +38,74 @@ def _run_async_in_new_thread(coro) -> Any:
     t = threading.Thread(target=_runner, daemon=True)
     t.start()
     return fut.result()
+
+
+def _coerce_dense_vector(vec: Any) -> List[float]:
+    """
+    Convert numpy-backed / mixed numeric vectors into a plain Python List[float].
+    """
+    if vec is None:
+        return []
+
+    if hasattr(vec, "tolist"):
+        vec = vec.tolist()
+
+    if not isinstance(vec, list):
+        vec = list(vec)
+
+    return [float(x) for x in vec]
+
+
+def _extract_dense_vectors(emb_data: Any) -> List[List[float]]:
+    """
+    Normalize different possible embedder response shapes into List[List[float]].
+    Supports SafeResult.data payloads from the current ZEmbedder.
+    """
+    if emb_data is None:
+        return []
+
+    if isinstance(emb_data, dict):
+        dense = emb_data.get("dense")
+        if dense is not None:
+            if hasattr(dense, "tolist"):
+                dense = dense.tolist()
+
+            if isinstance(dense, list) and dense:
+                first = dense[0]
+                if hasattr(first, "tolist") or isinstance(first, list):
+                    return [_coerce_dense_vector(v) for v in dense]
+                try:
+                    return [_coerce_dense_vector(dense)]
+                except Exception:
+                    pass
+
+        embeddings = emb_data.get("embeddings")
+        if isinstance(embeddings, list):
+            out: List[List[float]] = []
+            for item in embeddings:
+                if isinstance(item, dict):
+                    for key in ("dense", "values", "embedding"):
+                        d = item.get(key)
+                        if d is not None:
+                            out.append(_coerce_dense_vector(d))
+                            break
+                else:
+                    out.append(_coerce_dense_vector(item))
+            if out:
+                return out
+
+        for key in ("vector", "values", "embedding"):
+            v = emb_data.get(key)
+            if v is not None:
+                return [_coerce_dense_vector(v)]
+
+    if isinstance(emb_data, list) and emb_data:
+        first = emb_data[0]
+        if hasattr(first, "tolist") or isinstance(first, list):
+            return [_coerce_dense_vector(v) for v in emb_data]
+        return [_coerce_dense_vector(emb_data)]
+
+    return []
 
 
 class ZRetriever(BaseRetriever):
@@ -90,18 +158,6 @@ class ZRetriever(BaseRetriever):
         *,
         run_manager: Optional[CallbackManagerForRetrieverRun] = None,
     ) -> List[Document]:
-        """
-        Async entrypoint.
-
-        Current ZEmbedder returns:
-            {
-                "dense": [...],
-                "sparse": [...],
-                "count": N
-            }
-
-        So the query vector must come from data["dense"][0].
-        """
         if not query or not str(query).strip():
             return []
 
@@ -111,13 +167,12 @@ class ZRetriever(BaseRetriever):
                 logger.warning("Query embedding failed: %s", getattr(emb_res, "error", emb_res))
                 return []
 
-            emb_data = emb_res.data or {}
-            dense_vectors = emb_data.get("dense") or []
+            dense_vectors = _extract_dense_vectors(emb_res.data)
             if not dense_vectors:
                 logger.info("No dense query vector returned by embedder.")
                 return []
 
-            query_vector = dense_vectors[0]
+            query_vector = _coerce_dense_vector(dense_vectors[0])
 
             search_res = await self.vector_searcher.search(
                 query_vector=query_vector,
@@ -186,50 +241,100 @@ async def _demo_async() -> None:
     collection = _DEFAULT_COLLECTION
 
     try:
-        # 1. CLEAN START
         logger.info("Cleaning collection '%s'...", collection)
         delete_res = await db_client.delete_many_async(collection, {})
         if not delete_res.success:
             logger.warning("Collection cleanup failed: %s", getattr(delete_res, "error", delete_res))
 
-        # 2. INSERT DATA
         knowledge = [
-            {"topic": "Biology", "text": "Mitochondria generate energy in the cell."},
-            {"topic": "Astronomy", "text": "Jupiter is the largest planet in our solar system."},
-            {"topic": "History", "text": "The Roman Empire shaped the foundation of Western civilization."},
+            {
+                "topic": "Biology",
+                "text": (
+                    "The mitochondrion is the organelle that produces ATP energy for the cell. "
+                    "Mitochondria are often called the powerhouse of the cell."
+                ),
+            },
+            {
+                "topic": "Biology",
+                "text": (
+                    "Cells use mitochondria to convert nutrients into ATP, which provides usable energy."
+                ),
+            },
+            {
+                "topic": "Astronomy",
+                "text": "Jupiter is the largest planet in our solar system.",
+            },
+            {
+                "topic": "History",
+                "text": "The Roman Empire shaped the foundation of Western civilization.",
+            },
+            {
+                "topic": "Computers",
+                "text": "A CPU executes instructions and performs arithmetic and logic operations.",
+            },
         ]
 
-        logger.info("Inserting and embedding fresh data...")
-        for item in knowledge:
-            ins_res = await db_client.insert_one_async(collection, item)
-            if not ins_res.success:
-                logger.warning("Insert failed for item %s: %s", item, getattr(ins_res, "error", ins_res))
-                continue
+        logger.info("Embedding demo knowledge before insert...")
+        text_batch = [item["text"] for item in knowledge]
+        emb_res = await embedder.embed_many(text_batch)
+        if not emb_res.success:
+            logger.error("Knowledge embedding failed: %s", getattr(emb_res, "error", emb_res))
+            return
 
-            inserted_id = (ins_res.data or {}).get("inserted_id")
-            if inserted_id is None:
-                logger.warning("Insert succeeded but no inserted_id returned for item: %s", item)
-                continue
+        dense_vectors = _extract_dense_vectors(emb_res.data)
+        if not dense_vectors:
+            logger.error("No dense vectors returned for demo knowledge.")
+            return
 
-            emb_store_res = await embedder.get_embedding(
-                text=item["text"],
-                collection=collection,
-                document_id=inserted_id,
-                embedding_field=_DEFAULT_EMBED_FIELD,
+        if len(dense_vectors) != len(knowledge):
+            logger.error(
+                "Embedding count mismatch. vectors=%s knowledge=%s",
+                len(dense_vectors),
+                len(knowledge),
             )
-            if not emb_store_res.success:
-                logger.warning(
-                    "Embedding persistence failed for inserted_id=%s: %s",
-                    inserted_id,
-                    getattr(emb_store_res, "error", emb_store_res),
-                )
+            return
 
-        # 3. INITIALIZE VECTOR SEARCH
+        logger.info("Inserting embedded KB documents...")
+        inserted = 0
+        for item, dense in zip(knowledge, dense_vectors):
+            dense_py = _coerce_dense_vector(dense)
+
+            doc = {
+                **item,
+                _DEFAULT_EMBED_FIELD: {
+                    _DEFAULT_VECTOR_KEY: dense_py,
+                    "model": "bge-m3-local",
+                    "dimensionality": len(dense_py),
+                },
+            }
+            ins_res = await db_client.insert_one_async(collection, doc)
+            if not ins_res.success:
+                logger.warning(
+                    "Insert failed for item %s: %s",
+                    item,
+                    getattr(ins_res, "error", ins_res),
+                )
+                continue
+            inserted += 1
+
+        logger.info("Inserted %s embedded document(s).", inserted)
+
+        debug_res = await db_client.find_many_async(
+            collection,
+            {_DEFAULT_EMBED_FIELD + "." + _DEFAULT_VECTOR_KEY: {"$exists": True}},
+            limit=20,
+        )
+        if debug_res.success:
+            docs_with_vectors = debug_res.data or []
+            logger.info("Documents with stored vectors: %s", len(docs_with_vectors))
+        else:
+            logger.warning("Vector existence check failed: %s", getattr(debug_res, "error", debug_res))
+
         vector_search = LocalVectorSearch(
             repository=db_client,
             collection=collection,
             embedding_field=_DEFAULT_EMBED_FIELD,
-            vector_key=_DEFAULT_VECTOR_KEY,  # embedding["dense"]
+            vector_key=_DEFAULT_VECTOR_KEY,
         )
 
         retriever = ZRetriever(
@@ -240,10 +345,9 @@ async def _demo_async() -> None:
             embedding_field=_DEFAULT_EMBED_FIELD,
             content_field=_DEFAULT_CONTENT_FIELD,
             top_k=5,
-            similarity_threshold=0.5,
+            similarity_threshold=0.35,
         )
 
-        # 4. BUILD INDEX
         idx_res = await retriever.rebuild_index()
         if idx_res.success:
             idx_data = idx_res.data or {}
@@ -257,22 +361,27 @@ async def _demo_async() -> None:
             logger.error("Index rebuild failed: %s", getattr(idx_res, "error", idx_res))
             return
 
-        # 5. TEST QUERY
-        query = "Which organelle provides energy in the cell?"
-        results = await retriever.ainvoke(query)
+        queries = [
+            "Which organelle provides energy in the cell?",
+            "What is the powerhouse of the cell?",
+            "Which part of a cell makes ATP?",
+        ]
 
-        print(f"\n--- Final Results for: '{query}' ---")
-        if not results:
-            print("No matches found above threshold.")
-            return
+        for query in queries:
+            results = await retriever.ainvoke(query)
 
-        for i, doc in enumerate(results, 1):
-            content = doc.page_content or "[EMPTY CONTENT]"
-            score = float(doc.metadata.get("retrieval_score", 0.0))
-            topic = doc.metadata.get("topic", "Unknown")
-            print(f"Result {i}: {content}")
-            print(f"   Topic: {topic}")
-            print(f"   Score: {score:.4f}")
+            print(f"\n--- Final Results for: '{query}' ---")
+            if not results:
+                print("No matches found above threshold.")
+                continue
+
+            for i, doc in enumerate(results, 1):
+                content = doc.page_content or "[EMPTY CONTENT]"
+                score = float(doc.metadata.get("retrieval_score", 0.0))
+                topic = doc.metadata.get("topic", "Unknown")
+                print(f"Result {i}: {content}")
+                print(f"   Topic: {topic}")
+                print(f"   Score: {score:.4f}")
 
     finally:
         try:

@@ -7,11 +7,12 @@ name = "ComfyUI-ZMongo"
 version = "0.1.1"
 description = "Professional ZMongo Legal Operations suite for ComfyUI"
 readme = "README.md"
-requires-python = ">=3.10"
-license = {text = "MIT"}
+requires-python = ">=3.10,<3.13"
+license = { text = "MIT" }
 authors = [
-    {name = "CentralFloridaAttorney"}
+    { name = "CentralFloridaAttorney" }
 ]
+
 dependencies = [
     "motor>=3.4",
     "pymongo>=4.6",
@@ -26,13 +27,14 @@ dependencies = [
     "langchain-community",
     "bcrypt",
     "pandas",
+    "FlagEmbedding==1.3.2",
+    "transformers==4.44.2",
 ]
 
 [project.urls]
 "Repository" = "https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git"
 
 [tool.poetry]
-# Disabling package-mode fixes the 'No file/folder found' error
 package-mode = false
 
 [tool.setuptools]

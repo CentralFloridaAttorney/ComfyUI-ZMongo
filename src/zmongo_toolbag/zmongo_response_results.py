@@ -1,7 +1,7 @@
 from typing import List, Optional, Union, Dict
 from pymongo.cursor import Cursor
 
-from zmongo_retriever.zmongo_toolbag.safe_result import SafeResult
+from zmongo_toolbag.safe_result import SafeResult
 
 
 class ZMongoResponseResults:
