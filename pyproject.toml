@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "comfyuser"}
+    {name = "CentralFloridaAttorney"}
 ]
 dependencies = [
     "motor>=3.4",
@@ -26,7 +26,11 @@ dependencies = [
     "langchain-community"
 ]
 
+[project.urls]
+"Repository" = "https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git"
+
 [tool.poetry]
+# Disabling package-mode fixes the 'No file/folder found' error
 package-mode = false
 
 [tool.setuptools]
@@ -39,12 +43,4 @@ include-package-data = true
 where = ["src"]
 namespaces = true
 include = ["*"]
-exclude = [
-    "tests*",
-    "examples*",
-    "scripts*",
-    "**/dist*",
-    "**/build*",
-    "**/.venv*",
-    "__pycache__*"
-]
+exclude = ["tests*", "examples*", "scripts*", "**/dist*", "**/build*", "**/.venv*", "__pycache__*"]
