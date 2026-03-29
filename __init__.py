@@ -1,9 +1,6 @@
 import logging
 
-from src.nodes.zmongo_config_node import ZMongoConfigNode
-from src.nodes.zmongo_operations_node import ZMongoOperationsNode
-from src.nodes.zmongo_record_node import ZMongoRecordSplitter, ZMongoFieldSelector
-from src.nodes.zretriever_node import ZRetrieverNode
+from src import ZMongoConfigNode, ZMongoOperationsNode, ZMongoRecordSplitter, ZMongoFieldSelector, ZRetrieverNode
 
 # Set directory for JS components
 WEB_DIRECTORY = "./web"
