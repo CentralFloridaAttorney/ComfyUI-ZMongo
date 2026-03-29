@@ -7,10 +7,10 @@ from bson import json_util
 from bson.objectid import ObjectId
 from pymongo import MongoClient
 
-from .zmongo_toolbag.data_processing import DataProcessor
-from .zmongo_toolbag.zmongo import ZMongo
-from .zmongo_manager import ZMongoManager
-from .zmongo_toolbag.zembedder import ZEmbedder
+from zmongo_toolbag.data_processing import DataProcessor
+from zmongo_toolbag.zmongo import ZMongo
+from zmongo_manager import ZMongoManager
+from zmongo_toolbag.zembedder import ZEmbedder
 
 logger = logging.getLogger(__name__)
 

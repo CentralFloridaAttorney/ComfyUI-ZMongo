@@ -13,9 +13,9 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from safe_result import SafeResult
-from zmongo import ZMongo
-from gemini_embedding_model import EMBEDDING_STYLE_RETRIEVAL_QUERY
+from zmongo_toolbag.safe_result import SafeResult
+from zmongo_toolbag.zmongo import ZMongo
+from zmongo_toolbag.gemini_embedding_model import EMBEDDING_STYLE_RETRIEVAL_QUERY
 
 # Standard imports without leading dots for this environment
 
