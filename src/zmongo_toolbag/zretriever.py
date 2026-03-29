@@ -10,10 +10,10 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from pydantic import ConfigDict, Field
 
-from .local_vector_search import LocalVectorSearch
-from .safe_result import SafeResult
-from .zembedder import ZEmbedder
-from .zmongo import ZMongo
+from local_vector_search import LocalVectorSearch
+from safe_result import SafeResult
+from zembedder import ZEmbedder
+from zmongo import ZMongo
 
 # ----------------------------------------------------------------------
 # Constants / Default Values

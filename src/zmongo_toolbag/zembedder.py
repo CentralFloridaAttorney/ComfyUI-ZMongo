@@ -9,16 +9,16 @@ from typing import Any, Dict, List, Optional, Literal
 
 from dotenv import load_dotenv
 
-from .data_processing import DataProcessor
+from data_processing import DataProcessor
 # Fixed imports without leading dots
 
-from .gemini_embedding_model import (
+from gemini_embedding_model import (
     EMBEDDING_STYLE_RETRIEVAL_DOCUMENT,
     EMBEDDING_STYLE_RETRIEVAL_QUERY, GeminiEmbeddingModel,
 )
-from .local_vector_search import LocalVectorSearch
-from .safe_result import SafeResult
-from .zmongo import ZMongo
+from local_vector_search import LocalVectorSearch
+from safe_result import SafeResult
+from zmongo import ZMongo
 
 load_dotenv(Path.home() / ".resources" / ".env")
 load_dotenv(Path.home() / ".resources" / ".secrets")

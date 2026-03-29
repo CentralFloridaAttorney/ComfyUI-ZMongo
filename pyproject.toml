@@ -23,7 +23,8 @@ dependencies = [
     "google-genai",
     "aiohttp",
     "langchain",
-    "langchain-community"
+    "langchain-community",
+    "bcrypt",
 ]
 
 [project.urls]

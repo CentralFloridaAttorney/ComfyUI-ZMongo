@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Optional, Union
 from motor import motor_asyncio
 from bson.objectid import ObjectId
 
-from .safe_result import SafeResult
-from .zmongo_response_result import ZMongoResponseResult
+from zmongo_toolbag.safe_result import SafeResult
+from zmongo_toolbag.zmongo_response_result import ZMongoResponseResult
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

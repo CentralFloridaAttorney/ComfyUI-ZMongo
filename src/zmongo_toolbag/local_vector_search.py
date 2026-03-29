@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from bson.objectid import ObjectId
 
-from .safe_result import SafeResult
+from safe_result import SafeResult
 # Standard imports without leading dots for this environment
 
 logger = logging.getLogger(__name__)
@@ -67,9 +67,10 @@ class LocalVectorSearch:
 
     async def _find_all_docs(self) -> SafeResult:
         try:
-            # Standardizing on ZMongo find_many
+            # Ensure find_many actually returns a list of docs in its .data field
             repo_call = self.repo.find_many(self.collection, query={}, limit=self.max_docs)
-            return await self._await_repo_result(repo_call)
+            res = await self._await_repo_result(repo_call)
+            return res
         except Exception as e:
             return SafeResult.fail(f"find_many failed: {e}")
 
@@ -99,30 +100,6 @@ class LocalVectorSearch:
             if self._index_matrix is not None:
                 return SafeResult.ok({"count": int(self._index_matrix.shape[0])})
             return await self.rebuild_index()
-
-    async def rebuild_index(self) -> SafeResult:
-        try:
-            docs_res = await self._find_all_docs()
-            if not docs_res.success: return docs_res
-            docs = docs_res.data or []
-            meta, vecs = [], []
-            for d in docs:
-                extracted = self._extract_vectors_from_doc(d)
-                for v in extracted:
-                    vecs.append(v)
-                    meta.append(d)
-            if not vecs:
-                self._index_matrix = np.zeros((0, 0), dtype=float)
-                self._meta_docs = []
-                return SafeResult.ok({"count": 0})
-            M = np.array(vecs, dtype=float)
-            if M.dtype == object:
-                return SafeResult.fail("Embeddings have inconsistent dimensions.")
-            self._index_matrix, self._meta_docs = M, meta
-            return SafeResult.ok({"count": int(M.shape[0]), "dim": int(M.shape[1])})
-        except Exception as e:
-            logger.exception("Rebuild index failed")
-            return SafeResult.fail(str(e))
 
     def rebuild_index_sync(self) -> SafeResult:
         try:
@@ -158,6 +135,61 @@ class LocalVectorSearch:
         if mode == "cosine_0_1": return 0.5 * (cos + 1.0)
         return cos.astype(float)
 
+    async def rebuild_index(self) -> SafeResult:
+        """
+        Fetches all documents and builds the in-memory vector index.
+        Explicitly unwraps SafeResult data to prevent iteration errors.
+        """
+        try:
+            # 1. Fetch documents
+            docs_res = await self._find_all_docs()
+
+            # 2. Check for failure early
+            if not docs_res.success:
+                logger.error(f"Index rebuild failed at fetch: {docs_res.error}")
+                return docs_res
+
+            # 3. CRITICAL FIX: Ensure we are iterating over the LIST inside the result
+            # We access .data and fallback to an empty list if it's None.
+            docs = docs_res.data
+            if isinstance(docs, SafeResult):  # Handle accidental nesting
+                docs = docs.data
+
+            if not isinstance(docs, list):
+                # If ZMongo returns a dict (like the 'deleted_count' one in your logs),
+                # we need to make sure we aren't trying to iterate over it like a list of docs.
+                if isinstance(docs, dict) and "documents" in docs:
+                    docs = docs["documents"]
+                else:
+                    docs = []
+
+            meta, vecs = [], []
+            for d in docs:  # This will no longer throw TypeError
+                if not isinstance(d, dict):
+                    continue
+
+                extracted = self._extract_vectors_from_doc(d)
+                for v in extracted:
+                    vecs.append(v)
+                    meta.append(d)
+
+            # 4. Final Matrix Assembly
+            if not vecs:
+                self._index_matrix = np.zeros((0, 0), dtype=float)
+                self._meta_docs = []
+                return SafeResult.ok({"count": 0})
+
+            M = np.array(vecs, dtype=float)
+            if M.dtype == object:
+                return SafeResult.fail("Embeddings have inconsistent dimensions.")
+
+            self._index_matrix, self._meta_docs = M, meta
+            logger.info(f"Successfully indexed {M.shape[0]} vectors.")
+            return SafeResult.ok({"count": int(M.shape[0]), "dim": int(M.shape[1])})
+
+        except Exception as e:
+            logger.exception("Rebuild index crashed")
+            return SafeResult.fail(str(e))
 
 async def setup_demo():
     print("--- Initializing test_vector_search Demo ---")
