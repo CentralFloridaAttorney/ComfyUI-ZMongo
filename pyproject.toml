@@ -12,7 +12,6 @@ license = {text = "MIT"}
 authors = [
     {name = "comfyuser"}
 ]
-keywords = ["comfyui", "mongodb", "legal-ops", "zmongo"]
 dependencies = [
     "motor>=3.4",
     "pymongo>=4.6",
@@ -27,15 +26,14 @@ dependencies = [
     "langchain-community"
 ]
 
-[project.urls]
-"Repository" = "https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo"
+[tool.poetry]
+package-mode = false
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.package-dir]
-# Maps the distribution name to the 'src' directory
-"ComfyUI-ZMongo" = "src"
+"ComfyUI_ZMongo" = "src"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -50,6 +48,3 @@ exclude = [
     "**/.venv*",
     "__pycache__*"
 ]
-
-[tool.setuptools.package-data]
-"*" = ["*.json", "*.md", "web/*.js", "web/*.css"]
