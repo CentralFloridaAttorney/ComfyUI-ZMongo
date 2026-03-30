@@ -13,3 +13,5 @@ docx2txt
 nest_asyncio
 tkhtmlview
 beautifulsoup4
+FlagEmbedding
+transformers

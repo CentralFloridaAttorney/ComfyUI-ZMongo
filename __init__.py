@@ -1,49 +1,59 @@
 import sys
 import os
 
-# Add the current directory to sys.path to ensure 'src' is findable
-# as a sub-module during the ComfyUI boot sequence.
+# Add the current directory to sys.path so `src` is discoverable
 node_path = os.path.dirname(__file__)
 if node_path not in sys.path:
     sys.path.append(node_path)
 
-# Use relative imports to pull from your src directory
 try:
-    # Assuming these are defined in src/__init__.py or src/nodes.py
-    # If they are in a specific file like src/zmongo_nodes.py,
-    # change the import to: from .src.zmongo_nodes import ...
     from src import (
         ZMongoConfigNode,
+        ZMongoTextFetcher,
         ZMongoOperationsNode,
         ZMongoRecordSplitter,
         ZMongoFieldSelector,
-        ZRetrieverNode
+        ZRetrieverNode,
+        ZMongoDatabaseBrowserNode,
+        ZMongoRecordLoopNode,
     )
 except ImportError as e:
     print(f"ZMongo Load Error: {e}")
-    # Fallback attempt if they are in a sub-file called nodes.py
     from src.zmongo_nodes import (
         ZMongoConfigNode,
+        ZMongoTextFetcher,
         ZMongoOperationsNode,
         ZMongoRecordSplitter,
         ZMongoFieldSelector,
-        ZRetrieverNode
-    )
+        ZRetrieverNode,
+        ZMongoDatabaseBrowserNode,
+        ZMongoRecordLoopNode, ZMongoPromptDemoNode,
+)
 
 NODE_CLASS_MAPPINGS = {
     "ZMongoConfig": ZMongoConfigNode,
+    "ZMongoTextFetcher": ZMongoTextFetcher,
     "ZMongoOperations": ZMongoOperationsNode,
     "ZMongoRecordSplitter": ZMongoRecordSplitter,
     "ZMongoFieldSelector": ZMongoFieldSelector,
     "ZRetriever": ZRetrieverNode,
+    "ZMongoDatabaseBrowser": ZMongoDatabaseBrowserNode,
+    "ZMongoRecordLoopNode": ZMongoRecordLoopNode,
+    "ZMongoLoopControllerNode": ZMongoRecordLoopNode,
+    "ZMongoPromptDemoNode": ZMongoPromptDemoNode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoConfig": "🛡️ ZMongo Configuration",
+    "ZMongoTextFetcher": "📝 ZMongo Text Fetcher",
     "ZMongoOperations": "📥 ZMongo Operations",
     "ZMongoRecordSplitter": "✂️ ZMongo Record Splitter",
     "ZMongoFieldSelector": "🔍 ZMongo Field Selector",
     "ZRetriever": "🧠 ZMongo Vector Retriever",
+    "ZMongoDatabaseBrowser": "🗂️ ZMongo Database Browser",
+    "ZMongoRecordLoopNode": "🗂️ ZMongo Record Loop Node",
+    "ZMongoLoopControllerNode": " ZMongo Loop Controller Node",
+    "ZMongoPromptDemoNode": " ZMongo Prompt Demo Node"
 }
 
-__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
