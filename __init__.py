@@ -15,7 +15,6 @@ try:
         ZMongoFieldSelector,
         ZRetrieverNode,
         ZMongoDatabaseBrowserNode,
-        ZMongoRecordLoopNode,
     )
 except ImportError as e:
     print(f"ZMongo Load Error: {e}")
@@ -27,8 +26,7 @@ except ImportError as e:
         ZMongoFieldSelector,
         ZRetrieverNode,
         ZMongoDatabaseBrowserNode,
-        ZMongoRecordLoopNode, ZMongoPromptDemoNode,
-)
+    )
 
 NODE_CLASS_MAPPINGS = {
     "ZMongoConfig": ZMongoConfigNode,
@@ -38,9 +36,6 @@ NODE_CLASS_MAPPINGS = {
     "ZMongoFieldSelector": ZMongoFieldSelector,
     "ZRetriever": ZRetrieverNode,
     "ZMongoDatabaseBrowser": ZMongoDatabaseBrowserNode,
-    "ZMongoRecordLoopNode": ZMongoRecordLoopNode,
-    "ZMongoLoopControllerNode": ZMongoRecordLoopNode,
-    "ZMongoPromptDemoNode": ZMongoPromptDemoNode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -51,9 +46,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoFieldSelector": "🔍 ZMongo Field Selector",
     "ZRetriever": "🧠 ZMongo Vector Retriever",
     "ZMongoDatabaseBrowser": "🗂️ ZMongo Database Browser",
-    "ZMongoRecordLoopNode": "🗂️ ZMongo Record Loop Node",
-    "ZMongoLoopControllerNode": " ZMongo Loop Controller Node",
-    "ZMongoPromptDemoNode": " ZMongo Prompt Demo Node"
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

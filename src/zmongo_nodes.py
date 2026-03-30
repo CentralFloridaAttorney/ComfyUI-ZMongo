@@ -4,6 +4,7 @@ import random
 import threading
 from typing import Any, Dict, List, Optional
 
+import requests
 from bson import json_util
 from bson.objectid import ObjectId
 from pymongo import MongoClient
@@ -108,7 +109,151 @@ def _get_zmongo(uri: Optional[str] = None, db_name: Optional[str] = None) -> ZMo
         return _ZMONGO_SINGLETON
 
 
-class ZMongoPromptDemoNode:
+class ZMongoAPIMixin:
+    """Shared API/local access helpers for ZMongo nodes."""
+
+    API_COMMON_INPUTS = {
+        "zmongo_api_url": ("STRING", {"default": ""}),
+        "zmongo_api_key": ("STRING", {"default": "", "multiline": False}),
+        "use_api": ("BOOLEAN", {"default": False}),
+        "api_timeout_sec": ("INT", {"default": 10, "min": 1, "max": 120}),
+    }
+
+    @staticmethod
+    def _parse_json_object(raw: str, field_name: str) -> Dict[str, Any]:
+        text = (raw or "").strip()
+        if not text:
+            return {}
+        try:
+            parsed = json.loads(text)
+        except Exception as exc:
+            raise ValueError(f"{field_name} is not valid JSON: {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError(f"{field_name} must be a JSON object")
+        return parsed
+
+    @staticmethod
+    def _normalize_sort(sort_field: str, sort_direction: str):
+        direction = 1 if sort_direction == "ascending" else -1
+        field = (sort_field or "").strip() or "_id"
+        return [(field, direction)]
+
+    @staticmethod
+    def _build_auth_headers(api_key: str) -> Dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        return headers
+
+    def _post_api(self, api_url: str, api_key: str, path: str, payload: Dict[str, Any], timeout_sec: int) -> Dict[str, Any]:
+        if not api_url or not api_url.strip():
+            raise ValueError("zmongo_api_url is required when use_api=True")
+
+        url = api_url.rstrip("/") + path
+        headers = self._build_auth_headers(api_key)
+
+        response = requests.post(url, json=payload, headers=headers, timeout=int(timeout_sec))
+        if response.status_code != 200:
+            raise RuntimeError(f"API request failed: {response.status_code} {response.text}")
+
+        data = response.json()
+        if not data.get("success", False):
+            raise RuntimeError(f"API error: {data}")
+        return data
+
+    def _fetch_record_by_index_api(
+        self,
+        api_url: str,
+        api_key: str,
+        database_name: str,
+        collection_name: str,
+        select_index: int,
+        sort_field: str,
+        sort_direction: str,
+        mongo_filter: Dict[str, Any],
+        projection: Dict[str, Any],
+        timeout_sec: int,
+    ) -> Dict[str, Any]:
+        payload = {
+            "database_name": database_name,
+            "collection_name": collection_name,
+            "index": int(select_index),
+            "sort": {
+                "field": sort_field or "_id",
+                "direction": sort_direction,
+            },
+            "filter": mongo_filter or {},
+            "projection": projection or {},
+        }
+        return self._post_api(
+            api_url=api_url,
+            api_key=api_key,
+            path="/record/by_index",
+            payload=payload,
+            timeout_sec=timeout_sec,
+        )
+
+    def _fetch_records_range_api(
+        self,
+        api_url: str,
+        api_key: str,
+        database_name: str,
+        collection_name: str,
+        start_index: int,
+        end_index: int,
+        step: int,
+        sort_field: str,
+        sort_direction: str,
+        mongo_filter: Dict[str, Any],
+        projection: Dict[str, Any],
+        timeout_sec: int,
+    ) -> Dict[str, Any]:
+        payload = {
+            "database_name": database_name,
+            "collection_name": collection_name,
+            "start_index": int(start_index),
+            "end_index": int(end_index),
+            "step": int(step),
+            "sort": {
+                "field": sort_field or "_id",
+                "direction": sort_direction,
+            },
+            "filter": mongo_filter or {},
+            "projection": projection or {},
+        }
+        return self._post_api(
+            api_url=api_url,
+            api_key=api_key,
+            path="/records/range",
+            payload=payload,
+            timeout_sec=timeout_sec,
+        )
+
+    def _fetch_collection_preview_api(
+        self,
+        api_url: str,
+        api_key: str,
+        database_name: str,
+        collection_name: str,
+        limit: int,
+        select_index: int,
+        timeout_sec: int,
+    ) -> Dict[str, Any]:
+        payload = {
+            "database_name": database_name,
+            "collection_name": collection_name,
+            "limit": int(limit),
+            "select_index": int(select_index),
+        }
+        return self._post_api(
+            api_url=api_url,
+            api_key=api_key,
+            path="/collection/preview",
+            payload=payload,
+            timeout_sec=timeout_sec,
+        )
+
+class ZMongoPromptDemoNode(ZMongoAPIMixin):
     """
     Standalone demo node for real-database prompt retrieval.
 
@@ -1312,37 +1457,104 @@ class ZMongoRecordSplitter:
 
 
 class ZMongoFieldSelector:
-    """Dynamic dot-path field extractor with path list output."""
+    """
+    Dot-path field extractor with frontend-assisted dropdown population.
+
+    How it works:
+    - record_json comes from an upstream node
+    - on execution, this node flattens the JSON into path-like keys
+    - it returns those paths both as an output string and as UI metadata
+    - frontend JS silently updates the field_path dropdown choices
+    """
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "record_json": ("STRING", {"forceInput": True}),
-                "field_path": ("STRING", {"default": "metadata.case_name"}),
+                "field_path": (["text"], {"default": "text"}),
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("field_value", "available_paths")
+    RETURN_TYPES = ("STRING", "STRING", "STRING")
+    RETURN_NAMES = ("field_value", "available_paths", "selected_path")
     FUNCTION = "select_field"
     CATEGORY = "ZMongo/Database"
+
+    @staticmethod
+    def _normalize_available_paths(record: Dict[str, Any]) -> List[str]:
+        try:
+            flattened = DataProcessor.flatten_dict(record)
+            if isinstance(flattened, dict) and flattened:
+                paths = sorted(str(k) for k in flattened.keys())
+            else:
+                paths = []
+        except Exception:
+            paths = []
+
+        if not paths and isinstance(record, dict):
+            paths = sorted(str(k) for k in record.keys())
+
+        if not paths:
+            paths = ["text"]
+
+        return paths
+
+    @staticmethod
+    def _serialize_value(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, (dict, list)):
+            return _safe_json(value)
+        return str(value)
 
     def select_field(self, record_json, field_path):
         try:
             record = json.loads(record_json)
-            value = DataProcessor.get_value(record, field_path)
-            flattened = DataProcessor.flatten_dict(record)
-            available_paths = "\n".join(sorted(flattened.keys()))
-            if value is None:
-                return ("", available_paths)
-            if isinstance(value, (dict, list)):
-                return (_safe_json(value), available_paths)
-            return (str(value), available_paths)
+            if not isinstance(record, dict):
+                raise ValueError("record_json must decode to a JSON object")
+
+            available_paths_list = self._normalize_available_paths(record)
+            available_paths_text = "\n".join(available_paths_list)
+
+            selected_path = field_path if field_path in available_paths_list else available_paths_list[0]
+
+            try:
+                value = DataProcessor.get_value(record, selected_path)
+            except Exception:
+                value = None
+
+            field_value = self._serialize_value(value)
+
+            return {
+                "ui": {
+                    # Important: send the plain list, not [list]
+                    "field_choices": available_paths_list,
+                    "selected_path": selected_path,
+                    "available_paths": available_paths_text,
+                },
+                "result": (
+                    field_value,
+                    available_paths_text,
+                    selected_path,
+                ),
+            }
+
         except Exception as exc:
             logger.exception("ZMongoFieldSelector failure")
-            return (f"Error: {exc}", "")
-
+            error_text = f"Error: {exc}"
+            return {
+                "ui": {
+                    "field_choices": ["text"],
+                    "selected_path": "text",
+                    "available_paths": "",
+                },
+                "result": (
+                    error_text,
+                    "",
+                    "text",
+                ),
+            }
 
 class ZMongoOperationsNode:
     """Insert node using ZMongo.run_sync and SafeResult throughout."""
