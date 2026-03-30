@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from motor import motor_asyncio
 from bson import ObjectId
 
-from zmongo_toolbag.safe_result import SafeResult
+from .safe_result import SafeResult
 
 ENV_PATH = Path.home() / ".resources" / ".env"
 load_dotenv(ENV_PATH)

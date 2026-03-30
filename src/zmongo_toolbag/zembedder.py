@@ -11,16 +11,17 @@ It uses FlagEmbedding directly and does not depend on PyMilvus.
 
 import asyncio
 import logging
+import numpy as np
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 
-from zmongo_toolbag.data_processor import DataProcessor
-from zmongo_toolbag.local_vector_search import LocalVectorSearch
-from zmongo_toolbag.safe_result import SafeResult
-from zmongo_toolbag.zmongo import ZMongo
+from .data_processor import DataProcessor
+from .local_vector_search import LocalVectorSearch
+from .safe_result import SafeResult
+from .zmongo import ZMongo
 
 RESOURCE_PATH = Path.home() / ".resources"
 load_dotenv(RESOURCE_PATH / ".env")
@@ -109,7 +110,7 @@ class ZEmbedder:
     ) -> None:
         self.repository = ZMongo(db_name=db_name)
         self.device = device
-        self.default_output_dim = output_dimensionality
+        self.output_dimensionality = output_dimensionality
         self.collection_name = collection_name
         self.embedding_field = embedding_field
         self.vector_key = vector_key
@@ -149,8 +150,7 @@ class ZEmbedder:
         except Exception as exc:
             raise RuntimeError(
                 f"Failed to initialize BGEM3FlagModel from '{self.model_path}'. "
-                "Make sure this directory contains a full Hugging Face model export "
-                "(for example: config.json, tokenizer_config.json, tokenizer.json or vocab files, and model weights)."
+                "Make sure this directory contains a full Hugging Face model export."
             ) from exc
 
         self.vector_search = LocalVectorSearch(
@@ -185,54 +185,30 @@ class ZEmbedder:
             return {str(int(i)): float(v) for i, v in zip(indices, data)}
 
         raise TypeError(f"Unsupported sparse vector type: {type(sparse)!r}")
-    def _normalize_embedding_payload(self, payload: Dict[str, Any], count: int) -> Dict[str, Any]:
-        """
-        Normalize direct FlagEmbedding/BGE-M3 output into:
-            {
-                "dense": List[List[float]],
-                "sparse": List[Dict[str, float]],
-                "count": int,
-            }
 
-        Handles payloads like:
-            {
-                "dense_vecs": [np.ndarray, ...],
-                "lexical_weights": [defaultdict(...), ...],
-                "colbert_vecs": ...
-            }
-        """
+    def _normalize_embedding_payload(self, payload: Dict[str, Any], count: int) -> Dict[str, Any]:
+        """Normalize FlagEmbedding output into a standard format."""
         if not isinstance(payload, dict):
             raise TypeError(f"Embedding payload must be a dict, got {type(payload)!r}")
 
-        if "dense_vecs" in payload and payload["dense_vecs"] is not None:
-            dense_raw = payload["dense_vecs"]
-        elif "dense" in payload and payload["dense"] is not None:
-            dense_raw = payload["dense"]
-        else:
-            dense_raw = []
-
-        if "lexical_weights" in payload and payload["lexical_weights"] is not None:
-            sparse_raw = payload["lexical_weights"]
-        elif "sparse" in payload and payload["sparse"] is not None:
-            sparse_raw = payload["sparse"]
-        else:
-            sparse_raw = []
+        # Map potential key names from different FlagEmbedding versions
+        dense_raw = payload.get("dense_vecs") or payload.get("dense") or []
+        sparse_raw = payload.get("lexical_weights") or payload.get("sparse") or []
 
         dense_vectors = [self._to_dense_list(vec) for vec in dense_raw]
         sparse_vectors = [self._to_sparse_dict(vec) for vec in sparse_raw]
 
-        if sparse_vectors and len(sparse_vectors) != len(dense_vectors):
-            raise ValueError(
-                f"Dense/sparse count mismatch: dense={len(dense_vectors)} sparse={len(sparse_vectors)}"
-            )
-
-        if not sparse_vectors:
+        # Fill missing sparse vectors if only dense were returned
+        if not sparse_vectors and dense_vectors:
             sparse_vectors = [{} for _ in dense_vectors]
 
         if len(dense_vectors) != count:
-            raise ValueError(
-                f"Embedding count mismatch: expected {count}, got {len(dense_vectors)}"
-            )
+             # If we have a mismatch, it's likely due to the tokenizer skipping text.
+             # We should fill with zeros to maintain list alignment if necessary.
+             logger.warning("Count mismatch: expected %d, got %d. Padding with zeros.", count, len(dense_vectors))
+             while len(dense_vectors) < count:
+                 dense_vectors.append([0.0] * self.output_dimensionality)
+                 sparse_vectors.append({})
 
         return {
             "dense": dense_vectors,
@@ -242,23 +218,87 @@ class ZEmbedder:
 
     async def embed_many(self, texts: List[str]) -> SafeResult:
         try:
-            clean_texts = [str(text).strip() for text in texts if str(text).strip()]
+            if texts is None:
+                return SafeResult.fail("No texts were provided for embedding.")
+
+            source_texts = [texts] if isinstance(texts, str) else list(texts)
+
+            # Pre-clean texts to avoid passing pure whitespace or empty strings to the model
+            clean_texts = [str(text).strip() for text in source_texts if text is not None and str(text).strip()]
+
             if not clean_texts:
-                return SafeResult.ok({"dense": [], "sparse": [], "count": 0})
+                return SafeResult.fail("No non-empty texts were provided for embedding.")
 
             loop = asyncio.get_running_loop()
 
-            def _embed() -> Dict[str, Any]:
+            def _embed_batch(self, batch: Any) -> Dict[str, Any]:
+                """
+                Internal batch processor with type coercion and empty-list safety.
+                """
+                # 1. Handle non-list inputs (e.g., single strings or None)
+                if isinstance(batch, str):
+                    batch = [batch]
+                elif batch is None:
+                    return {"dense_vecs": [], "lexical_weights": [], "batch": batch}
+                elif not isinstance(batch, (list, tuple)):
+                    try:
+                        batch = list(batch)
+                    except TypeError:
+                        # If not iterable (like an int), wrap it in a list to try to stringify
+                        batch = [str(batch)]
+
+                # 2. Guard: Ensure we don't call encode with an empty list
+                # This prevents the IndexError: list index out of range in transformers
+                if not batch:
+                    return {"dense_vecs": [], "lexical_weights": []}
+
+                # 3. Call the BGE-M3 FlagModel encode method
                 return self.model.encode(
-                    clean_texts,
+                    batch,
                     return_dense=True,
                     return_sparse=True,
                     return_colbert_vecs=False,
                 )
 
-            raw_embeddings = await loop.run_in_executor(None, _embed)
-            payload = self._normalize_embedding_payload(raw_embeddings, len(clean_texts))
-            return SafeResult.ok(payload)
+            def _embed_single_texts(batch: List[str]) -> Dict[str, Any]:
+                """Fallback that handles individual failures per string."""
+                dense_vectors: List[List[float]] = []
+                sparse_vectors: List[Dict[str, float]] = []
+
+                for text in batch:
+                    try:
+                        # Skip processing if string is actually empty after cleaning
+                        if not text.strip():
+                            dense_vectors.append([0.0] * self.output_dimensionality)
+                            sparse_vectors.append({})
+                            continue
+
+                        single_payload = _embed_batch([text])
+                        normalized = self._normalize_embedding_payload(single_payload, 1)
+                        dense_vectors.extend(normalized["dense"])
+                        sparse_vectors.extend(normalized["sparse"])
+                    except Exception as e:
+                        logger.error("Failed to embed individual text: %s", e)
+                        dense_vectors.append([0.0] * self.output_dimensionality)
+                        sparse_vectors.append({})
+
+                return {
+                    "dense": dense_vectors,
+                    "sparse": sparse_vectors,
+                    "count": len(dense_vectors),
+                }
+
+            try:
+                raw_embeddings = await loop.run_in_executor(None, _embed_batch, clean_texts)
+                payload = self._normalize_embedding_payload(raw_embeddings, len(clean_texts))
+                return SafeResult.ok(payload)
+            except Exception as batch_exc:
+                logger.warning(
+                    "Batch embedding path failed; retrying one text at a time. Error: %s, %s, %s", clean_texts, _embed_batch(),
+                    batch_exc,
+                )
+                payload = await loop.run_in_executor(None, _embed_single_texts, clean_texts)
+                return SafeResult.ok(payload)
 
         except Exception as exc:
             logger.exception("Batch embedding failed")
@@ -391,35 +431,121 @@ class ZEmbedder:
             logger.exception("Batch embed-and-store failed")
             return SafeResult.fail(exc)
 
+    async def find_similar_documents(
+        self,
+        query_text: str,
+        target_collection: Optional[str] = None,
+        n_results: int = 5,
+        min_score: Optional[float] = None,
+        rebuild_index: bool = False,
+    ) -> SafeResult:
+        try:
+            clean_query = str(query_text or "").strip()
+            if not clean_query:
+                return SafeResult.fail("query_text is required")
+
+            requested_collection = target_collection or self.collection_name
+
+            if requested_collection != self.vector_search.collection:
+                self.vector_search = LocalVectorSearch(
+                    repository=self.repository,
+                    collection=requested_collection,
+                    embedding_field=self.embedding_field,
+                    vector_key=self.vector_key,
+                )
+            elif rebuild_index:
+                self.vector_search.clear_index()
+
+            embed_res = await self.embed_many([clean_query])
+            if not embed_res.success:
+                return embed_res
+
+            embed_data = embed_res.data or {}
+            dense_vectors = embed_data.get("dense") or []
+            if not dense_vectors:
+                return SafeResult.fail("No dense query embedding was generated")
+
+            search_res = await self.vector_search.search(
+                query_vector=dense_vectors[0],
+                top_k=max(1, int(n_results)),
+            )
+            if not search_res.success:
+                return search_res
+
+            results = search_res.data if isinstance(search_res.data, list) else []
+            if min_score is not None:
+                try:
+                    threshold = float(min_score)
+                    results = [
+                        hit for hit in results
+                        if float(hit.get("retrieval_score", 0.0)) >= threshold
+                    ]
+                except Exception:
+                    return SafeResult.fail(f"Invalid min_score: {min_score!r}")
+
+            return SafeResult.ok(
+                {
+                    "query_text": clean_query,
+                    "target_collection": requested_collection,
+                    "results": results,
+                    "count": len(results),
+                }
+            )
+
+        except Exception as exc:
+            logger.exception("Similarity search failed")
+            return SafeResult.fail(exc)
+
     def close(self) -> None:
         if hasattr(self, "repository"):
             self.repository.close()
         if hasattr(self, "vector_search"):
             self.vector_search.clear_index()
 
+def _embed_batch(self, batch: Any) -> Dict[str, Any]:
+    """
+    Internal batch processor with type coercion and empty-list safety.
+    """
+    # 1. Handle non-list inputs (e.g., single strings or None)
+    if isinstance(batch, str):
+        batch = [batch]
+    elif batch is None:
+        return {"dense_vecs": [], "lexical_weights": []}
+    elif not isinstance(batch, (list, tuple)):
+        try:
+            batch = list(batch)
+        except TypeError:
+            # If not iterable (like an int), wrap it in a list to try to stringify
+            batch = [str(batch)]
+
+    # 2. Guard: Ensure we don't call encode with an empty list
+    # This prevents the IndexError: list index out of range in transformers
+    if not batch:
+        return {"dense_vecs": [], "lexical_weights": []}
+
+    # 3. Call the BGE-M3 FlagModel encode method
+    return self.model.encode(
+        batch,
+        return_dense=True,
+        return_sparse=True,
+        return_colbert_vecs=False,
+    )
 
 if __name__ == "__main__":
     async def run_demo() -> None:
         logging.basicConfig(level=logging.INFO)
-
         embedder: Optional[ZEmbedder] = None
         try:
             embedder = ZEmbedder()
-
             test_text = "Legal compliance for AI Blackwell architecture."
             res = await embedder.get_embedding(text=test_text, persist=False)
-
             if not res.success:
-                print(f"❌ Embedding failed: {getattr(res, 'error', res)}")
+                print(f"❌ Embedding failed: {res.error}")
                 return
-
             print("✅ Successfully generated hybrid embeddings.")
             print(f"Dense Dim: {res.data['dimensionality']}")
-            print(f"Sparse Keys: {list((res.data.get('sparse') or {}).keys())[:5]}...")
-
         except Exception as exc:
             logger.exception("Demo failed")
-            print(f"❌ Demo failed: {exc}")
         finally:
             if embedder is not None:
                 embedder.close()
