@@ -229,10 +229,10 @@ class ZMongoDatabaseBrowserNode:
             client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
             client.admin.command("ping")
             collection = client[database_name][collection_name]
-            total_count = collection.count_documents({})
-            records = list(collection.find({}).limit(limit))
 
-            if not records:
+            total_count = collection.count_documents({})
+
+            if total_count == 0:
                 return (
                     json.dumps(
                         {
@@ -242,22 +242,85 @@ class ZMongoDatabaseBrowserNode:
                         indent=2,
                     ),
                     "No records found.",
-                    int(total_count),
+                    0,
                     str(database_name),
                     str(collection_name),
                     0,
                 )
 
-            bounded_index = max(1, min(select_index, len(records)))
-            selected_record = records[bounded_index - 1]
+            # Clamp the requested index to a valid 1-based record index.
+            bounded_index = max(1, min(int(select_index), int(total_count)))
+
+            # Use a stable sort so index N always maps to the same record ordering.
+            sort_spec = [("_id", 1)]
+
+            # Fetch the selected record directly by index.
+            selected_cursor = collection.find({}).sort(sort_spec).skip(bounded_index - 1).limit(1)
+            selected_record = next(selected_cursor, None)
+
+            if selected_record is None:
+                return (
+                    json.dumps(
+                        {
+                            "error": "Selected record could not be retrieved",
+                            "selected_index": bounded_index,
+                        },
+                        indent=2,
+                    ),
+                    "Database browse error: Selected record could not be retrieved.",
+                    int(total_count),
+                    str(database_name),
+                    str(collection_name),
+                    int(bounded_index),
+                )
+
+            # Fetch a preview list for the browser summary.
+            summary_limit = max(1, min(int(limit), int(total_count)))
+            records = list(collection.find({}).sort(sort_spec).limit(summary_limit))
+
+            summary_lines = []
+            for idx, record in enumerate(records, start=1):
+                record_id = record.get("_id", "")
+                title = (
+                        record.get("title")
+                        or record.get("name")
+                        or record.get("username")
+                        or record.get("email")
+                        or record.get("text")
+                        or record.get("content")
+                        or ""
+                )
+                if isinstance(title, str):
+                    title = title.strip().replace("\n", " ")
+                    if len(title) > 100:
+                        title = title[:100] + "..."
+                else:
+                    title = str(title)
+
+                if not title:
+                    title = f"keys={list(record.keys())[:6]}"
+
+                marker = ">> " if idx == bounded_index else "   "
+                summary_lines.append(f"{marker}{idx}. _id={record_id} | {title}")
+
+            record_list_summary = "\n".join(summary_lines) if summary_lines else "No records found."
+
+            # Include the selected index in the returned payload so downstream nodes
+            # can verify they are using the correct selected record.
+            selected_payload = dict(selected_record)
+            selected_payload["_selected_index"] = bounded_index
+            selected_payload["_database_name"] = str(database_name)
+            selected_payload["_collection_name"] = str(collection_name)
+
             return (
-                _safe_json(selected_record),
-                self._make_summary(records),
+                _safe_json(selected_payload),
+                record_list_summary,
                 int(total_count),
                 str(database_name),
                 str(collection_name),
                 int(bounded_index),
             )
+
         except Exception as exc:
             error_payload = {
                 "error": str(exc),
@@ -279,7 +342,6 @@ class ZMongoDatabaseBrowserNode:
                     client.close()
                 except Exception:
                     pass
-
 
 class ZMongoRecordSplitter:
     """Converts JSON arrays into a list output usable by downstream ComfyUI nodes."""
