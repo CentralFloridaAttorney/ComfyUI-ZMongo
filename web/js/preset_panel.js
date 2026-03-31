@@ -1,4 +1,4 @@
-import { app } from "../../scripts/app.js";
+import { app } from "../../scripts/app.web";
 
 const EXT_ID = "ZMongo.PresetPanel";
 const PANEL_ID = "zmongo-preset-panel";

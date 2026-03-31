@@ -1,4 +1,4 @@
-import { app } from "/scripts/app.js";
+import { app } from "/scripts/app.web";
 
 function findWidget(node, name) {
     return node.widgets?.find((w) => w.name === name);

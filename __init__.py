@@ -1,91 +1,65 @@
+import logging
 import os
 import sys
-import logging
 
-# Add the current directory to sys.path so `src` is discoverable
-node_path = os.path.dirname(__file__)
-if node_path not in sys.path:
-    sys.path.append(node_path)
+# Ensure the custom node package directory is importable so `.src...` works
+NODE_PATH = os.path.dirname(__file__)
+if NODE_PATH not in sys.path:
+    sys.path.append(NODE_PATH)
 
-WEB_DIRECTORY = "./js"
+WEB_DIRECTORY = "./web"
 
 logger = logging.getLogger(__name__)
 
-try:
-    from server import PromptServer
 
-    from src import (
-        ZMongoConfigNode,
-        ZMongoTextFetcher,
-        ZMongoOperationsNode,
-        ZMongoRecordSplitter,
-        ZMongoFieldSelector,
-        ZRetrieverNode,
-        ZMongoDatabaseBrowserNode,
-        ZMongoRecordLoopNode,
-        ZMongoSaveTextNode,
-        ZMongoDataPassThroughNode,
-        ZMongoSaveBatchTextNode,
-        ZMongoSaveValueNode,
-        ZMongoTabularRecordViewNode,
-        register_zmongo_field_selector_routes,
-        register_zmongo_tabular_record_view_routes,
-        register_zmongo_record_editor_routes,
-        ZMongoRecordEditorNode,
-    )
-    from src.zmongo_field_selector_node import ZMongoFieldSelectorNode
-    from src.zmongo_flattened_field_selector_node import ZMongoFlattenedFieldSelectorNode
-    from src.preset_api import register_preset_routes
-
-except ImportError as e:
-    print(f"ZMongo Load Error: {e}")
-
-    from server import PromptServer
-
-    from .src.zmongo_nodes import (
-        ZMongoConfigNode,
-        ZMongoTextFetcher,
-        ZMongoOperationsNode,
-        ZMongoRecordSplitter,
-        ZMongoFieldSelector,
-        ZRetrieverNode,
-        ZMongoDatabaseBrowserNode,
-        ZMongoRecordLoopNode,
-        ZMongoSaveTextNode,
-        ZMongoDataPassThroughNode,
-        ZMongoSaveBatchTextNode,
-        ZMongoSaveValueNode,
-    )
-    from .src.zmongo_tabular_record_view_node import ZMongoTabularRecordViewNode
-    from .src.zmongo_tabular_record_view_api import register_zmongo_tabular_record_view_routes
-    from .src.zmongo_field_selector_node import ZMongoFieldSelectorNode
-    from .src.zmongo_field_selector_api import register_zmongo_field_selector_routes
-    from .src.zmongo_flattened_field_selector_node import ZMongoFlattenedFieldSelectorNode
-    from .src.zmongo_record_editor_node import ZMongoRecordEditorNode
-    from .src.zmongo_record_editor_api import register_zmongo_record_editor_routes
-    from .src.preset_api import register_preset_routes
+def _safe_register(route_func, label: str) -> None:
+    """Register PromptServer routes without breaking node loading."""
+    try:
+        route_func(PromptServer.instance)
+    except Exception as exc:
+        logger.warning("ZMongo %s route registration warning: %s", label, exc)
 
 
-try:
-    register_preset_routes(PromptServer.instance)
-except Exception as exc:
-    print(f"ZMongo preset route registration warning: {exc}")
+from server import PromptServer
 
-try:
-    register_zmongo_field_selector_routes(PromptServer.instance)
-except Exception as exc:
-    print(f"ZMongo field route registration warning: {exc}")
+from .src.zmongo_nodes import (
+    ZMongoConfigNode,
+    ZMongoDataPassThroughNode,
+    ZMongoDatabaseBrowserNode,
+    ZMongoFieldSelector,
+    ZMongoOperationsNode,
+    ZMongoRecordLoopNode,
+    ZMongoRecordSplitter,
+    ZMongoSaveBatchTextNode,
+    ZMongoSaveTextNode,
+    ZMongoSaveValueNode,
+    ZMongoTextFetcher,
+    ZRetrieverNode,
+)
+from .src.zmongo_field_selector_node import ZMongoFieldSelectorNode
+from .src.zmongo_flattened_field_selector_node import ZMongoFlattenedFieldSelectorNode
+from .src.zmongo_tabular_record_view_node import ZMongoTabularRecordViewNode
+from .src.zmongo_tabular_record_view_api import (
+    register_zmongo_tabular_record_view_routes,
+)
+from .src.zmongo_field_selector_api import register_zmongo_field_selector_routes
+from .src.zmongo_record_editor_node import ZMongoRecordEditorNode
+from .src.zmongo_record_editor_api import register_zmongo_record_editor_routes
+from .src.preset_api import register_preset_routes
 
-try:
-    register_zmongo_tabular_record_view_routes(PromptServer.instance)
-except Exception as exc:
-    print(f"ZMongo tabular route registration warning: {exc}")
+from .src.model_loader import (
+    ZMongoModelCompatibilityDisplayNode,
+    ZMongoModelIntrospectorNode,
+    ZMongoUniversalModelSelectorNode,
+    ZMongoUniversalModelLoaderNode,
+    ZMongoUniversalModelAdapterNode,
+    ZMongoBuiltInLoaderAdapterNode,
+)
 
-try:
-    register_zmongo_record_editor_routes(PromptServer.instance)
-except Exception as exc:
-    print(f"ZMongo record editor route registration warning: {exc}")
-
+_safe_register(register_preset_routes, "preset")
+_safe_register(register_zmongo_field_selector_routes, "field selector")
+_safe_register(register_zmongo_tabular_record_view_routes, "tabular record view")
+_safe_register(register_zmongo_record_editor_routes, "record editor")
 
 NODE_CLASS_MAPPINGS = {
     "ZMongoConfig": ZMongoConfigNode,
@@ -104,6 +78,12 @@ NODE_CLASS_MAPPINGS = {
     "ZMongoFieldSelectorNode": ZMongoFieldSelectorNode,
     "ZMongoTabularRecordViewNode": ZMongoTabularRecordViewNode,
     "ZMongoRecordEditorNode": ZMongoRecordEditorNode,
+    "ZMongoUniversalModelSelectorNode": ZMongoUniversalModelSelectorNode,
+    "ZMongoModelIntrospectorNode": ZMongoModelIntrospectorNode,
+    "ZMongoModelCompatibilityDisplayNode": ZMongoModelCompatibilityDisplayNode,
+    "ZMongoUniversalModelLoaderNode": ZMongoUniversalModelLoaderNode,
+    "ZMongoUniversalModelAdapterNode": ZMongoUniversalModelAdapterNode,
+    "ZMongoBuiltInLoaderAdapterNode": ZMongoBuiltInLoaderAdapterNode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -123,6 +103,11 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoFieldSelectorNode": "🔎 ZMongo Field Selector Node",
     "ZMongoTabularRecordViewNode": "📊 ZMongo Tabular Record View",
     "ZMongoRecordEditorNode": "📝 ZMongo Record Editor",
+    "ZMongoUniversalModelSelectorNode": "🧩 ZMongo Universal Model Selector",
+    "ZMongoModelIntrospectorNode": "🧠 ZMongo Model Introspector",
+    "ZMongoModelCompatibilityDisplayNode": "✅ ZMongo Model Compatibility Display",
+    "ZMongoUniversalModelAdapterNode": " ZMongo Universal Model Adapter",
+    "ZMongoBuiltInLoaderAdapterNode": " ZMongo BuiltIn Loader Adapter",
 }
 
 __all__ = [
