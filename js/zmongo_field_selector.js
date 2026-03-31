@@ -26,6 +26,7 @@ async function fetchFlattenedFields(collectionName) {
 
 function setWidgetOptions(widget, values) {
     const safeValues = values.length ? values : ["<no_fields_found>"];
+
     widget.options = widget.options || {};
     widget.options.values = safeValues;
 
@@ -128,12 +129,14 @@ app.registerExtension({
             syncFieldFromIndex();
         };
 
+        // initial startup refresh from default selected collection
         try {
             await refreshFieldWidget(node, collectionWidget, fieldWidget, indexWidget);
         } catch (err) {
             console.error("Initial ZMongo field refresh failed:", err);
         }
 
+        // delayed retry to handle restored workflow timing
         setTimeout(async () => {
             try {
                 await refreshFieldWidget(node, collectionWidget, fieldWidget, indexWidget);
