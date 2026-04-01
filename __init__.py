@@ -2,15 +2,6 @@ import logging
 import os
 import sys
 
-from src.zmongo_toolbag.local_vector_search import LocalVectorSearch
-
-from src.zmongo_toolbag.zembedder import ZEmbedder
-
-from src.zmongo_toolbag.data_processor import DataProcessor
-
-from src.zmongo_toolbag.safe_result import SafeResult
-
-from src.zmongo_toolbag.zmongo import ZMongo
 
 # Ensure the custom node package directory is importable so `.src...` works
 NODE_PATH = os.path.dirname(__file__)
@@ -42,7 +33,7 @@ from src.zmongo_flattened_field_selector_node import ZMongoFlattenedFieldSelecto
 from src.zmongo_tabular_record_view_node import ZMongoTabularRecordViewNode
 
 from src.zmongo_record_editor_node import ZMongoRecordEditorNode
-
+from src.zmongo_workflow_node import ZMongoWorkflowNode
 
 from src.model_loader import (
     ZMongoModelCompatibilityDisplayNode,
@@ -53,7 +44,7 @@ from src.model_loader import (
     ZMongoBuiltInLoaderAdapterNode,
 )
 
-
+from src.zmongo_query_builder_node import ZMongoQueryBuilderNode
 
 
 ###############################################################################
@@ -81,6 +72,9 @@ from src.model_loader import (
 # _safe_register(register_zmongo_record_editor_routes, "record editor")
 ###############################################################################
 
+
+
+
 NODE_CLASS_MAPPINGS = {
     "ZMongoConfig": ZMongoConfigNode,
     "ZMongoTextFetcher": ZMongoTextFetcher,
@@ -104,6 +98,8 @@ NODE_CLASS_MAPPINGS = {
     "ZMongoUniversalModelLoaderNode": ZMongoUniversalModelLoaderNode,
     "ZMongoUniversalModelAdapterNode": ZMongoUniversalModelAdapterNode,
     "ZMongoBuiltInLoaderAdapterNode": ZMongoBuiltInLoaderAdapterNode,
+    "ZMongoWorkflowNode": ZMongoWorkflowNode,
+    "ZMongoQueryBuilderNode": ZMongoQueryBuilderNode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -128,15 +124,12 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoModelCompatibilityDisplayNode": "✅ ZMongo Model Compatibility Display",
     "ZMongoUniversalModelAdapterNode": " ZMongo Universal Model Adapter",
     "ZMongoBuiltInLoaderAdapterNode": " ZMongo BuiltIn Loader Adapter",
+    "ZMongoWorkflowNode": " ZMongo Workflow Node",
+    "ZMongoQueryBuilderNode": "ZMongo Query Builder",
 }
 
 __all__ = [
     "NODE_CLASS_MAPPINGS",
     "NODE_DISPLAY_NAME_MAPPINGS",
     "WEB_DIRECTORY",
-    "DataProcessor",
-    "SafeResult",
-    "ZMongo",
-    "ZEmbedder",
-    "LocalVectorSearch",
 ]

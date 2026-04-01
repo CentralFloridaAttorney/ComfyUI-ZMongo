@@ -1,3 +1,4 @@
+from .zmongo_workflow_node import ZMongoWorkflowNode
 from .zmongo_toolbag.data_processor import DataProcessor
 from .zmongo_toolbag.local_vector_search import LocalVectorSearch
 from .zmongo_toolbag.safe_result import SafeResult
@@ -12,6 +13,8 @@ from .zmongo_record_editor_api import register_zmongo_record_editor_routes
 from .zmongo_record_editor_node import ZMongoRecordEditorNode
 from .zmongo_tabular_record_view_api import register_zmongo_tabular_record_view_routes
 from .zmongo_tabular_record_view_node import ZMongoTabularRecordViewNode
+from .zmongo_query_builder_node import ZMongoQueryBuilderNode
+
 from .zmongo_nodes import (
     ZMongoConfigNode,
     ZMongoDataPassThroughNode,
@@ -46,6 +49,8 @@ from .model_loader.zmongo_universal_adapter_node import (
 from .model_loader.zmongo_builtin_loader_adapter_node import (
     ZMongoBuiltInLoaderAdapterNode,
 )
+
+
 __all__ = [
     "register_preset_routes",
     "register_zmongo_field_selector_routes",
@@ -78,4 +83,6 @@ __all__ = [
     "ZMongo",
     "ZEmbedder",
     "LocalVectorSearch",
+    "ZMongoWorkflowNode",
+    "ZMongoQueryBuilderNode",
 ]
