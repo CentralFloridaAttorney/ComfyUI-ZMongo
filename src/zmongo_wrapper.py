@@ -1,7 +1,7 @@
 import json
 
-from zmongo_manager import ZMongoManager
-from zmongo_toolbag.data_processor import DataProcessor
+from .zmongo_manager import ZMongoManager
+from .zmongo_toolbag.data_processor import DataProcessor
 
 
 class ZMongoOperationsNode:

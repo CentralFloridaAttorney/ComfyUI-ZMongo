@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import folder_paths
 from nodes import (
@@ -10,60 +10,33 @@ from nodes import (
     CLIPVisionLoader,
     CheckpointLoaderSimple,
     ControlNetLoader,
-    STYLE_MODEL,
     StyleModelLoader,
     UNETLoader,
     VAELoader,
-    UpscaleModelLoader,
 )
-
+from comfy_extras.nodes_upscale_model import UpscaleModelLoader
 
 class ZMongoBuiltInLoaderAdapterNode:
     """
     Universal adapter that reuses ComfyUI built-in loaders wherever possible.
-
-    This node accepts a selected model path (or model_info_json from the
-    introspector / universal loader), determines the compatible built-in loader,
-    converts the selected file into the name expected by that built-in loader,
-    and returns real native Comfy outputs.
-
-    Supported families:
-      - checkpoint      -> CheckpointLoaderSimple
-      - vae             -> VAELoader
-      - clip            -> CLIPLoader
-      - text_encoder    -> CLIPLoader
-      - unet            -> UNETLoader
-      - diffusion       -> UNETLoader
-      - controlnet      -> ControlNetLoader
-      - clip_vision     -> CLIPVisionLoader
-      - upscaler        -> UpscaleModelLoader
-      - style_model     -> StyleModelLoader
-
-    Unsupported families intentionally return only status metadata:
-      - llm
-      - embedding
-      - onnx_model
-      - audio_model
-      - speech_model
-      - generic unknowns
     """
 
     CATEGORY = "ZMongo/Models"
     FUNCTION = "adapt"
 
     RETURN_TYPES = (
-        "MODEL",         # model
-        "CLIP",          # clip
-        "VAE",           # vae
-        "MODEL",         # unet_model
-        "CONTROL_NET",   # control_net
-        "CLIP_VISION",   # clip_vision
-        "UPSCALE_MODEL", # upscale_model
-        "STYLE_MODEL",   # style_model
-        "STRING",        # status_text
-        "BOOLEAN",       # is_compatible
-        "STRING",        # model_type
-        "STRING",        # built_in_loader_name
+        "MODEL",
+        "CLIP",
+        "VAE",
+        "MODEL",
+        "CONTROL_NET",
+        "CLIP_VISION",
+        "UPSCALE_MODEL",
+        "STYLE_MODEL",
+        "STRING",
+        "BOOLEAN",
+        "STRING",
+        "STRING",
     )
     RETURN_NAMES = (
         "model",
@@ -209,10 +182,6 @@ class ZMongoBuiltInLoaderAdapterNode:
 
     @classmethod
     def _relative_name_for_folder_type(cls, full_path: Path, folder_type: str) -> str:
-        """
-        Convert an absolute path to the name/relative path expected by ComfyUI's
-        built-in loaders for the given folder type.
-        """
         normalized = full_path.resolve()
         available = folder_paths.get_filename_list(folder_type)
 
@@ -228,10 +197,6 @@ class ZMongoBuiltInLoaderAdapterNode:
 
     @staticmethod
     def _call_first_available(instance: Any, methods_with_kwargs):
-        """
-        Try a sequence of possible built-in method names/signatures until one works.
-        This keeps the adapter resilient across small ComfyUI API changes.
-        """
         last_error = None
 
         for method_name, kwargs in methods_with_kwargs:
@@ -411,25 +376,18 @@ class ZMongoBuiltInLoaderAdapterNode:
 
             if model_type == "checkpoint":
                 model_obj, clip_obj, vae_obj = self._load_checkpoint(relative_name)
-
             elif model_type == "vae":
                 vae_obj = self._load_vae(relative_name)
-
             elif model_type in {"clip", "text_encoder"}:
                 clip_obj = self._load_clip(relative_name, clip_type)
-
             elif model_type in {"unet", "diffusion"}:
                 unet_obj = self._load_unet(relative_name)
-
             elif model_type == "controlnet":
                 controlnet_obj = self._load_controlnet(relative_name)
-
             elif model_type == "clip_vision":
                 clipvision_obj = self._load_clip_vision(relative_name)
-
             elif model_type == "upscaler":
                 upscale_obj = self._load_upscale_model(relative_name)
-
             elif model_type == "style_model":
                 style_obj = self._load_style_model(relative_name)
 

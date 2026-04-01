@@ -44,7 +44,7 @@ class ZMongoUniversalModelSelectorNode:
 
     @classmethod
     def _zmongo_root(cls) -> Path:
-        return Path(folder_paths.models_dir) / "zmongo"
+        return Path(folder_paths.models_dir) / "checkpoints"
 
     @classmethod
     def _iter_model_files(cls, root: Path) -> Iterable[Path]:

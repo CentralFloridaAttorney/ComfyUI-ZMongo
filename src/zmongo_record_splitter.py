@@ -1,5 +1,5 @@
 import json
-from zmongo_toolbag.data_processor import DataProcessor
+from .zmongo_toolbag.data_processor import DataProcessor
 
 
 class ZMongoRecordSplitter:

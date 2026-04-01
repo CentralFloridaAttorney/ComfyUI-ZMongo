@@ -1,9 +1,13 @@
+import base64
 import datetime
 import html
 import json
 import logging
+import math
 import re
+import uuid
 from collections import deque
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 try:
@@ -15,11 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class DataProcessor:
-    """Centralized data processing, normalization, flattening, and text helpers.
-
-    This class preserves the legacy helper methods from the prior implementation
-    while standardizing everything under the new ``DataProcessor`` name.
-    """
+    """Centralized data processing, normalization, flattening, and text helpers."""
 
     # ------------------------------------------------------------------
     # Entity & index helpers (legacy compatibility)
@@ -75,21 +75,218 @@ class DataProcessor:
     # ------------------------------------------------------------------
     @staticmethod
     def normalize_objectid(obj: Any) -> Any:
-        """Recursively convert ObjectId and datetime values to JSON-safe strings."""
-        if isinstance(obj, ObjectId):
-            return str(obj)
-        if isinstance(obj, (datetime.datetime, datetime.date)):
-            return obj.isoformat()
-        if isinstance(obj, dict):
-            return {k: DataProcessor.normalize_objectid(v) for k, v in obj.items()}
-        if isinstance(obj, (list, tuple, set)):
-            return [DataProcessor.normalize_objectid(v) for v in obj]
-        return obj
+        """Legacy alias retained for backward compatibility."""
+        return DataProcessor.to_json_compatible(obj)
 
     @staticmethod
-    def to_json_compatible(data: Any) -> Any:
-        """Backward-compatible alias for recursive normalization."""
-        return DataProcessor.normalize_objectid(data)
+    def to_json_compatible(
+        data: Any,
+        _seen: Optional[set] = None,
+        *,
+        max_depth: int = 50,
+        _depth: int = 0,
+    ) -> Any:
+        """Recursively convert arbitrary Python objects into JSON-compatible data."""
+        if _seen is None:
+            _seen = set()
+
+        if _depth > max_depth:
+            return {"__truncated__": f"max_depth_exceeded:{max_depth}"}
+
+        if data is None or isinstance(data, (bool, int, str)):
+            return data
+
+        if isinstance(data, float):
+            if math.isnan(data):
+                return "NaN"
+            if math.isinf(data):
+                return "Infinity" if data > 0 else "-Infinity"
+            return data
+
+        if isinstance(data, ObjectId):
+            return str(data)
+
+        if isinstance(data, uuid.UUID):
+            return str(data)
+
+        if isinstance(data, Decimal):
+            try:
+                if data == data.to_integral_value():
+                    return int(data)
+                return float(data)
+            except Exception:
+                return str(data)
+
+        if isinstance(data, (datetime.datetime, datetime.date, datetime.time)):
+            try:
+                return data.isoformat()
+            except Exception:
+                return str(data)
+
+        if isinstance(data, re.Pattern):
+            return data.pattern
+
+        if isinstance(data, (bytes, bytearray, memoryview)):
+            raw = bytes(data)
+            try:
+                return raw.decode("utf-8")
+            except Exception:
+                return {
+                    "__type__": "bytes",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                }
+
+        if isinstance(data, BaseException):
+            return {
+                "__type__": data.__class__.__name__,
+                "message": str(data),
+                "args": DataProcessor.to_json_compatible(
+                    list(getattr(data, "args", [])),
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                ),
+            }
+
+        needs_cycle_tracking = isinstance(
+            data,
+            (dict, list, tuple, set, frozenset, deque),
+        ) or hasattr(data, "__dict__") or hasattr(data, "model_dump") or hasattr(data, "dict")
+
+        if needs_cycle_tracking:
+            obj_id = id(data)
+            if obj_id in _seen:
+                return {"__circular_reference__": type(data).__name__}
+            _seen.add(obj_id)
+
+        if isinstance(data, dict):
+            converted: Dict[str, Any] = {}
+            for key, value in data.items():
+                if isinstance(key, (str, int, float, bool)) or key is None:
+                    safe_key = str(key)
+                else:
+                    safe_key = str(
+                        DataProcessor.to_json_compatible(
+                            key,
+                            _seen=_seen.copy(),
+                            max_depth=max_depth,
+                            _depth=_depth + 1,
+                        )
+                    )
+
+                converted[safe_key] = DataProcessor.to_json_compatible(
+                    value,
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                )
+            return converted
+
+        if isinstance(data, (list, tuple, set, frozenset, deque)):
+            iterable = list(data)
+            if isinstance(data, (set, frozenset)):
+                try:
+                    iterable = sorted(iterable, key=lambda x: repr(x))
+                except Exception:
+                    pass
+
+            return [
+                DataProcessor.to_json_compatible(
+                    item,
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                )
+                for item in iterable
+            ]
+
+        try:
+            import numpy as np  # type: ignore
+
+            if isinstance(data, np.generic):
+                return DataProcessor.to_json_compatible(
+                    data.item(),
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                )
+
+            if isinstance(data, np.ndarray):
+                return DataProcessor.to_json_compatible(
+                    data.tolist(),
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                )
+        except Exception:
+            pass
+
+        try:
+            import pandas as pd  # type: ignore
+
+            if isinstance(data, pd.DataFrame):
+                return DataProcessor.to_json_compatible(
+                    data.to_dict(orient="records"),
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                )
+
+            if isinstance(data, pd.Series):
+                return DataProcessor.to_json_compatible(
+                    data.to_dict(),
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                )
+        except Exception:
+            pass
+
+        if hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
+            try:
+                dumped = data.model_dump()
+                return DataProcessor.to_json_compatible(
+                    dumped,
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                )
+            except Exception:
+                pass
+
+        if hasattr(data, "dict") and callable(getattr(data, "dict")):
+            try:
+                dumped = data.dict()
+                return DataProcessor.to_json_compatible(
+                    dumped,
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                )
+            except Exception:
+                pass
+
+        if hasattr(data, "__dict__"):
+            try:
+                attrs = {
+                    key: value
+                    for key, value in vars(data).items()
+                    if not key.startswith("_")
+                }
+                return DataProcessor.to_json_compatible(
+                    attrs,
+                    _seen=_seen.copy(),
+                    max_depth=max_depth,
+                    _depth=_depth + 1,
+                )
+            except Exception:
+                pass
+
+        try:
+            return str(data)
+        except Exception:
+            return f"<unserializable {type(data).__name__}>"
 
     # ------------------------------------------------------------------
     # JSON serialization
@@ -97,22 +294,9 @@ class DataProcessor:
     @staticmethod
     def to_json(data: Any, indent: Optional[int] = None) -> str:
         """Serialize arbitrary data to JSON, coercing unsupported values."""
-
-        def _default(obj: Any) -> str:
-            if isinstance(obj, ObjectId):
-                return str(obj)
-            if isinstance(obj, (datetime.datetime, datetime.date)):
-                return obj.isoformat()
-            return str(obj)
-
         try:
-            normalized = DataProcessor.normalize_objectid(data)
-            return json.dumps(
-                normalized,
-                indent=indent,
-                default=_default,
-                ensure_ascii=False,
-            )
+            normalized = DataProcessor.to_json_compatible(data)
+            return json.dumps(normalized, indent=indent, ensure_ascii=False)
         except Exception as exc:
             logger.error("Error serializing to JSON: %s", exc)
             return json.dumps({"error": str(exc)})
@@ -172,11 +356,7 @@ class DataProcessor:
 
     @staticmethod
     def set_value(data: Union[Dict[str, Any], List[Any]], key: str, val: Any) -> bool:
-        """Set a nested value using a dot-path key.
-
-        Missing intermediate dict nodes are created automatically.
-        Existing lists are supported when numeric indexes are used.
-        """
+        """Set a nested value using a dot-path key."""
         if not isinstance(data, (dict, list)) or not key:
             return False
 
@@ -233,14 +413,10 @@ class DataProcessor:
             text = data
         elif isinstance(data, dict):
             if "output_text" not in data:
-                raise ValueError(
-                    "Dictionary must contain 'output_text' key for HTML conversion."
-                )
+                raise ValueError("Dictionary must contain 'output_text' key for HTML conversion.")
             text = data.get("output_text", "")
         else:
-            raise ValueError(
-                f"Invalid input type: {type(data)}. Expected str or dict."
-            )
+            raise ValueError(f"Invalid input type: {type(data)}. Expected str or dict.")
 
         if not isinstance(text, str):
             raise ValueError("Invalid text for HTML conversion")
@@ -255,116 +431,4 @@ class DataProcessor:
     @staticmethod
     def convert_object_to_json(obj: Any, _seen: Optional[set] = None) -> Any:
         """Recursively coerce arbitrary Python objects into JSON-safe values."""
-        import numpy as np
-        import pandas as pd
-
-        if _seen is None:
-            _seen = set()
-
-        obj_id = id(obj)
-        if obj_id in _seen:
-            return {"__circular_reference__": type(obj).__name__}
-        _seen.add(obj_id)
-
-        if obj is None or isinstance(obj, (bool, int, float, str)):
-            return obj
-        if isinstance(obj, bytes):
-            try:
-                return obj.decode()
-            except Exception:
-                return str(obj)
-        if isinstance(obj, (datetime.datetime, datetime.date)):
-            return obj.isoformat()
-        if isinstance(obj, ObjectId):
-            return str(obj)
-        if isinstance(obj, np.ndarray):
-            return [
-                DataProcessor.convert_object_to_json(item, _seen.copy())
-                for item in obj.tolist()
-            ]
-        if isinstance(obj, pd.DataFrame):
-            return [
-                DataProcessor.convert_object_to_json(record, _seen.copy())
-                for record in obj.to_dict(orient="records")
-            ]
-        if isinstance(obj, pd.Series):
-            return {
-                key: DataProcessor.convert_object_to_json(value, _seen.copy())
-                for key, value in obj.items()
-            }
-        if isinstance(obj, (list, tuple, set, deque)):
-            return [
-                DataProcessor.convert_object_to_json(item, _seen.copy())
-                for item in list(obj)
-            ]
-        if isinstance(obj, dict):
-            return {
-                key: DataProcessor.convert_object_to_json(value, _seen.copy())
-                for key, value in obj.items()
-            }
-        if hasattr(obj, "__dict__"):
-            attrs = {
-                key: value
-                for key, value in vars(obj).items()
-                if not key.startswith("_")
-            }
-            return DataProcessor.convert_object_to_json(attrs, _seen.copy())
-        return str(obj)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-
-    print("--- 1. BSON & JSON normalization ---")
-    mock_data = {
-        "_id": ObjectId("65918f0678e24c0001f3e5b1"),
-        "timestamp": datetime.datetime(2024, 1, 1, 12, 0, 0),
-        "tags": {"active", "verified"},
-        "meta": {"author": "User123"},
-    }
-    print(DataProcessor.normalize_objectid(mock_data))
-    print(DataProcessor.to_json(mock_data, indent=2))
-    print()
-
-    print("--- 2. Flattening ---")
-    nested = {
-        "user": {"id": 1, "profile": {"name": "Alice", "role": "Admin"}},
-        "items": ["laptop", "mouse"],
-    }
-    print(DataProcessor.flatten_dict(nested))
-    print()
-
-    print("--- 3. Path-based get/set ---")
-    print(DataProcessor.get_value(nested, "user.profile.name"))
-    print(DataProcessor.get_value(nested, "items.1"))
-    DataProcessor.set_value(nested, "user.profile.role", "Superuser")
-    DataProcessor.set_value(nested, "items.0", "macbook")
-    print(nested)
-    print()
-
-    print("--- 4. Text / HTML helpers ---")
-    raw_text = "```python\nprint('Hello World')\n```"
-    print(repr(DataProcessor.clean_output_text(raw_text)))
-    html_payload = {"output_text": "&lt;p&gt;Hello &amp; Welcome&lt;/p&gt;"}
-    print(DataProcessor.convert_text_to_html(html_payload))
-    print()
-
-    print("--- 5. Legacy helpers ---")
-    row = ["Acme", "Holdings", None, "nan"]
-    print(DataProcessor.get_entity_name(row))
-    print(DataProcessor.get_index_last_non_excluded(row, {None, "nan"}))
-    print()
-
-    print("--- 6. Complex object conversion & circular refs ---")
-
-    class User:
-        def __init__(self, name: str) -> None:
-            self.name = name
-            self.friend = None
-
-    alice = User("Alice")
-    bob = User("Bob")
-    alice.friend = bob
-    bob.friend = alice
-
-    print(DataProcessor.convert_object_to_json(alice))
+        return DataProcessor.to_json_compatible(obj, _seen=_seen)

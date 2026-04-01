@@ -25,9 +25,9 @@ try:
     from .zmongo_toolbag.zmongo import ZMongo
     from .zmongo_toolbag.safe_result import SafeResult
 except (ImportError, ValueError):
-    from zmongo_toolbag.data_processor import DataProcessor
-    from zmongo_toolbag.zmongo import ZMongo
-    from zmongo_toolbag.safe_result import SafeResult
+    from .zmongo_toolbag.data_processor import DataProcessor
+    from .zmongo_toolbag.zmongo import ZMongo
+    from .zmongo_toolbag.safe_result import SafeResult
 
 # BSON Streaming support check
 try:

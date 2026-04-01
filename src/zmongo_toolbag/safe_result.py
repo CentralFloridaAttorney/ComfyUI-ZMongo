@@ -1,7 +1,8 @@
-import logging
 import json
+import logging
 from typing import Any, Dict, Optional, Union
-from quart import jsonify, Response
+
+from quart import Response, jsonify
 
 from .data_processor import DataProcessor
 
@@ -9,60 +10,54 @@ logger = logging.getLogger(__name__)
 
 
 class SafeResult:
-    """
-    Unified, BSON-safe, Quart-compatible response wrapper for ZLegal Codex.
-    """
+    """Unified, BSON-safe, Quart-compatible response wrapper."""
 
     def __init__(
-            self,
-            success: bool,
-            data: Optional[Any] = None,
-            message: Optional[str] = None,
-            error: Optional[Union[str, Dict[str, Any]]] = None,
-            status_code: Optional[int] = None,
-            _raw_data: Optional[Any] = None,  # Internal storage for original objects
+        self,
+        success: bool,
+        data: Optional[Any] = None,
+        message: Optional[str] = None,
+        error: Optional[Union[str, Dict[str, Any]]] = None,
+        status_code: Optional[int] = None,
+        _raw_data: Optional[Any] = None,
     ):
         self.success = success
-
-        # Store raw data for .original() restoration (ObjectIds, etc.)
         self._raw_data = _raw_data if _raw_data is not None else data
-
-        # Processed data for JSON serialization
         self.data = DataProcessor.to_json_compatible(data)
-
         self.message = message or ("Success" if success else "Error")
         self.error = DataProcessor.to_json_compatible(error)
         self.status_code = status_code or (200 if success else 400)
 
         logger.debug(
-            f"[SafeResult.__init__] success={self.success}, "
-            f"status={self.status_code}, message={self.message}"
+            "[SafeResult.__init__] success=%s, status=%s, message=%s",
+            self.success,
+            self.status_code,
+            self.message,
         )
 
-    # ------------------------------------------------------------------
-    # ✅ Constructors
-    # ------------------------------------------------------------------
     @classmethod
     def ok(
-            cls,
-            data: Optional[Any] = None,
-            message: Optional[str] = "OK",
-            status_code: int = 200,
+        cls,
+        data: Optional[Any] = None,
+        message: Optional[str] = "OK",
+        status_code: int = 200,
     ) -> "SafeResult":
-        # Pass data as _raw_data to preserve ObjectIds
-        return cls(True, data=data, message=message, status_code=status_code, _raw_data=data)
+        return cls(
+            True,
+            data=data,
+            message=message,
+            status_code=status_code,
+            _raw_data=data,
+        )
 
     @classmethod
     def fail(
-            cls,
-            error: Optional[Union[str, Dict[str, Any], Exception]] = "Error",
-            data: Optional[Any] = None,
-            status_code: int = 400,
-            message: Optional[str] = None,
+        cls,
+        error: Optional[Union[str, Dict[str, Any], Exception]] = "Error",
+        data: Optional[Any] = None,
+        status_code: int = 400,
+        message: Optional[str] = None,
     ) -> "SafeResult":
-        """
-        Supports positional args matching tests: fail(error_msg, data_dict)
-        """
         err_val = str(error) if isinstance(error, Exception) else error
         msg_val = message or (str(err_val) if isinstance(err_val, str) else "Error")
 
@@ -72,36 +67,23 @@ class SafeResult:
             message=msg_val,
             error=err_val,
             status_code=status_code,
-            _raw_data=data
+            _raw_data=data,
         )
 
-    # ------------------------------------------------------------------
-    # ✅ Data Restoration (Missing in original file)
-    # ------------------------------------------------------------------
     def original(self) -> Any:
-        """
-        Returns the original (raw) data, restoring ObjectIds and applying
-        '__keymap' transformations if present.
-        """
         return self._apply_keymap(self._raw_data)
 
     def _apply_keymap(self, obj: Any) -> Any:
-        """Recursively apply __keymap field renaming to the object."""
         if isinstance(obj, list):
             return [self._apply_keymap(item) for item in obj]
 
         if isinstance(obj, dict):
-            # Check for keymap
             keymap = obj.get("__keymap")
-            new_obj = {}
+            new_obj: Dict[str, Any] = {}
             for k, v in obj.items():
                 if k == "__keymap":
                     continue
-
-                # Recursive process value
                 val = self._apply_keymap(v)
-
-                # Remap key if needed
                 if keymap and k in keymap:
                     new_obj[keymap[k]] = val
                 else:
@@ -110,11 +92,7 @@ class SafeResult:
 
         return obj
 
-    # ------------------------------------------------------------------
-    # ✅ Serialization & Representation
-    # ------------------------------------------------------------------
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to a JSON-safe dict."""
         return {
             "success": self.success,
             "data": self.data,
@@ -124,23 +102,20 @@ class SafeResult:
         }
 
     def model_dump(self) -> Dict[str, Any]:
-        """Alias for to_dict, expected by tests."""
         return self.to_dict()
 
     def to_json(self) -> str:
-        """Return JSON string representation."""
         return json.dumps(self.to_dict(), default=str)
 
-    def __repr__(self):
-        # Format matches test expectation: SafeResult(success=True ...)
-        return f"SafeResult(success={self.success}, data={self.data}, message={self.message}, error={self.error})"
+    def __repr__(self) -> str:
+        return (
+            f"SafeResult(success={self.success}, data={self.data}, "
+            f"message={self.message}, error={self.error})"
+        )
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self.success
 
-    # ------------------------------------------------------------------
-    # ✅ Quart Integration
-    # ------------------------------------------------------------------
     def to_response(self, override_status: Optional[int] = None):
         code = override_status or self.status_code
         return jsonify(self.to_dict()), code
@@ -174,21 +149,19 @@ class SafeResult:
             )
 
         except Exception as e:
-            return cls.fail("Response parsing failed", error=str(e), status_code=500)
+            return cls.fail(str(e), status_code=500, message="Response parsing failed")
 
-    # ------------------------------------------------------------------
-    # 🧠 Utilities
-    # ------------------------------------------------------------------
     def log(self, prefix: str = "") -> "SafeResult":
         msg = f"{prefix} [{self.status_code}] {self.message}"
         if self.success:
-            logger.info(f"[SafeResult.log] ✅ {msg}")
+            logger.info("[SafeResult.log] ✅ %s", msg)
         else:
-            logger.error(f"[SafeResult.log] ❌ {msg} | {self.error}")
+            logger.error("[SafeResult.log] ❌ %s | %s", msg, self.error)
         return self
 
     @classmethod
     def ensure(cls, condition: bool, message: str = "Condition failed", **kwargs) -> "SafeResult":
         if condition:
-            return cls.ok(**kwargs)
+            success_message = kwargs.pop("message", "OK")
+            return cls.ok(message=success_message, **kwargs)
         return cls.fail(error=message, **kwargs)

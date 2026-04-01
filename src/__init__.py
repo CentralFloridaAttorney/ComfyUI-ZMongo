@@ -1,3 +1,8 @@
+from .zmongo_toolbag.data_processor import DataProcessor
+from .zmongo_toolbag.local_vector_search import LocalVectorSearch
+from .zmongo_toolbag.safe_result import SafeResult
+from .zmongo_toolbag.zembedder import ZEmbedder
+from .zmongo_toolbag.zmongo import ZMongo
 from .preset_api import register_preset_routes
 
 from .zmongo_field_selector_api import register_zmongo_field_selector_routes
@@ -67,5 +72,10 @@ __all__ = [
     "ZMongoUniversalModelSelectorNode",
     "ZMongoUniversalModelLoaderNode",
     "ZMongoUniversalModelAdapterNode",
-    "ZMongoBuiltInLoaderAdapterNode"
+    "ZMongoBuiltInLoaderAdapterNode",
+    "DataProcessor",
+    "SafeResult",
+    "ZMongo",
+    "ZEmbedder",
+    "LocalVectorSearch",
 ]

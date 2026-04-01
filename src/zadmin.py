@@ -4,8 +4,8 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-from zmongo_admin_tabs import ZMongoAdminTabs
-from zmongo_manager import ZMongoManager
+from .zmongo_admin_tabs import ZMongoAdminTabs
+from .zmongo_manager import ZMongoManager
 
 
 class ZAdminGUI(tk.Tk):

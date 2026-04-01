@@ -6,27 +6,27 @@ from aiohttp import web
 try:
     from .zmongo_manager import ZMongoManager
 except Exception:
-    from zmongo_manager import ZMongoManager
+    from .zmongo_manager import ZMongoManager
 
 try:
     from .zmongo_toolbag.data_processor import DataProcessor
 except Exception:
-    from zmongo_toolbag.data_processor import DataProcessor
+    from .zmongo_toolbag.data_processor import DataProcessor
 
 try:
     from .zmongo_toolbag.zembedder import ZEmbedder
 except Exception:
-    from zmongo_toolbag.zembedder import ZEmbedder
+    from .zmongo_toolbag.zembedder import ZEmbedder
 
 try:
     from .zmongo_toolbag.zmongo import ZMongo
 except Exception:
-    from zmongo_toolbag.zmongo import ZMongo
+    from .zmongo_toolbag.zmongo import ZMongo
 
 try:
     from .zmongo_toolbag.safe_result import SafeResult
 except Exception:
-    from zmongo_toolbag.safe_result import SafeResult
+    from .zmongo_toolbag.safe_result import SafeResult
 logger = logging.getLogger(__name__)
 
 try:
