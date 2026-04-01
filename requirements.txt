@@ -15,3 +15,6 @@ tkhtmlview
 beautifulsoup4
 FlagEmbedding
 transformers
+pymilvus[model]
+FlagEmbedding
+pytest

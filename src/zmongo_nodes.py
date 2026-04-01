@@ -12,7 +12,6 @@ from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 from .zmongo_toolbag.safe_result import SafeResult
 from .zmongo_toolbag.zmongo import ZMongo
-from .zmongo_toolbag.data_processor import DataProcessor
 from .zmongo_toolbag.zembedder import ZEmbedder
 
 logger = logging.getLogger(__name__)
@@ -111,30 +110,6 @@ def _get_zmongo(uri: Optional[str] = None, db_name: Optional[str] = None) -> ZMo
         return _ZMONGO_SINGLETON
 
 
-def _register_zmongo_field_selector_routes(prompt_server_instance):
-    routes = prompt_server_instance.routes
-
-    @routes.get("/zmongo/flattened_fields")
-    async def zmongo_get_flattened_fields(request):
-        try:
-            collection_name = request.rel_url.query.get("collection_name", "").strip()
-            fields = ZMongoFlattenedFieldDropdownNode.get_flattened_field_names(collection_name)
-            return web.json_response(
-                {
-                    "success": True,
-                    "collection_name": collection_name,
-                    "fields": fields,
-                }
-            )
-        except Exception as exc:
-            return web.json_response(
-                {
-                    "success": False,
-                    "error": str(exc),
-                    "fields": [],
-                },
-                status=500,
-            )
 class ZMongoAPIMixin:
     """Shared API/local access helpers for ZMongo nodes."""
 

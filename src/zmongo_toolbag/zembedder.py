@@ -1,165 +1,69 @@
 """
-ZEmbedder – local BGE-M3 hybrid embedding manager.
-
-This module integrates:
-- ZMongo
-- LocalVectorSearch
-- SafeResult
-
-It uses FlagEmbedding directly and does not depend on PyMilvus.
+ZEmbedder – Local BGE-M3 Hybrid Embedding manager for Blackwell RTX 5080.
+Integrates with ZMongo, LocalVectorSearch, and SafeResult.
 """
 
 import asyncio
 import logging
-import numpy as np
-from importlib.metadata import PackageNotFoundError, version
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
+from pymilvus.model.hybrid import BGEM3EmbeddingFunction
 
+# Internal toolbag imports
 from .data_processor import DataProcessor
-from .local_vector_search import LocalVectorSearch
 from .safe_result import SafeResult
 from .zmongo import ZMongo
+from .local_vector_search import LocalVectorSearch
 
+# Load environment resources
 RESOURCE_PATH = Path.home() / ".resources"
 load_dotenv(RESOURCE_PATH / ".env")
 load_dotenv(RESOURCE_PATH / ".secrets")
 
 logger = logging.getLogger(__name__)
 
+# Constants for BGE-M3
 DEFAULT_MODEL_PATH = "/home/comfyuser/.resources/preserved_models/encoders/bge-m3"
 DEFAULT_DB_NAME = "wiki_kb"
-DEFAULT_COLLECTION = "knowledge_base"
-DEFAULT_EMBEDDING_FIELD = "embedding"
-DEFAULT_VECTOR_KEY = "dense"
-
-
-def _check_bge_m3_dependencies() -> None:
-    try:
-        flagembedding_ver = version("FlagEmbedding")
-    except PackageNotFoundError as exc:
-        raise RuntimeError("FlagEmbedding is not installed in this venv.") from exc
-
-    try:
-        transformers_ver = version("transformers")
-    except PackageNotFoundError as exc:
-        raise RuntimeError("transformers is not installed in this venv.") from exc
-
-    logger.info(
-        "Detected dependency versions: FlagEmbedding=%s transformers=%s",
-        flagembedding_ver,
-        transformers_ver,
-    )
-
-
-def _is_hf_model_dir(path: Path) -> bool:
-    required = ("config.json", "tokenizer_config.json")
-    return path.is_dir() and all((path / name).exists() for name in required)
-
-
-def _resolve_bge_m3_model_dir(model_path: Union[str, Path]) -> Path:
-    base = Path(model_path).expanduser().resolve()
-
-    if not base.exists():
-        raise FileNotFoundError(f"BGE-M3 model path does not exist: {base}")
-
-    if _is_hf_model_dir(base):
-        return base
-
-    snapshots_dir = base / "snapshots"
-    if snapshots_dir.is_dir():
-        for child in sorted(snapshots_dir.iterdir()):
-            if _is_hf_model_dir(child):
-                return child
-
-    for candidate in sorted(base.rglob("config.json")):
-        parent = candidate.parent
-        if _is_hf_model_dir(parent):
-            return parent
-
-    raise FileNotFoundError(
-        f"No usable BGE-M3 model directory found under '{base}'. "
-        "Expected files such as config.json and tokenizer_config.json."
-    )
-
-
-def _list_dir_brief(path: Path, limit: int = 20) -> str:
-    try:
-        items = sorted(p.name for p in path.iterdir())
-        if len(items) > limit:
-            return ", ".join(items[:limit]) + ", ..."
-        return ", ".join(items)
-    except Exception:
-        return "<unable to list directory>"
-
-
 class ZEmbedder:
-    """Local BGE-M3 embedding manager using FlagEmbedding directly."""
-
+    """
+    Local BGE-M3 Embedding manager.
+    Produces Dense and Sparse vectors for hybrid RAG pipelines.
+    """
     def __init__(
         self,
         db_name: str = DEFAULT_DB_NAME,
         model_path: str = DEFAULT_MODEL_PATH,
         device: str = "cuda:0",
-        output_dimensionality: int = 1024,
-        collection_name: str = DEFAULT_COLLECTION,
-        embedding_field: str = DEFAULT_EMBEDDING_FIELD,
-        vector_key: str = DEFAULT_VECTOR_KEY,
-    ) -> None:
+        output_dimensionality: int = 1024 # BGE-M3 default dense dim
+    ):
         self.repository = ZMongo(db_name=db_name)
         self.device = device
-        self.output_dimensionality = output_dimensionality
-        self.collection_name = collection_name
-        self.embedding_field = embedding_field
-        self.vector_key = vector_key
+        self.default_output_dim = output_dimensionality
 
-        _check_bge_m3_dependencies()
+        # Verify local model path
+        if not os.path.exists(model_path):
+            logger.error(f"❌ Model not found at {model_path}. Please download it first.")
+            raise FileNotFoundError(f"BGE-M3 not found at {model_path}")
 
-        try:
-            from FlagEmbedding import BGEM3FlagModel
-        except Exception as exc:
-            raise RuntimeError("Failed to import BGEM3FlagModel.") from exc
+        # Initialize the Hybrid Model on Blackwell GPU
+        self.model = BGEM3EmbeddingFunction(
+            model_name=model_path,
+            device=device,
+            use_fp16=True  # Optimized for RTX 5080
+        )
 
-        raw_model_path = Path(model_path).expanduser()
-
-        if not raw_model_path.exists():
-            logger.error("❌ Model path does not exist: %s", raw_model_path)
-            raise FileNotFoundError(f"BGE-M3 model path does not exist: {raw_model_path}")
-
-        try:
-            resolved_model_dir = _resolve_bge_m3_model_dir(raw_model_path)
-        except Exception:
-            logger.error(
-                "❌ Could not resolve a valid BGE-M3 model directory from %s. Contents: %s",
-                raw_model_path,
-                _list_dir_brief(raw_model_path) if raw_model_path.is_dir() else "<not a directory>",
-            )
-            raise
-
-        self.model_path = str(resolved_model_dir)
-        logger.info("Using BGE-M3 model directory: %s", self.model_path)
-
-        try:
-            self.model = BGEM3FlagModel(
-                self.model_path,
-                use_fp16=(device != "cpu"),
-                devices=device,
-            )
-        except Exception as exc:
-            raise RuntimeError(
-                f"Failed to initialize BGEM3FlagModel from '{self.model_path}'. "
-                "Make sure this directory contains a full Hugging Face model export."
-            ) from exc
-
+        # Internal searcher for backward compatibility
         self.vector_search = LocalVectorSearch(
             repository=self.repository,
-            collection=self.collection_name,
-            embedding_field=self.embedding_field,
-            vector_key=self.vector_key,
+            collection="knowledge_base",
+            embedding_field="embedding.dense",
+            vector_key="vectors"
         )
-        logger.info("✅ ZEmbedder (BGE-M3) initialized on %s", device)
+        logger.info(f"✅ ZEmbedder (BGE-M3) initialized on {device}")
 
     @staticmethod
     def _to_dense_list(vec: Any) -> List[float]:
@@ -169,16 +73,22 @@ class ZEmbedder:
 
     @staticmethod
     def _to_sparse_dict(sparse: Any) -> Dict[str, float]:
+        """
+        Normalize BGE-M3 sparse output into a plain dict[str, float].
+        Handles dict-like outputs and scipy sparse-style objects.
+        """
         if sparse is None:
             return {}
 
         if isinstance(sparse, dict):
             return {str(k): float(v) for k, v in sparse.items()}
 
+        # scipy sparse row / matrix style
         if hasattr(sparse, "tocoo"):
             coo = sparse.tocoo()
             return {str(int(col)): float(val) for col, val in zip(coo.col, coo.data)}
 
+        # some libs may expose indices/data separately
         indices = getattr(sparse, "indices", None)
         data = getattr(sparse, "data", None)
         if indices is not None and data is not None:
@@ -186,167 +96,72 @@ class ZEmbedder:
 
         raise TypeError(f"Unsupported sparse vector type: {type(sparse)!r}")
 
-    def _normalize_embedding_payload(self, payload: Dict[str, Any], count: int) -> Dict[str, Any]:
-        """Normalize FlagEmbedding output into a standard format."""
-        if not isinstance(payload, dict):
-            raise TypeError(f"Embedding payload must be a dict, got {type(payload)!r}")
-
-        # Map potential key names from different FlagEmbedding versions
-        dense_raw = payload.get("dense_vecs") or payload.get("dense") or []
-        sparse_raw = payload.get("lexical_weights") or payload.get("sparse") or []
-
-        dense_vectors = [self._to_dense_list(vec) for vec in dense_raw]
-        sparse_vectors = [self._to_sparse_dict(vec) for vec in sparse_raw]
-
-        # Fill missing sparse vectors if only dense were returned
-        if not sparse_vectors and dense_vectors:
-            sparse_vectors = [{} for _ in dense_vectors]
-
-        if len(dense_vectors) != count:
-             # If we have a mismatch, it's likely due to the tokenizer skipping text.
-             # We should fill with zeros to maintain list alignment if necessary.
-             logger.warning("Count mismatch: expected %d, got %d. Padding with zeros.", count, len(dense_vectors))
-             while len(dense_vectors) < count:
-                 dense_vectors.append([0.0] * self.output_dimensionality)
-                 sparse_vectors.append({})
-
-        return {
-            "dense": dense_vectors,
-            "sparse": sparse_vectors,
-            "count": count,
-        }
-
     async def embed_many(self, texts: List[str]) -> SafeResult:
+        """Embeds multiple texts using hybrid logic."""
         try:
-            if texts is None:
-                return SafeResult.fail("No texts were provided for embedding.")
-
-            source_texts = [texts] if isinstance(texts, str) else list(texts)
-
-            # Pre-clean texts to avoid passing pure whitespace or empty strings to the model
-            clean_texts = [str(text).strip() for text in source_texts if text is not None and str(text).strip()]
-
-            if not clean_texts:
-                return SafeResult.fail("No non-empty texts were provided for embedding.")
+            if not texts:
+                return SafeResult.ok({"dense": [], "sparse": [], "count": 0})
 
             loop = asyncio.get_running_loop()
+            embeddings = await loop.run_in_executor(
+                None,
+                self.model.encode_documents,
+                texts,
+            )
 
-            def _embed_batch(self, batch: Any) -> Dict[str, Any]:
-                """
-                Internal batch processor with type coercion and empty-list safety.
-                """
-                # 1. Handle non-list inputs (e.g., single strings or None)
-                if isinstance(batch, str):
-                    batch = [batch]
-                elif batch is None:
-                    return {"dense_vecs": [], "lexical_weights": [], "batch": batch}
-                elif not isinstance(batch, (list, tuple)):
-                    try:
-                        batch = list(batch)
-                    except TypeError:
-                        # If not iterable (like an int), wrap it in a list to try to stringify
-                        batch = [str(batch)]
+            dense_vectors = [self._to_dense_list(vec) for vec in embeddings["dense"]]
+            sparse_vectors = [self._to_sparse_dict(vec) for vec in embeddings["sparse"]]
 
-                # 2. Guard: Ensure we don't call encode with an empty list
-                # This prevents the IndexError: list index out of range in transformers
-                if not batch:
-                    return {"dense_vecs": [], "lexical_weights": []}
-
-                # 3. Call the BGE-M3 FlagModel encode method
-                return self.model.encode(
-                    batch,
-                    return_dense=True,
-                    return_sparse=True,
-                    return_colbert_vecs=False,
-                )
-
-            def _embed_single_texts(batch: List[str]) -> Dict[str, Any]:
-                """Fallback that handles individual failures per string."""
-                dense_vectors: List[List[float]] = []
-                sparse_vectors: List[Dict[str, float]] = []
-
-                for text in batch:
-                    try:
-                        # Skip processing if string is actually empty after cleaning
-                        if not text.strip():
-                            dense_vectors.append([0.0] * self.output_dimensionality)
-                            sparse_vectors.append({})
-                            continue
-
-                        single_payload = _embed_batch([text])
-                        normalized = self._normalize_embedding_payload(single_payload, 1)
-                        dense_vectors.extend(normalized["dense"])
-                        sparse_vectors.extend(normalized["sparse"])
-                    except Exception as e:
-                        logger.error("Failed to embed individual text: %s", e)
-                        dense_vectors.append([0.0] * self.output_dimensionality)
-                        sparse_vectors.append({})
-
-                return {
-                    "dense": dense_vectors,
-                    "sparse": sparse_vectors,
-                    "count": len(dense_vectors),
-                }
-
-            try:
-                raw_embeddings = await loop.run_in_executor(None, _embed_batch, clean_texts)
-                payload = self._normalize_embedding_payload(raw_embeddings, len(clean_texts))
-                return SafeResult.ok(payload)
-            except Exception as batch_exc:
-                logger.warning(
-                    "Batch embedding path failed; retrying one text at a time. Error: %s, %s, %s", clean_texts, _embed_batch(),
-                    batch_exc,
-                )
-                payload = await loop.run_in_executor(None, _embed_single_texts, clean_texts)
-                return SafeResult.ok(payload)
-
-        except Exception as exc:
+            return SafeResult.ok({
+                "dense": dense_vectors,
+                "sparse": sparse_vectors,
+                "count": len(texts),
+            })
+        except Exception as e:
             logger.exception("Batch embedding failed")
-            return SafeResult.fail(exc)
+            return SafeResult.fail(e)
 
     async def get_embedding(
-        self,
-        text: Optional[str] = None,
-        *,
-        collection: Optional[str] = None,
-        document_id: Optional[Any] = None,
-        text_field: str = "text",
-        embedding_field: str = DEFAULT_EMBEDDING_FIELD,
-        persist: bool = True,
-        **_: Any,
+            self,
+            text: Optional[str] = None,
+            *,
+            collection: Optional[str] = None,
+            document_id: Optional[Any] = None,
+            text_field: str = "text",
+            embedding_field: str = "embedding",
+            **kwargs,
     ) -> SafeResult:
+        """
+        Fetches or embeds text. Returns a SafeResult containing
+        BSON-safe dense and sparse vectors.
+        """
         try:
-            resolved_text = text
-
-            if not resolved_text and collection and document_id is not None:
-                fetch_res = await self.repository.find_one_async(collection, {"_id": document_id})
+            if not text and collection and document_id is not None:
+                fetch_res = await self.repository.find_one_async(
+                    collection,
+                    {"_id": document_id},
+                )
                 if not fetch_res.success:
                     return fetch_res
 
-                source_doc = fetch_res.data or {}
-                resolved_text = DataProcessor.get_value(source_doc, text_field)
+                text = DataProcessor.get_value(fetch_res.data, text_field)
 
-            if not resolved_text or not str(resolved_text).strip():
+            if not text:
                 return SafeResult.fail("No text content provided or found.")
 
-            embed_res = await self.embed_many([str(resolved_text)])
-            if not embed_res.success:
-                return embed_res
+            loop = asyncio.get_running_loop()
+            embs = await loop.run_in_executor(
+                None,
+                self.model.encode_queries,
+                [text],
+            )
 
-            embed_data = embed_res.data or {}
-            dense_vec = embed_data["dense"][0]
-            sparse_vec = embed_data["sparse"][0]
+            dense_vec = self._to_dense_list(embs["dense"][0])
+            sparse_vec = self._to_sparse_dict(embs["sparse"][0])
 
-            result_payload = {
-                "dense": dense_vec,
-                "sparse": sparse_vec,
-                "text": str(resolved_text),
-                "dimensionality": len(dense_vec),
-            }
-
-            if persist and collection and document_id is not None:
+            if collection and document_id is not None:
                 update_payload = {
-                    text_field: str(resolved_text),
+                    text_field: text,
                     embedding_field: {
                         "dense": dense_vec,
                         "sparse": sparse_vec,
@@ -363,191 +178,37 @@ class ZEmbedder:
                 if not persist_res.success:
                     return persist_res
 
-            return SafeResult.ok(result_payload)
-
-        except Exception as exc:
+            return SafeResult.ok({
+                "dense": dense_vec,
+                "sparse": sparse_vec,
+                "text": text,
+                "dimensionality": len(dense_vec),
+            })
+        except Exception as e:
             logger.exception("Single embedding generation failed")
-            return SafeResult.fail(exc)
+            return SafeResult.fail(e)
 
-    async def embed_and_store_many(
-        self,
-        collection: str,
-        documents: List[Dict[str, Any]],
-        *,
-        text_field: str = "text",
-        embedding_field: str = DEFAULT_EMBEDDING_FIELD,
-    ) -> SafeResult:
-        try:
-            if not documents:
-                return SafeResult.ok({"inserted_count": 0, "embedded_count": 0})
-
-            clean_docs: List[Dict[str, Any]] = []
-            texts: List[str] = []
-
-            for doc in documents:
-                text = DataProcessor.get_value(doc, text_field)
-                if text is None or not str(text).strip():
-                    return SafeResult.fail(
-                        f"Document missing non-empty text_field '{text_field}': {doc}"
-                    )
-                clean_docs.append(dict(doc))
-                texts.append(str(text))
-
-            embed_res = await self.embed_many(texts)
-            if not embed_res.success:
-                return embed_res
-
-            payload = embed_res.data or {}
-            dense_vectors = payload["dense"]
-            sparse_vectors = payload["sparse"]
-
-            inserted_count = 0
-            embedded_count = 0
-
-            for doc, dense_vec, sparse_vec in zip(clean_docs, dense_vectors, sparse_vectors):
-                doc[embedding_field] = {
-                    "dense": dense_vec,
-                    "sparse": sparse_vec,
-                    "model": "bge-m3-local",
-                    "dimensionality": len(dense_vec),
-                }
-
-                insert_res = await self.repository.insert_one_async(collection, doc)
-                if not insert_res.success:
-                    return insert_res
-
-                inserted_count += 1
-                embedded_count += 1
-
-            return SafeResult.ok(
-                {
-                    "inserted_count": inserted_count,
-                    "embedded_count": embedded_count,
-                    "count": inserted_count,
-                }
-            )
-
-        except Exception as exc:
-            logger.exception("Batch embed-and-store failed")
-            return SafeResult.fail(exc)
-
-    async def find_similar_documents(
-        self,
-        query_text: str,
-        target_collection: Optional[str] = None,
-        n_results: int = 5,
-        min_score: Optional[float] = None,
-        rebuild_index: bool = False,
-    ) -> SafeResult:
-        try:
-            clean_query = str(query_text or "").strip()
-            if not clean_query:
-                return SafeResult.fail("query_text is required")
-
-            requested_collection = target_collection or self.collection_name
-
-            if requested_collection != self.vector_search.collection:
-                self.vector_search = LocalVectorSearch(
-                    repository=self.repository,
-                    collection=requested_collection,
-                    embedding_field=self.embedding_field,
-                    vector_key=self.vector_key,
-                )
-            elif rebuild_index:
-                self.vector_search.clear_index()
-
-            embed_res = await self.embed_many([clean_query])
-            if not embed_res.success:
-                return embed_res
-
-            embed_data = embed_res.data or {}
-            dense_vectors = embed_data.get("dense") or []
-            if not dense_vectors:
-                return SafeResult.fail("No dense query embedding was generated")
-
-            search_res = await self.vector_search.search(
-                query_vector=dense_vectors[0],
-                top_k=max(1, int(n_results)),
-            )
-            if not search_res.success:
-                return search_res
-
-            results = search_res.data if isinstance(search_res.data, list) else []
-            if min_score is not None:
-                try:
-                    threshold = float(min_score)
-                    results = [
-                        hit for hit in results
-                        if float(hit.get("retrieval_score", 0.0)) >= threshold
-                    ]
-                except Exception:
-                    return SafeResult.fail(f"Invalid min_score: {min_score!r}")
-
-            return SafeResult.ok(
-                {
-                    "query_text": clean_query,
-                    "target_collection": requested_collection,
-                    "results": results,
-                    "count": len(results),
-                }
-            )
-
-        except Exception as exc:
-            logger.exception("Similarity search failed")
-            return SafeResult.fail(exc)
-
-    def close(self) -> None:
+    def close(self):
+        """Cleanup resources."""
         if hasattr(self, "repository"):
             self.repository.close()
         if hasattr(self, "vector_search"):
             self.vector_search.clear_index()
 
-def _embed_batch(self, batch: Any) -> Dict[str, Any]:
-    """
-    Internal batch processor with type coercion and empty-list safety.
-    """
-    # 1. Handle non-list inputs (e.g., single strings or None)
-    if isinstance(batch, str):
-        batch = [batch]
-    elif batch is None:
-        return {"dense_vecs": [], "lexical_weights": []}
-    elif not isinstance(batch, (list, tuple)):
-        try:
-            batch = list(batch)
-        except TypeError:
-            # If not iterable (like an int), wrap it in a list to try to stringify
-            batch = [str(batch)]
 
-    # 2. Guard: Ensure we don't call encode with an empty list
-    # This prevents the IndexError: list index out of range in transformers
-    if not batch:
-        return {"dense_vecs": [], "lexical_weights": []}
-
-    # 3. Call the BGE-M3 FlagModel encode method
-    return self.model.encode(
-        batch,
-        return_dense=True,
-        return_sparse=True,
-        return_colbert_vecs=False,
-    )
-
+# --- Async Demo ---
 if __name__ == "__main__":
-    async def run_demo() -> None:
-        logging.basicConfig(level=logging.INFO)
-        embedder: Optional[ZEmbedder] = None
-        try:
-            embedder = ZEmbedder()
-            test_text = "Legal compliance for AI Blackwell architecture."
-            res = await embedder.get_embedding(text=test_text, persist=False)
-            if not res.success:
-                print(f"❌ Embedding failed: {res.error}")
-                return
-            print("✅ Successfully generated hybrid embeddings.")
+    async def run_demo():
+        embedder = ZEmbedder()
+
+        test_text = "Legal compliance for AI Blackwell architecture."
+        res = await embedder.get_embedding(text=test_text)
+
+        if res.success:
+            print(f"✅ Successfully generated hybrid embeddings.")
             print(f"Dense Dim: {res.data['dimensionality']}")
-        except Exception as exc:
-            logger.exception("Demo failed")
-        finally:
-            if embedder is not None:
-                embedder.close()
+            print(f"Sparse Keys: {list(res.data['sparse'].keys())[:5]}...")
+
+        embedder.close()
 
     asyncio.run(run_demo())

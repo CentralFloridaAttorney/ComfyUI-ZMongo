@@ -14,8 +14,6 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from .safe_result import SafeResult
-from .zmongo import ZMongo
-from .gemini_embedding_model import EMBEDDING_STYLE_RETRIEVAL_QUERY
 
 # Standard imports without leading dots for this environment
 
@@ -201,83 +199,3 @@ class LocalVectorSearch:
         except Exception as e:
             logger.exception("Failed to rebuild local vector index")
             return SafeResult.fail(f"Rebuild index error: {str(e)}")
-
-
-if __name__ == "__main__":
-
-    # 1. Setup logging
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    logger = logging.getLogger(__name__)
-
-
-    async def run_real_data_demo():
-        logger.info("--- Starting LocalVectorSearch REAL DATA Demo ---")
-
-        # 2. Initialize Real Components
-        db_client = ZMongo()
-        from .zembedder import ZEmbedder
-        embedder = ZEmbedder()  # Used to turn your query text into a vector
-
-        # Configuration - Adjust these to match your actual DB schema
-        TARGET_DB_NAME = "wiki_kb"
-        TARGET_COLLECTION = "knowledge_base"
-        EMBEDDING_FIELD = "embedding"  # The root field where embeddings are stored
-        VECTOR_KEY = "vectors"  # The sub-field containing the list of floats
-
-        lvs = LocalVectorSearch(
-            repository=db_client,
-            collection=TARGET_COLLECTION,
-            embedding_field=EMBEDDING_FIELD,
-            vector_key=VECTOR_KEY
-        )
-
-        # 3. Build Index from MongoDB
-        logger.info(f"Fetching vectors from collection '{TARGET_COLLECTION}'...")
-        rb_res = await lvs.rebuild_index()
-
-        if not rb_res.success or rb_res.data['count'] == 0:
-            logger.error(f"Failed to build index. Success: {rb_res.success}, Count: {rb_res.data.get('count', 0)}")
-            logger.info("Ensure your documents have vectors in the specified field.")
-            return
-
-        print(f"✅ Index Ready: {rb_res.data['count']} documents loaded into memory.")
-
-        # 4. Perform a Real Search
-        query_text = "What is the largest planet in our solar system?"
-        logger.info(f"Querying: '{query_text}'")
-
-        # Get query vector from Gemini
-        q_res = await embedder.get_embedding(
-            text=query_text,
-            embedding_style=EMBEDDING_STYLE_RETRIEVAL_QUERY
-        )
-
-        if q_res.success:
-            # LocalVectorSearch expects the vector itself
-            # get_embedding returns {"vectors": [[...]]}
-            query_vector = q_res.data["vectors"][0]
-
-            search_res = await lvs.search(query_vector, top_k=3)
-
-            if search_res.success:
-                print(f"\n--- Search Results for: '{query_text}' ---")
-                for i, hit in enumerate(search_res.data):
-                    doc = hit['document']
-                    score = hit['retrieval_score']
-                    # Use .get() to safely access your text field (e.g., 'text' or 'content')
-                    content = doc.get('text') or doc.get('content') or str(doc.get('_id'))
-                    print(f"{i + 1}. [{score:.4f}] {content}")
-            else:
-                print(f"Search failed: {search_res.error}")
-
-        # 5. Cleanup
-        lvs.clear_index()
-        db_client.close()
-        logger.info("--- Demo Completed ---")
-
-
-    # Run the demo
-    try:
-        asyncio.run(run_real_data_demo())
-    except KeyboardInterrupt:
-        pass
