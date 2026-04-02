@@ -1,13 +1,29 @@
+import os
+import sys
+
+# 1. LIVE ENVIRONMENT MIMICRY 🎭
+# This finds the 'ComfyUI-ZMongo' folder and adds it to the search path.
+# It mimics exactly what your root __init__.py does when ComfyUI starts.
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
+
+# 2. ABSOLUTE PACKAGE IMPORT 📦
+# Now we can import DataProcessor as if it were a global package.
+from zmongo_toolbag.data_processor import DataProcessor
+
+# --- Rest of your original imports ---
 import datetime
 import math
 import uuid
 from collections import deque
 from decimal import Decimal
-
 import pytest
 from bson import ObjectId
 
-from zmongo_toolbag.data_processor import DataProcessor
+# ... rest of your test classes and functions ...
 
 
 class DummyModelDump:

@@ -1,0 +1,544 @@
+{
+  "last_node_id": 16,
+  "last_link_id": 14,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MarkdownNote",
+      "pos": [-2520, -180],
+      "size": [960, 420],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "ZMongo Workflow Guide",
+      "properties": {},
+      "widgets_values": [
+        "# ZMongo Workflow Guide\n\nThis workflow demonstrates the recommended way to use the current ZMongo nodes inside ComfyUI.\n\n## What this template shows\n1. Configure the shared ZMongo connection.\n2. Browse records from a collection.\n3. Inspect the selected record JSON.\n4. Extract a field using the field selector.\n5. Select a record range using the record loop node.\n6. Save the selected field values to files.\n\n## Recommended usage pattern\n- Use **ZMongoConfigNode** first to confirm your database connection.\n- Use **ZMongoDatabaseBrowserNode** when you want to inspect real records and discover fields.\n- Use **ZMongoFieldSelector** to pick a field from a selected record.\n- Use **ZMongoRecordLoopNode** when you want one record, a range of records, or a field-value list for batch export.\n- Use **ZMongoSaveTextNode** to save one value or a JSON list of values to the ComfyUI output folder.\n\n## Typical field names\nFor OCR or document workflows, the most common field is usually:\n- `text`\n\n## Important note about ranges\nThe record loop node returns data according to its `emit_mode`. If you want to save multiple field values at once, use:\n- `emit_mode = list_of_prompts`\n\nThe save node can then split that JSON list into separate files when:\n- `save_layout = separate file per item`\n\n## Expected output folder\nSaved files will go into the ComfyUI output directory."
+      ],
+      "color": "#2a2f38",
+      "bgcolor": "#3a4250"
+    },
+    {
+      "id": 2,
+      "type": "ZMongoConfigNode",
+      "pos": [-2450, 360],
+      "size": [320, 130],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "status",
+          "type": "STRING",
+          "links": [1]
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "mongodb://127.0.0.1:27017",
+        "test"
+      ],
+      "_meta": {
+        "title": "ZMongo Config"
+      }
+    },
+    {
+      "id": 3,
+      "type": "PreviewAny",
+      "pos": [-2070, 350],
+      "size": [340, 150],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 1
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Connection Status"
+      }
+    },
+    {
+      "id": 4,
+      "type": "MarkdownNote",
+      "pos": [-1510, -180],
+      "size": [760, 360],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "How To Browse And Discover Fields",
+      "properties": {},
+      "widgets_values": [
+        "## Browsing workflow\n\nUse the database browser to inspect real records from the collection before building downstream logic.\n\n### Key controls\n- **mongo_uri**: database URI\n- **database_name**: database to inspect\n- **collection_name**: collection to inspect\n- **limit**: how many records to preview\n- **select_index**: which record to fetch as the selected record\n\n### Recommended first step\nStart with:\n- collection: `ocr_docs`\n- limit: `20`\n- select_index: `1`\n\nThen inspect:\n- `selected_record_json`\n- `record_list_summary`\n- `selected_index_out`\n\nAfter that, connect `selected_record_json` into **ZMongoFieldSelector** and choose a field like `text`."
+      ],
+      "color": "#2f3a2a",
+      "bgcolor": "#45563d"
+    },
+    {
+      "id": 5,
+      "type": "ZMongoDatabaseBrowserNode",
+      "pos": [-1490, 240],
+      "size": [320, 280],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "selected_record_json",
+          "type": "STRING",
+          "links": [2, 4]
+        },
+        {
+          "name": "record_list_summary",
+          "type": "STRING",
+          "links": [3]
+        },
+        {
+          "name": "total_count",
+          "type": "INT",
+          "links": []
+        },
+        {
+          "name": "db_name_out",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "coll_name_out",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "selected_index_out",
+          "type": "INT",
+          "links": []
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "mongodb://127.0.0.1:27017",
+        "test",
+        "ocr_docs",
+        20,
+        1,
+        1
+      ],
+      "_meta": {
+        "title": "ZMongo Database Browser"
+      }
+    },
+    {
+      "id": 6,
+      "type": "PreviewAny",
+      "pos": [-1080, 220],
+      "size": [390, 420],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 2
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Selected Record JSON"
+      }
+    },
+    {
+      "id": 7,
+      "type": "PreviewAny",
+      "pos": [-1080, 670],
+      "size": [390, 260],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 3
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Record List Summary"
+      }
+    },
+    {
+      "id": 8,
+      "type": "ZMongoFieldSelector",
+      "pos": [-630, 320],
+      "size": [300, 90],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "record_json",
+          "type": "STRING",
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "name": "field_value",
+          "type": "STRING",
+          "links": [5]
+        },
+        {
+          "name": "available_paths",
+          "type": "STRING",
+          "links": [6]
+        },
+        {
+          "name": "selected_path",
+          "type": "STRING",
+          "links": [7]
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "text"
+      ],
+      "_meta": {
+        "title": "ZMongo Field Selector"
+      }
+    },
+    {
+      "id": 9,
+      "type": "PreviewAny",
+      "pos": [-240, 250],
+      "size": [360, 200],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 5
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Selected Field Value"
+      }
+    },
+    {
+      "id": 10,
+      "type": "PreviewAny",
+      "pos": [-240, 480],
+      "size": [360, 260],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 6
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Available Field Paths"
+      }
+    },
+    {
+      "id": 11,
+      "type": "PreviewAny",
+      "pos": [-240, 770],
+      "size": [240, 120],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 7
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Selected Path"
+      }
+    },
+    {
+      "id": 12,
+      "type": "MarkdownNote",
+      "pos": [180, -180],
+      "size": [900, 420],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "How To Use The Record Loop Node",
+      "properties": {},
+      "widgets_values": [
+        "## Record loop workflow\n\nUse the record loop node when you want to select one record or many records for export or downstream generation.\n\n### Recommended meanings of the current fields\n- **mode**\n  - `single` = one record\n  - `range` = a record range\n  - `all` = all matching records\n  - `batch` = first batch from the selected range\n  - `random_single` = one random record\n  - `random_batch` = random batch of records\n\n- **field_path** = main field to extract, usually `text`\n- **fallback_field_paths** = backup field names\n- **emit_mode**\n  - `prompt_text` = one field value\n  - `record_json` = one record as JSON\n  - `record_and_prompt` = one record plus one field value\n  - `list_of_records` = JSON list of records\n  - `list_of_prompts` = JSON list of field values\n\n### Recommended batch export setting\nTo save a range of `text` values to files, use:\n- `mode = range`\n- `start_index = 1`\n- `end_index = 4`\n- `field_path = text`\n- `emit_mode = list_of_prompts`\n\nThen connect the second output into **ZMongoSaveTextNode**."
+      ],
+      "color": "#3a2f2a",
+      "bgcolor": "#5b463f"
+    },
+    {
+      "id": 13,
+      "type": "ZMongoRecordLoopNode",
+      "pos": [180, 280],
+      "size": [360, 440],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "record_data",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "selected_field_text",
+          "type": "STRING",
+          "links": [8]
+        },
+        {
+          "name": "current_index",
+          "type": "INT",
+          "links": [9]
+        },
+        {
+          "name": "total_count",
+          "type": "INT",
+          "links": []
+        },
+        {
+          "name": "emitted_count",
+          "type": "INT",
+          "links": []
+        },
+        {
+          "name": "summary",
+          "type": "STRING",
+          "links": [10]
+        },
+        {
+          "name": "loop_state_json",
+          "type": "STRING",
+          "links": [11]
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "mongodb://127.0.0.1:27017",
+        "test",
+        "ocr_docs",
+        "range",
+        1,
+        4,
+        1,
+        1,
+        "_id",
+        "ascending",
+        "text",
+        "text\ndoc_text\ndocument.text\nprompt",
+        "{}",
+        "{}",
+        false,
+        0,
+        true,
+        true,
+        true,
+        2000,
+        "skip",
+        "empty prompt",
+        "stop_at_end",
+        "list_of_prompts",
+        0
+      ],
+      "_meta": {
+        "title": "ZMongo Record Loop"
+      }
+    },
+    {
+      "id": 14,
+      "type": "ZMongoSaveTextNode",
+      "pos": [650, 320],
+      "size": [360, 250],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "content_to_save",
+          "type": "STRING",
+          "link": 8
+        },
+        {
+          "name": "starting_index",
+          "type": "INT",
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "saved_file_path_or_paths",
+          "type": "STRING",
+          "links": [12]
+        },
+        {
+          "name": "saved_file_count",
+          "type": "INT",
+          "links": [13]
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "zmongo_export",
+        1,
+        "txt",
+        "write new content",
+        "separate file per item",
+        true
+      ],
+      "_meta": {
+        "title": "ZMongo Save Text"
+      }
+    },
+    {
+      "id": 15,
+      "type": "PreviewAny",
+      "pos": [1050, 260],
+      "size": [400, 220],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 12
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Saved File Paths"
+      }
+    },
+    {
+      "id": 16,
+      "type": "PreviewAny",
+      "pos": [1050, 520],
+      "size": [300, 140],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 13
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Saved File Count"
+      }
+    },
+    {
+      "id": 17,
+      "type": "PreviewAny",
+      "pos": [650, 620],
+      "size": [360, 220],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 10
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Loop Summary"
+      }
+    },
+    {
+      "id": 18,
+      "type": "PreviewAny",
+      "pos": [650, 870],
+      "size": [360, 260],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 11
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [null, null, false],
+      "_meta": {
+        "title": "Loop State JSON"
+      }
+    }
+  ],
+  "links": [
+    [1, 2, 0, 3, 0, "STRING"],
+    [2, 5, 0, 6, 0, "STRING"],
+    [3, 5, 1, 7, 0, "STRING"],
+    [4, 5, 0, 8, 0, "STRING"],
+    [5, 8, 0, 9, 0, "STRING"],
+    [6, 8, 1, 10, 0, "STRING"],
+    [7, 8, 2, 11, 0, "STRING"],
+    [8, 13, 1, 14, 0, "STRING"],
+    [9, 13, 2, 14, 1, "INT"],
+    [10, 13, 5, 17, 0, "STRING"],
+    [11, 13, 6, 18, 0, "STRING"],
+    [12, 14, 0, 15, 0, "STRING"],
+    [13, 14, 1, 16, 0, "INT"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4,
+  "_meta": {
+    "title": "ZMongo Guided Workflow Template"
+  }
+}

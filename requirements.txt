@@ -18,3 +18,4 @@ transformers
 pymilvus[model]
 FlagEmbedding
 pytest
+quart
