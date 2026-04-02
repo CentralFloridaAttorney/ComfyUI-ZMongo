@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ComfyUI-ZMongo"
-version = "0.1.1"
+version = "0.1.2"
 description = "Professional ZMongo Legal Operations suite for ComfyUI"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"

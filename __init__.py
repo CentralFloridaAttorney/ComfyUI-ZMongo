@@ -2,15 +2,15 @@ import logging
 import os
 import sys
 
-from src.zmongo_toolbag.local_vector_search import LocalVectorSearch
+from .src.zmongo_toolbag.local_vector_search import LocalVectorSearch
 
-from src.zmongo_toolbag.zembedder import ZEmbedder
+from .src.zmongo_toolbag.zembedder import ZEmbedder
 
-from src.zmongo_toolbag.data_processor import DataProcessor
+from .src.zmongo_toolbag.data_processor import DataProcessor
 
-from src.zmongo_toolbag.safe_result import SafeResult
+from .src.zmongo_toolbag.safe_result import SafeResult
 
-from src.zmongo_toolbag.zmongo import ZMongo
+from .src.zmongo_toolbag.zmongo import ZMongo
 
 # Ensure the custom node package directory is importable so `.src...` works
 NODE_PATH = os.path.dirname(__file__)
