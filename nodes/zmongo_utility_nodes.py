@@ -204,19 +204,21 @@ class ZMongoFieldSelector:
 
 class ZMongoCollectionSelector:
     """
-    Selects a collection name from a predefined list for use with a ZMongo connection.
-    Allows for manual dropdown selection or dynamic selection via an integer index.
+    Selects a collection name and applies it to the passed ZMongo connection.
+
+    Behavior:
+    - Supports dropdown or index-based selection.
+    - Updates the connection object's active/default collection when possible.
+    - Returns the modified zmongo object, the selected collection name, and index.
     """
 
     CATEGORY = "ZMongo/Utilities"
     FUNCTION = "select_collection"
-    # Returns the connection object (pass-through), the collection name, and the index
     RETURN_TYPES = ("ZMONGO_CONNECTION", "STRING", "INT")
     RETURN_NAMES = ("zmongo", "collection_name", "index")
 
     @classmethod
     def INPUT_TYPES(cls):
-        # The list provided in your previous request
         cls.collection_list = [
             "api_keys", "test_collection", "documents", "memoranda",
             "onehot_words", "guests", "ocr_jobs", "embedded_cases",
@@ -234,19 +236,80 @@ class ZMongoCollectionSelector:
             }
         }
 
+    @classmethod
+    def IS_CHANGED(cls, zmongo, dropdown_selection, index_input=None):
+        return f"{id(zmongo)}|{dropdown_selection}|{index_input}"
+
+    @staticmethod
+    def _apply_collection_to_zmongo(zmongo, collection_name: str) -> bool:
+        """
+        Try the common patterns for setting the active/default collection
+        on a ZMongo connection object.
+        """
+        if zmongo is None:
+            return False
+
+        applied = False
+        normalized = str(collection_name or "").strip()
+        if not normalized:
+            return False
+
+        # Preferred method-based APIs first
+        for method_name in ("set_collection", "set_default_collection", "use_collection"):
+            method = getattr(zmongo, method_name, None)
+            if callable(method):
+                try:
+                    maybe_result = method(normalized)
+                    # If a fluent API returns a connection instance, keep it on the object if useful.
+                    if maybe_result is not None:
+                        zmongo = maybe_result
+                    applied = True
+                except Exception:
+                    logger.debug("ZMongoCollectionSelector: %s(%r) failed", method_name, normalized)
+
+        # Common attribute names
+        for attr_name in (
+            "collection_name",
+            "default_collection",
+            "collection",
+            "_collection_name",
+            "_default_collection",
+            "_collection",
+        ):
+            if hasattr(zmongo, attr_name):
+                try:
+                    setattr(zmongo, attr_name, normalized)
+                    applied = True
+                except Exception:
+                    logger.debug("ZMongoCollectionSelector: setting %s failed", attr_name)
+
+        return applied
+
     def select_collection(self, zmongo, dropdown_selection, index_input=None):
-        # 1. Handle Index Selection logic
+        if zmongo is None:
+            logger.error("ZMongoCollectionSelector: No active connection.")
+            return (None, "", 0)
+
+        # Resolve selected collection
         if index_input is not None:
-            # Clamp the index to the bounds of the list to prevent errors
-            idx = max(0, min(index_input, len(self.collection_list) - 1))
+            idx = max(0, min(int(index_input), len(self.collection_list) - 1))
             selected_item = self.collection_list[idx]
         else:
-            # Use the UI dropdown selection
-            selected_item = dropdown_selection
-            idx = self.collection_list.index(dropdown_selection)
+            selected_item = str(dropdown_selection or "").strip()
+            idx = self.collection_list.index(selected_item) if selected_item in self.collection_list else 0
+            if not selected_item:
+                selected_item = self.collection_list[idx]
 
-        # 2. Return the data
-        # We pass zmongo back out so you can chain this node to a "Query" or "Insert" node.
+        applied = self._apply_collection_to_zmongo(zmongo, selected_item)
+
+        if not applied:
+            logger.warning(
+                "ZMongoCollectionSelector: could not confirm collection update on zmongo; "
+                "returning selected collection name as workflow state only."
+            )
+        else:
+            logger.info("ZMongoCollectionSelector: active collection set to '%s'", selected_item)
+
         return (zmongo, selected_item, idx)
 
 

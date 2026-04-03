@@ -32,6 +32,7 @@ class ZMongo:
         self,
         uri: Optional[str] = None,
         db_name: Optional[str] = None,
+        coll_name: Optional[str] = None,
         *,
         cache_enabled: bool = True,
         cache_ttl_seconds: int = 5,
@@ -39,6 +40,8 @@ class ZMongo:
     ) -> None:
         self.uri = uri or os.getenv("MONGO_URI", "mongodb://127.0.0.1:27017")
         self.db_name = db_name or os.getenv("MONGO_DATABASE_NAME", "test")
+        # Added default collection name support
+        self.coll_name = coll_name or os.getenv("MONGO_COLLECTION_NAME", "default")
 
         self.cache_enabled = cache_enabled
         self.cache_ttl_seconds = max(0, int(cache_ttl_seconds))
@@ -230,6 +233,8 @@ class ZMongo:
             self._cache.setdefault(coll, {})[key] = (value, expires_at)
 
     def clear_cache(self, coll: Optional[str] = None) -> None:
+        # Defaults to clearing the specific default collection if None provided
+        # Or you can keep it as is (clearing ALL) - usually clear_cache(None) means clear all.
         with self._cache_lock:
             if coll is None:
                 self._cache.clear()
@@ -270,15 +275,16 @@ class ZMongo:
 
     async def find_one_async(
         self,
-        coll: str,
-        query: Dict[str, Any],
+        coll: Optional[str] = None,
+        query: Optional[Dict[str, Any]] = None,
         *,
         cache: bool = False,
         **kwargs,
     ) -> SafeResult:
         try:
             self._ensure_not_closed()
-            normalized_query = self._normalize_query(query)
+            coll = coll or self.coll_name
+            normalized_query = self._normalize_query(query or {})
 
             cache_key = self._make_cache_key(
                 operation="find_one",
@@ -317,7 +323,7 @@ class ZMongo:
 
     async def find_many_async(
         self,
-        coll: str,
+        coll: Optional[str] = None,
         query: Optional[Dict[str, Any]] = None,
         *,
         sort: Optional[Union[List[Tuple[str, int]], Tuple[str, int]]] = None,
@@ -326,6 +332,7 @@ class ZMongo:
     ) -> SafeResult:
         try:
             self._ensure_not_closed()
+            coll = coll or self.coll_name
             normalized_query = self._normalize_query(query or {})
 
             cache_key = self._make_cache_key(
@@ -370,10 +377,11 @@ class ZMongo:
         except Exception as exc:
             return self._fail(exc, operation="find_many")
 
-    async def aggregate_async(self, coll: str, pipeline: List[Dict[str, Any]]) -> SafeResult:
+    async def aggregate_async(self, coll: Optional[str] = None, pipeline: Optional[List[Dict[str, Any]]] = None) -> SafeResult:
         try:
             self._ensure_not_closed()
-            cursor = self.db[coll].aggregate(pipeline)
+            coll = coll or self.coll_name
+            cursor = self.db[coll].aggregate(pipeline or [])
             docs = await cursor.to_list(length=None)
             return SafeResult.ok(
                 {
@@ -388,13 +396,14 @@ class ZMongo:
 
     async def count_documents_async(
         self,
-        coll: str,
+        coll: Optional[str] = None,
         query: Optional[Dict[str, Any]] = None,
         *,
         cache: bool = False,
     ) -> SafeResult:
         try:
             self._ensure_not_closed()
+            coll = coll or self.coll_name
             normalized_query = self._normalize_query(query or {})
 
             cache_key = self._make_cache_key(
@@ -430,19 +439,21 @@ class ZMongo:
         except Exception as exc:
             return self._fail(exc, operation="count_documents")
 
-    async def insert_one_async(self, coll: str, doc: Dict[str, Any]) -> SafeResult:
+    async def insert_one_async(self, coll: Optional[str] = None, doc: Optional[Dict[str, Any]] = None) -> SafeResult:
         try:
             self._ensure_not_closed()
-            result = await self.db[coll].insert_one(doc)
+            coll = coll or self.coll_name
+            result = await self.db[coll].insert_one(doc or {})
             self.clear_cache(coll)
             return SafeResult.ok({"inserted_id": result.inserted_id, "collection": coll})
         except Exception as exc:
             return self._fail(exc, operation="insert_one")
 
-    async def insert_many_async(self, coll: str, docs: List[Dict[str, Any]]) -> SafeResult:
+    async def insert_many_async(self, coll: Optional[str] = None, docs: Optional[List[Dict[str, Any]]] = None) -> SafeResult:
         try:
             self._ensure_not_closed()
-            result = await self.db[coll].insert_many(docs)
+            coll = coll or self.coll_name
+            result = await self.db[coll].insert_many(docs or [])
             self.clear_cache(coll)
             return SafeResult.ok(
                 {
@@ -456,15 +467,17 @@ class ZMongo:
 
     async def update_one_async(
         self,
-        coll: str,
-        query: Dict[str, Any],
-        update: Dict[str, Any],
+        coll: Optional[str] = None,
+        query: Optional[Dict[str, Any]] = None,
+        update: Optional[Dict[str, Any]] = None,
         *,
         upsert: bool = False,
     ) -> SafeResult:
         try:
             self._ensure_not_closed()
-            normalized_query = self._normalize_query(query)
+            coll = coll or self.coll_name
+            normalized_query = self._normalize_query(query or {})
+            update = update or {}
             update_doc = update if any(k.startswith("$") for k in update.keys()) else {"$set": update}
 
             result = await self.db[coll].update_one(normalized_query, update_doc, upsert=upsert)
@@ -484,14 +497,15 @@ class ZMongo:
 
     async def update_many_async(
         self,
-        coll: str,
-        query_or_ops: Union[Dict[str, Any], List[Any]],
+        coll: Optional[str] = None,
+        query_or_ops: Optional[Union[Dict[str, Any], List[Any]]] = None,
         update: Optional[Dict[str, Any]] = None,
         *,
         upsert: bool = False,
     ) -> SafeResult:
         try:
             self._ensure_not_closed()
+            coll = coll or self.coll_name
 
             if isinstance(query_or_ops, list):
                 result = await self.db[coll].bulk_write(query_or_ops)
@@ -508,7 +522,7 @@ class ZMongo:
                     }
                 )
 
-            normalized_query = self._normalize_query(query_or_ops)
+            normalized_query = self._normalize_query(query_or_ops or {})
             if update is None:
                 return SafeResult.fail(
                     error={"error_type": "ValueError", "error": "update is required for non-bulk update_many"},
@@ -531,10 +545,11 @@ class ZMongo:
         except Exception as exc:
             return self._fail(exc, operation="update_many")
 
-    async def delete_one_async(self, coll: str, query: Dict[str, Any]) -> SafeResult:
+    async def delete_one_async(self, coll: Optional[str] = None, query: Optional[Dict[str, Any]] = None) -> SafeResult:
         try:
             self._ensure_not_closed()
-            normalized_query = self._normalize_query(query)
+            coll = coll or self.coll_name
+            normalized_query = self._normalize_query(query or {})
             result = await self.db[coll].delete_one(normalized_query)
             self.clear_cache(coll)
             return SafeResult.ok(
@@ -543,10 +558,11 @@ class ZMongo:
         except Exception as exc:
             return self._fail(exc, operation="delete_one")
 
-    async def delete_many_async(self, coll: str, query: Dict[str, Any]) -> SafeResult:
+    async def delete_many_async(self, coll: Optional[str] = None, query: Optional[Dict[str, Any]] = None) -> SafeResult:
         try:
             self._ensure_not_closed()
-            normalized_query = self._normalize_query(query)
+            coll = coll or self.coll_name
+            normalized_query = self._normalize_query(query or {})
             result = await self.db[coll].delete_many(normalized_query)
             self.clear_cache(coll)
             return SafeResult.ok(
@@ -557,12 +573,14 @@ class ZMongo:
 
     async def insert_or_update_async(
         self,
-        coll: str,
-        query_or_document: Dict[str, Any],
+        coll: Optional[str] = None,
+        query_or_document: Optional[Dict[str, Any]] = None,
         data: Optional[Dict[str, Any]] = None,
     ) -> SafeResult:
         try:
             self._ensure_not_closed()
+            coll = coll or self.coll_name
+            query_or_document = query_or_document or {}
 
             if data is None:
                 if "_id" not in query_or_document:
@@ -595,8 +613,8 @@ class ZMongo:
 
     async def save_value_async(
         self,
-        coll: str,
-        value: Any,
+        coll: Optional[str] = None,
+        value: Any = None,
         *,
         query: Optional[Dict[str, Any]] = None,
         field_path: Optional[str] = None,
@@ -606,6 +624,7 @@ class ZMongo:
     ) -> SafeResult:
         try:
             self._ensure_not_closed()
+            coll = coll or self.coll_name
 
             normalized_query = self._normalize_query(query or {})
             parsed_value = value
@@ -729,12 +748,12 @@ class ZMongo:
         except Exception as exc:
             return self._fail(exc, operation="sync_timestamp")
 
-    def find_one(self, coll: str, query: Dict[str, Any], *, cache: bool = False, **kwargs) -> SafeResult:
+    def find_one(self, coll: Optional[str] = None, query: Optional[Dict[str, Any]] = None, *, cache: bool = False, **kwargs) -> SafeResult:
         return self.run_sync(self.find_one_async, coll, query, cache=cache, **kwargs)
 
     def find_many(
         self,
-        coll: str,
+        coll: Optional[str] = None,
         query: Optional[Dict[str, Any]] = None,
         *,
         sort: Optional[Union[List[Tuple[str, int]], Tuple[str, int]]] = None,
@@ -743,23 +762,23 @@ class ZMongo:
     ) -> SafeResult:
         return self.run_sync(self.find_many_async, coll, query, sort=sort, limit=limit, cache=cache)
 
-    def aggregate(self, coll: str, pipeline: List[Dict[str, Any]]) -> SafeResult:
+    def aggregate(self, coll: Optional[str] = None, pipeline: Optional[List[Dict[str, Any]]] = None) -> SafeResult:
         return self.run_sync(self.aggregate_async, coll, pipeline)
 
-    def count_documents(self, coll: str, query: Optional[Dict[str, Any]] = None, *, cache: bool = False) -> SafeResult:
+    def count_documents(self, coll: Optional[str] = None, query: Optional[Dict[str, Any]] = None, *, cache: bool = False) -> SafeResult:
         return self.run_sync(self.count_documents_async, coll, query, cache=cache)
 
-    def insert_one(self, coll: str, doc: Dict[str, Any]) -> SafeResult:
+    def insert_one(self, coll: Optional[str] = None, doc: Optional[Dict[str, Any]] = None) -> SafeResult:
         return self.run_sync(self.insert_one_async, coll, doc)
 
-    def insert_many(self, coll: str, docs: List[Dict[str, Any]]) -> SafeResult:
+    def insert_many(self, coll: Optional[str] = None, docs: Optional[List[Dict[str, Any]]] = None) -> SafeResult:
         return self.run_sync(self.insert_many_async, coll, docs)
 
     def update_one(
         self,
-        coll: str,
-        query: Dict[str, Any],
-        update: Dict[str, Any],
+        coll: Optional[str] = None,
+        query: Optional[Dict[str, Any]] = None,
+        update: Optional[Dict[str, Any]] = None,
         *,
         upsert: bool = False,
     ) -> SafeResult:
@@ -767,41 +786,41 @@ class ZMongo:
 
     def update_many(
         self,
-        coll: str,
-        query_or_ops: Union[Dict[str, Any], List[Any]],
+        coll: Optional[str] = None,
+        query_or_ops: Optional[Union[Dict[str, Any], List[Any]]] = None,
         update: Optional[Dict[str, Any]] = None,
         *,
         upsert: bool = False,
     ) -> SafeResult:
         return self.run_sync(self.update_many_async, coll, query_or_ops, update, upsert=upsert)
 
-    def delete_one(self, coll: str, query: Dict[str, Any]) -> SafeResult:
+    def delete_one(self, coll: Optional[str] = None, query: Optional[Dict[str, Any]] = None) -> SafeResult:
         return self.run_sync(self.delete_one_async, coll, query)
 
-    def delete_many(self, coll: str, query: Dict[str, Any]) -> SafeResult:
+    def delete_many(self, coll: Optional[str] = None, query: Optional[Dict[str, Any]] = None) -> SafeResult:
         return self.run_sync(self.delete_many_async, coll, query)
 
-    def delete_all_documents(self, coll: str) -> SafeResult:
+    def delete_all_documents(self, coll: Optional[str] = None) -> SafeResult:
         return self.run_sync(self.delete_many_async, coll, {})
 
-    def delete_documents(self, coll: str, query: Dict[str, Any]) -> SafeResult:
+    def delete_documents(self, coll: Optional[str] = None, query: Optional[Dict[str, Any]] = None) -> SafeResult:
         return self.run_sync(self.delete_many_async, coll, query)
 
-    def insert_documents(self, coll: str, docs: List[Dict[str, Any]]) -> SafeResult:
+    def insert_documents(self, coll: Optional[str] = None, docs: Optional[List[Dict[str, Any]]] = None) -> SafeResult:
         return self.run_sync(self.insert_many_async, coll, docs)
 
     def insert_or_update(
         self,
-        coll: str,
-        query_or_document: Dict[str, Any],
+        coll: Optional[str] = None,
+        query_or_document: Optional[Dict[str, Any]] = None,
         data: Optional[Dict[str, Any]] = None,
     ) -> SafeResult:
         return self.run_sync(self.insert_or_update_async, coll, query_or_document, data)
 
     def save_value(
         self,
-        coll: str,
-        value: Any,
+        coll: Optional[str] = None,
+        value: Any = None,
         *,
         query: Optional[Dict[str, Any]] = None,
         field_path: Optional[str] = None,

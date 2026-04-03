@@ -123,8 +123,7 @@ class ZMongoConnectNode:
             cache_ttl_seconds: int,
             run_sync_timeout_seconds: float,
     ):
-        # Inclusion of URI and DB ensures the node re-runs if connection target changes
-        return f"{mongo_uri}|{database_name}|{cache_enabled}|{cache_ttl_seconds}|{run_sync_timeout_seconds}"
+        return float("NaN")
 
     def connect(
             self,
@@ -134,11 +133,17 @@ class ZMongoConnectNode:
             cache_ttl_seconds: int,
             run_sync_timeout_seconds: float,
     ):
+        database_name = str(database_name or "").strip()
+        mongo_uri = str(mongo_uri or "").strip()
+
+        if not mongo_uri:
+            mongo_uri = "mongodb://127.0.0.1:27017"
+        if not database_name:
+            database_name = "test"
+
         instance_key = f"{mongo_uri}|{database_name}"
 
         try:
-            # 1. Initialize the ZMongo instance
-            # (Assuming ZMongo is imported in your __init__.py or module)
             zmongo = ZMongo(
                 uri=mongo_uri,
                 db_name=database_name,
@@ -147,38 +152,63 @@ class ZMongoConnectNode:
                 run_sync_timeout_seconds=run_sync_timeout_seconds,
             )
 
-            # 2. Verify connection
+            # Stamp canonical connection metadata onto the object so every downstream
+            # node can reliably discover the chosen database and connection settings.
+            stamped_values = {
+                "uri": mongo_uri,
+                "mongo_uri": mongo_uri,
+                "_uri": mongo_uri,
+                "_mongo_uri": mongo_uri,
+                "db_name": database_name,
+                "database_name": database_name,
+                "_db_name": database_name,
+                "_database_name": database_name,
+                "cache_enabled": bool(cache_enabled),
+                "_cache_enabled": bool(cache_enabled),
+                "cache_ttl_seconds": int(cache_ttl_seconds),
+                "_cache_ttl_seconds": int(cache_ttl_seconds),
+                "run_sync_timeout_seconds": float(run_sync_timeout_seconds),
+                "_run_sync_timeout_seconds": float(run_sync_timeout_seconds),
+            }
+
+            for attr_name, attr_value in stamped_values.items():
+                try:
+                    setattr(zmongo, attr_name, attr_value)
+                except Exception:
+                    logger.debug("ZMongoConnectNode: could not set %s on returned zmongo", attr_name)
+
             ping_res = zmongo.ping()
 
-            # 3. Register the instance for the Field Selector's API access
             if ping_res.success:
                 ZMONGO_REGISTRY[instance_key] = zmongo
-                logger.info(f"ZMongo: Registered connection for {instance_key}")
+                logger.info("ZMongo: Registered connection for %s", instance_key)
 
-            # 4. Prepare the status payload using your DataProcessor or standard json
             status_payload = {
                 "success": ping_res.success,
                 "message": ping_res.message,
                 "error": ping_res.error,
                 "database": database_name,
+                "db_name": database_name,
+                "database_name": database_name,
                 "mongo_uri": mongo_uri,
+                "uri": mongo_uri,
                 "ping": ping_res.data,
             }
 
-            # Use DataProcessor.to_json for BSON-safe serialization
             status_json = DataProcessor.to_json(status_payload, indent=2)
-
             return (zmongo, status_json)
 
         except Exception as exc:
-            logger.exception(f"ZMongoConnectNode failure for {instance_key}")
-
-            # Error fallback using safe JSON serialization
+            logger.exception("ZMongoConnectNode failure for %s", instance_key)
             error_payload = {
                 "success": False,
                 "error": str(exc),
                 "operation": "connect",
-                "database": database_name
+                "database": database_name,
+                "db_name": database_name,
+                "database_name": database_name,
+                "mongo_uri": mongo_uri,
+                "uri": mongo_uri,
             }
             return (None, json.dumps(error_payload, indent=2))
 
@@ -200,6 +230,7 @@ class ZMongoListCollectionsNode:
             return (_safe_json([]), "", 0)
 
         result = zmongo.list_collections()
+
         if not result.success:
             return (_safe_json(result.to_dict()), "", 0)
 
@@ -236,18 +267,19 @@ class ZMongoLoadRecordNode:
         }
 
     def load_record(
-        self,
-        zmongo: ZMongo,
-        collection_name: str,
-        document_id: str = "",
-        query_json: str = "{}",
+            self,
+            zmongo: ZMongo,
+            collection_name: str,
+            document_id: str = "",
+            query_json: str = "{}",
     ):
         if zmongo is None:
             failure = SafeResult.fail("No ZMongo connection provided")
             return ("{}", "", failure.to_json(indent=2))
 
         try:
-            if not str(collection_name or "").strip():
+            collection_name = str(collection_name or "").strip()
+            if not collection_name:
                 raise ValueError("collection_name is required")
 
             normalized_id = _normalize_document_id(document_id)
@@ -256,12 +288,16 @@ class ZMongoLoadRecordNode:
             else:
                 query = _parse_json_object(query_json, "query_json", default={})
 
-            result = zmongo.find_one(collection_name, query)
+            result = zmongo.find_one(
+                collection_name=collection_name,
+                query=query,
+            )
             document = _extract_document_from_result(result)
 
             if not result.success or document is None:
                 status_payload = result.to_dict()
                 status_payload["query_used"] = DataProcessor.to_json_compatible(query)
+                status_payload["collection_name"] = collection_name
                 return ("{}", "", _safe_json(status_payload))
 
             record_id = str(document.get("_id", ""))
@@ -271,7 +307,7 @@ class ZMongoLoadRecordNode:
                 _safe_json(
                     {
                         "success": True,
-                        "collection": collection_name,
+                        "collection_name": collection_name,
                         "query_used": DataProcessor.to_json_compatible(query),
                         "record_id": record_id,
                     }
@@ -459,22 +495,23 @@ class ZMongoSaveValueNode:
         }
 
     def save_value(
-        self,
-        zmongo: ZMongo,
-        collection_name: str,
-        value_to_save: str,
-        parse_value_as_json: bool,
-        upsert_if_missing: bool,
-        document_id: str = "",
-        query_json: str = "{}",
-        field_path: str = "",
+            self,
+            zmongo: ZMongo,
+            collection_name: str,
+            value_to_save: str,
+            parse_value_as_json: bool,
+            upsert_if_missing: bool,
+            document_id: str = "",
+            query_json: str = "{}",
+            field_path: str = "",
     ):
         if zmongo is None:
             failure = SafeResult.fail("No ZMongo connection provided")
             return (failure.to_json(indent=2), False)
 
         try:
-            if not str(collection_name or "").strip():
+            collection_name = str(collection_name or "").strip()
+            if not collection_name:
                 raise ValueError("collection_name is required")
 
             normalized_id = _normalize_document_id(document_id)
@@ -484,9 +521,10 @@ class ZMongoSaveValueNode:
                 query = _parse_json_object(query_json, "query_json", default={})
 
             parsed_value = _parse_scalar_or_json(value_to_save, parse_json=parse_value_as_json)
+
             result = zmongo.save_value(
-                collection_name,
-                parsed_value,
+                coll=collection_name,
+                value=parsed_value,
                 query=query,
                 field_path=str(field_path or "").strip() or None,
                 upsert=upsert_if_missing,
@@ -499,6 +537,7 @@ class ZMongoSaveValueNode:
             payload["query_used"] = DataProcessor.to_json_compatible(query)
             payload["field_path"] = str(field_path or "").strip()
             return (_safe_json(payload), bool(result.success))
+
         except Exception as exc:
             logger.exception("ZMongoSaveValueNode failure")
             failure = SafeResult.from_exception(exc, operation="save_value")

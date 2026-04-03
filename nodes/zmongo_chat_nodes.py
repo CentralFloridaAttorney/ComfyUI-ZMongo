@@ -86,25 +86,23 @@ class ZMongoChatTurnNode:
         }
 
     @classmethod
-    def IS_CHANGED(
-        cls,
-        zmongo: Any,
-        collection_name: str,
-        mode: str,
-        thread_id: str,
-        user_message: str,
-        assistant_message: str,
-        system_prompt: str,
-        history_limit: int,
-        create_if_missing: bool,
-        include_system_prompt: bool,
-        assistant_prefix: str,
-    ):
-        return (
-            f"{id(zmongo)}|{collection_name}|{mode}|{thread_id}|{user_message}|"
-            f"{assistant_message}|{system_prompt}|{history_limit}|"
-            f"{create_if_missing}|{include_system_prompt}|{assistant_prefix}"
-        )
+    def IS_CHANGED(cls, **kwargs):
+        """
+        Generic change detector so subclasses can rename inputs
+        (for example thread_id -> campaign_id) without causing
+        signature mismatch warnings.
+        """
+        try:
+            parts = []
+            for key in sorted(kwargs.keys()):
+                value = kwargs[key]
+                if key == "zmongo":
+                    parts.append(f"{key}={id(value)}")
+                else:
+                    parts.append(f"{key}={value}")
+            return "|".join(parts)
+        except Exception:
+            return float("NaN")
 
     @staticmethod
     def _blank_thread(thread_id: str, system_prompt: str) -> Dict[str, Any]:
