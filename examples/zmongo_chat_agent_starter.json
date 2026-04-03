@@ -1,0 +1,162 @@
+{
+  "2": {
+    "inputs": {
+      "mongo_uri": "mongodb://127.0.0.1:27017",
+      "database_name": "test",
+      "cache_enabled": false,
+      "cache_ttl_seconds": 5,
+      "run_sync_timeout_seconds": 30
+    },
+    "class_type": "ZMongoConnectNode",
+    "_meta": {
+      "title": "ZMongo Connect"
+    }
+  },
+  "10": {
+    "inputs": {
+      "collection_name": "chat_threads",
+      "mode": "prepare_turn",
+      "thread_id": "thread_001",
+      "user_message": "Hello. Please introduce yourself briefly.",
+      "assistant_message": "",
+      "system_prompt": "You are a helpful assistant stored in a Mongo-backed ComfyUI workflow.",
+      "history_limit": 8,
+      "create_if_missing": true,
+      "include_system_prompt": true,
+      "assistant_prefix": "Assistant:",
+      "zmongo": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "ZMongoChatTurnNode",
+    "_meta": {
+      "title": "ZMongo Chat Turn (Prepare)"
+    }
+  },
+  "11": {
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "12": {
+    "inputs": {
+      "prompt": [
+        "10",
+        0
+      ],
+      "max_length": 2048,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.7,
+      "sampling_mode.top_k": 64,
+      "sampling_mode.top_p": 0.95,
+      "sampling_mode.min_p": 0.05,
+      "sampling_mode.repetition_penalty": 1.05,
+      "sampling_mode.seed": 0,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": false,
+      "clip": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "TextGenerate"
+    }
+  },
+  "13": {
+    "inputs": {
+      "collection_name": "chat_threads",
+      "mode": "commit_turn",
+      "thread_id": [
+        "10",
+        1
+      ],
+      "user_message": "Hello. Please introduce yourself briefly.",
+      "assistant_message": [
+        "12",
+        0
+      ],
+      "system_prompt": "You are a helpful assistant stored in a Mongo-backed ComfyUI workflow.",
+      "history_limit": 8,
+      "create_if_missing": true,
+      "include_system_prompt": true,
+      "assistant_prefix": "Assistant:",
+      "zmongo": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "ZMongoChatTurnNode",
+    "_meta": {
+      "title": "ZMongo Chat Turn (Commit)"
+    }
+  },
+  "20": {
+    "inputs": {
+      "preview_markdown": "",
+      "preview_text": "",
+      "previewMode": null,
+      "source": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Prompt Preview"
+    }
+  },
+  "21": {
+    "inputs": {
+      "preview_markdown": "",
+      "preview_text": "",
+      "previewMode": null,
+      "source": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Assistant Reply"
+    }
+  },
+  "22": {
+    "inputs": {
+      "preview_markdown": "",
+      "preview_text": "",
+      "previewMode": null,
+      "source": [
+        "13",
+        5
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Commit Status"
+    }
+  },
+  "23": {
+    "inputs": {
+      "preview_markdown": "",
+      "preview_text": "",
+      "previewMode": null,
+      "source": [
+        "13",
+        2
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Conversation JSON"
+    }
+  }
+}

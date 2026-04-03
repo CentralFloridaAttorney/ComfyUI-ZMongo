@@ -1,0 +1,96 @@
+{
+  "last_node_id": 3,
+  "last_link_id": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "ZMongoRecordLoopNode",
+      "pos": [-520, 180],
+      "size": [380, 460],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        { "name": "selected_record_json_or_list", "type": "STRING", "links": [] },
+        { "name": "selected_field_value_or_list", "type": "STRING", "links": [1] },
+        { "name": "current_record_index", "type": "INT", "links": [2] },
+        { "name": "total_record_count", "type": "INT", "links": [] },
+        { "name": "returned_item_count", "type": "INT", "links": [] },
+        { "name": "summary", "type": "STRING", "links": [] },
+        { "name": "selection_state_json", "type": "STRING", "links": [] }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "mongodb://127.0.0.1:27017",
+        "test",
+        "ocr_docs",
+        "record range",
+        2,
+        1000,
+        1,
+        1,
+        "_id",
+        "ascending",
+        "text",
+        "text\ndoc_text\ndocument.text\nprompt",
+        "{}",
+        "{}",
+        false,
+        0,
+        true,
+        true,
+        true,
+        2000,
+        "skip record",
+        "empty prompt",
+        "stop at end",
+        "field value list as json",
+        0
+      ],
+      "_meta": {
+        "title": "🔁 ZMongo Record Selector"
+      }
+    },
+    {
+      "id": 2,
+      "type": "ZMongoSaveTextNode",
+      "pos": [20, 200],
+      "size": [360, 240],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        { "name": "content_to_save", "type": "STRING", "link": 1 },
+        { "name": "starting_index", "type": "INT", "link": 2 }
+      ],
+      "outputs": [
+        { "name": "saved_file_path_or_paths", "type": "STRING", "links": [] },
+        { "name": "saved_file_count", "type": "INT", "links": [] }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "zmongo_record",
+        1,
+        "txt",
+        "write new content",
+        "separate file per item",
+        true
+      ],
+      "_meta": {
+        "title": "💾 ZMongo Save Text"
+      }
+    }
+  ],
+  "links": [
+    [1, 1, 1, 2, 0, "STRING"],
+    [2, 1, 2, 2, 1, "INT"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4,
+  "_meta": {
+    "title": "ZMongo → Save Range of Text Fields"
+  }
+}
