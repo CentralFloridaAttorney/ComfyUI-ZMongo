@@ -204,113 +204,188 @@ class ZMongoFieldSelector:
 
 class ZMongoCollectionSelector:
     """
-    Selects a collection name and applies it to the passed ZMongo connection.
+    Select a collection name from the database associated with the incoming
+    ZMongo connection.
 
-    Behavior:
-    - Supports dropdown or index-based selection.
-    - Updates the connection object's active/default collection when possible.
-    - Returns the modified zmongo object, the selected collection name, and index.
+    Notes:
+    - The runtime selection logic now reads collections from zmongo.list_collections().
+    - The fallback dropdown still starts with a placeholder until a JS extension
+      populates it dynamically.
+    - database_name is explicit workflow state and is also stamped onto zmongo.
     """
 
     CATEGORY = "ZMongo/Utilities"
     FUNCTION = "select_collection"
-    RETURN_TYPES = ("ZMONGO_CONNECTION", "STRING", "INT")
-    RETURN_NAMES = ("zmongo", "collection_name", "index")
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        cls.collection_list = [
-            "api_keys", "test_collection", "documents", "memoranda",
-            "onehot_words", "guests", "ocr_jobs", "embedded_cases",
-            "retriever_demo_kb", "test_vector_search", "causes_of_action",
-            "users", "ocr_docs", "rooms", "case_metadata", "witnesses", "clues"
-        ]
-
-        return {
-            "required": {
-                "zmongo": ("ZMONGO_CONNECTION",),
-                "dropdown_selection": (cls.collection_list, {"default": "documents"}),
-            },
-            "optional": {
-                "index_input": ("INT", {"forceInput": True, "default": 0}),
-            }
-        }
-
-    @classmethod
-    def IS_CHANGED(cls, zmongo, dropdown_selection, index_input=None):
-        return f"{id(zmongo)}|{dropdown_selection}|{index_input}"
+    RETURN_TYPES = ("ZMONGO_CONNECTION", "STRING", "STRING", "INT", "STRING")
+    RETURN_NAMES = ("zmongo", "database_name", "collection_name", "index", "collections_json")
 
     @staticmethod
-    def _apply_collection_to_zmongo(zmongo, collection_name: str) -> bool:
-        """
-        Try the common patterns for setting the active/default collection
-        on a ZMongo connection object.
-        """
+    def _apply_database_to_zmongo(zmongo, database_name: str) -> bool:
         if zmongo is None:
             return False
 
-        applied = False
-        normalized = str(collection_name or "").strip()
+        normalized = str(database_name or "").strip()
         if not normalized:
             return False
 
-        # Preferred method-based APIs first
-        for method_name in ("set_collection", "set_default_collection", "use_collection"):
+        applied = False
+
+        for attr_name in (
+                "db_name",
+                "database_name",
+                "_db_name",
+                "_database_name",
+        ):
+            try:
+                setattr(zmongo, attr_name, normalized)
+                applied = True
+            except Exception:
+                logger.debug("ZMongoCollectionSelector: setting %s failed", attr_name)
+
+        for method_name in ("set_database", "use_database", "set_db"):
             method = getattr(zmongo, method_name, None)
             if callable(method):
                 try:
                     maybe_result = method(normalized)
-                    # If a fluent API returns a connection instance, keep it on the object if useful.
                     if maybe_result is not None:
                         zmongo = maybe_result
                     applied = True
                 except Exception:
                     logger.debug("ZMongoCollectionSelector: %s(%r) failed", method_name, normalized)
 
-        # Common attribute names
-        for attr_name in (
-            "collection_name",
-            "default_collection",
-            "collection",
-            "_collection_name",
-            "_default_collection",
-            "_collection",
-        ):
-            if hasattr(zmongo, attr_name):
+        return applied
+
+    @staticmethod
+    def _apply_collection_to_zmongo(zmongo, collection_name: str) -> bool:
+        if zmongo is None:
+            return False
+
+        normalized = str(collection_name or "").strip()
+        if not normalized:
+            return False
+
+        applied = False
+
+        for method_name in ("set_collection", "set_default_collection", "use_collection"):
+            method = getattr(zmongo, method_name, None)
+            if callable(method):
                 try:
-                    setattr(zmongo, attr_name, normalized)
+                    maybe_result = method(normalized)
+                    if maybe_result is not None:
+                        zmongo = maybe_result
                     applied = True
                 except Exception:
-                    logger.debug("ZMongoCollectionSelector: setting %s failed", attr_name)
+                    logger.debug("ZMongoCollectionSelector: %s(%r) failed", method_name, normalized)
+
+        for attr_name in (
+                "collection_name",
+                "default_collection",
+                "collection",
+                "_collection_name",
+                "_default_collection",
+                "_collection",
+        ):
+            try:
+                setattr(zmongo, attr_name, normalized)
+                applied = True
+            except Exception:
+                logger.debug("ZMongoCollectionSelector: setting %s failed", attr_name)
 
         return applied
 
-    def select_collection(self, zmongo, dropdown_selection, index_input=None):
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "zmongo": ("ZMONGO_CONNECTION",),
+                "database_name": ("STRING", {"forceInput": True}),
+                "dropdown_selection": (["loading..."],),
+            },
+            "optional": {
+                "index_input": ("INT", {"forceInput": True, "default": -1}),
+            }
+        }
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        # Allows JS-injected values that were not present in the initial placeholder list.
+        return True
+
+    @classmethod
+    def IS_CHANGED(cls, zmongo, database_name, dropdown_selection, index_input=None):
+        return f"{id(zmongo)}|{database_name}|{dropdown_selection}|{index_input}"
+
+    @staticmethod
+    def _get_runtime_collections(zmongo, database_name: str) -> List[str]:
+        if zmongo is None:
+            return []
+
+        result = zmongo.list_collections()
+        if not getattr(result, "success", False):
+            logger.warning(
+                "ZMongoCollectionSelector: list_collections failed for database '%s'",
+                database_name,
+            )
+            return []
+
+        data = getattr(result, "data", None) or {}
+        collections = data.get("collections", []) if isinstance(data, dict) else []
+        return [str(name).strip() for name in collections if str(name).strip()]
+
+    def select_collection(self, zmongo, database_name, dropdown_selection, index_input=None):
         if zmongo is None:
             logger.error("ZMongoCollectionSelector: No active connection.")
-            return (None, "", 0)
+            return (None, str(database_name or ""), "", 0, "[]")
 
-        # Resolve selected collection
-        if index_input is not None:
-            idx = max(0, min(int(index_input), len(self.collection_list) - 1))
-            selected_item = self.collection_list[idx]
+        database_name = str(database_name or "").strip()
+
+        # First force the connection onto the requested database.
+        db_applied = self._apply_database_to_zmongo(zmongo, database_name)
+        if not db_applied:
+            logger.warning(
+                "ZMongoCollectionSelector: could not confirm database update on zmongo; "
+                "continuing with workflow database_name='%s'.",
+                database_name,
+            )
+
+        # Now fetch collections from the actual current connection/database.
+        runtime_collections = self._get_runtime_collections(zmongo, database_name)
+        collections_json = DataProcessor.to_json(runtime_collections, indent=2)
+
+        if not runtime_collections:
+            logger.warning(
+                "ZMongoCollectionSelector: no collections found for database '%s'.",
+                database_name,
+            )
+            return (zmongo, database_name, "", 0, collections_json)
+
+        # Selection logic prefers explicit index input; otherwise uses dropdown value.
+        if index_input is not None and int(index_input) >= 0:
+            idx = max(0, min(int(index_input), len(runtime_collections) - 1))
+            selected_item = runtime_collections[idx]
         else:
-            selected_item = str(dropdown_selection or "").strip()
-            idx = self.collection_list.index(selected_item) if selected_item in self.collection_list else 0
-            if not selected_item:
-                selected_item = self.collection_list[idx]
+            requested = str(dropdown_selection or "").strip()
+            if requested in runtime_collections:
+                selected_item = requested
+                idx = runtime_collections.index(requested)
+            else:
+                selected_item = runtime_collections[0]
+                idx = 0
 
-        applied = self._apply_collection_to_zmongo(zmongo, selected_item)
-
-        if not applied:
+        coll_applied = self._apply_collection_to_zmongo(zmongo, selected_item)
+        if not coll_applied:
             logger.warning(
                 "ZMongoCollectionSelector: could not confirm collection update on zmongo; "
-                "returning selected collection name as workflow state only."
+                "returning collection_name as workflow state only."
             )
         else:
-            logger.info("ZMongoCollectionSelector: active collection set to '%s'", selected_item)
+            logger.info(
+                "ZMongoCollectionSelector: database='%s', collection='%s'",
+                database_name,
+                selected_item,
+            )
 
-        return (zmongo, selected_item, idx)
+        return (zmongo, database_name, selected_item, idx, collections_json)
 
 
 class ZMongoProjectFieldListNode:

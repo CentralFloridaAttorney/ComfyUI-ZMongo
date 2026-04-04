@@ -37,12 +37,12 @@ modules_to_load = [
     (".zmongo_utility_nodes", "nodes.zmongo_utility_nodes"),
     (".zmongo_workflow_nodes", "nodes.zmongo_workflow_nodes"),
     (".zmongo_chat_nodes", "nodes.zmongo_chat_nodes"),
-    (".zmongo_adventure_nodes", "nodes.zmongo_adventure_nodes"), # Added Adventure Nodes
+    (".zmongo_adventure_nodes", "nodes.zmongo_adventure_nodes"),
+    (".zmongo_llm_nodes", "nodes.zmongo_llm_nodes"),
 ]
 
 for import_path, log_name in modules_to_load:
     try:
-        # Dynamic import to maintain relative pathing
         from importlib import import_module
         module = import_module(import_path, package=__package__)
         _merge_node_module(module, log_name)

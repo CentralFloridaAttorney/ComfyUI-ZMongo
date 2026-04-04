@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from bson import ObjectId
 
@@ -93,14 +93,19 @@ ZMONGO_REGISTRY = {}
 
 class ZMongoConnectNode:
     """
-    Create a ZMongo connection object for downstream nodes and registers
+    Create a ZMongo connection object for downstream nodes and register
     the instance for UI-side schema discovery.
+
+    Outputs:
+    - zmongo
+    - status_json
+    - database_name
     """
 
     CATEGORY = "ZMongo/Simple"
     FUNCTION = "connect"
-    RETURN_TYPES = ("ZMONGO_CONNECTION", "STRING")
-    RETURN_NAMES = ("zmongo", "status_json")
+    RETURN_TYPES = ("ZMONGO_CONNECTION", "STRING", "STRING")
+    RETURN_NAMES = ("zmongo", "status_json", "database_name")
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -116,22 +121,22 @@ class ZMongoConnectNode:
 
     @classmethod
     def IS_CHANGED(
-            cls,
-            mongo_uri: str,
-            database_name: str,
-            cache_enabled: bool,
-            cache_ttl_seconds: int,
-            run_sync_timeout_seconds: float,
+        cls,
+        mongo_uri: str,
+        database_name: str,
+        cache_enabled: bool,
+        cache_ttl_seconds: int,
+        run_sync_timeout_seconds: float,
     ):
         return float("NaN")
 
     def connect(
-            self,
-            mongo_uri: str,
-            database_name: str,
-            cache_enabled: bool,
-            cache_ttl_seconds: int,
-            run_sync_timeout_seconds: float,
+        self,
+        mongo_uri: str,
+        database_name: str,
+        cache_enabled: bool,
+        cache_ttl_seconds: int,
+        run_sync_timeout_seconds: float,
     ):
         database_name = str(database_name or "").strip()
         mongo_uri = str(mongo_uri or "").strip()
@@ -152,8 +157,6 @@ class ZMongoConnectNode:
                 run_sync_timeout_seconds=run_sync_timeout_seconds,
             )
 
-            # Stamp canonical connection metadata onto the object so every downstream
-            # node can reliably discover the chosen database and connection settings.
             stamped_values = {
                 "uri": mongo_uri,
                 "mongo_uri": mongo_uri,
@@ -196,7 +199,7 @@ class ZMongoConnectNode:
             }
 
             status_json = DataProcessor.to_json(status_payload, indent=2)
-            return (zmongo, status_json)
+            return (zmongo, status_json, database_name)
 
         except Exception as exc:
             logger.exception("ZMongoConnectNode failure for %s", instance_key)
@@ -210,7 +213,7 @@ class ZMongoConnectNode:
                 "mongo_uri": mongo_uri,
                 "uri": mongo_uri,
             }
-            return (None, json.dumps(error_payload, indent=2))
+            return (None, json.dumps(error_payload, indent=2), database_name)
 
 
 class ZMongoListCollectionsNode:
@@ -289,7 +292,7 @@ class ZMongoLoadRecordNode:
                 query = _parse_json_object(query_json, "query_json", default={})
 
             result = zmongo.find_one(
-                collection_name=collection_name,
+                coll=collection_name,
                 query=query,
             )
             document = _extract_document_from_result(result)
