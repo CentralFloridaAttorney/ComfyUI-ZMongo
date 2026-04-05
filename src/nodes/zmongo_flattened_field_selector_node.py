@@ -2,8 +2,8 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from .zmongo_toolbag.zmongo import ZMongo
-from .zmongo_toolbag.data_processor import DataProcessor
+from ..zmongo_toolbag.zmongo import ZMongo
+from ..zmongo_toolbag.data_processor import DataProcessor
 
 logger = logging.getLogger(__name__)
 

@@ -12,7 +12,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 
 from .zmongo_admin_tabs import ZMongoAdminTabs
-from .zmongo_toolbag.zmongo import ZMongo
+from ..zmongo_toolbag.zmongo import ZMongo
 
 load_dotenv(Path.home() / ".resources" / ".env")
 

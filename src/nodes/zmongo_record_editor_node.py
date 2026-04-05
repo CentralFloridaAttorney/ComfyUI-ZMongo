@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Tuple
 
 from bson import ObjectId
 
-from .zmongo_toolbag.zmongo import ZMongo
-from .zmongo_toolbag.data_processor import DataProcessor
+from ..zmongo_toolbag.zmongo import ZMongo
+from ..zmongo_toolbag.data_processor import DataProcessor
 
 logger = logging.getLogger(__name__)
 

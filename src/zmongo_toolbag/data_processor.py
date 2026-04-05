@@ -11,9 +11,9 @@ from decimal import Decimal
 from typing import Any, Dict, Iterable, List, MutableMapping, MutableSequence, Optional, Sequence, Tuple, Union
 
 try:
-    from bson import ObjectId
+    from bson.objectid import ObjectId
 except ImportError:  # pragma: no cover
-    from bson.objectid import ObjectId  # type: ignore
+    from bson import ObjectId  # type: ignore
 
 logger = logging.getLogger(__name__)
 

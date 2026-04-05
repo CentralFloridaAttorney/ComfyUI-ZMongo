@@ -33,6 +33,7 @@ def _merge_node_module(module, module_name: str) -> None:
 
 # Module Loading Sequence
 modules_to_load = [
+    (".zmongo_starter_nodes", "nodes.zmongo_starter_nodes"),
     (".zmongo_basic_nodes", "nodes.zmongo_basic_nodes"),
     (".zmongo_utility_nodes", "nodes.zmongo_utility_nodes"),
     (".zmongo_workflow_nodes", "nodes.zmongo_workflow_nodes"),
