@@ -1,0 +1,229 @@
+{
+  "34": {
+    "inputs": {
+      "preview_markdown": "",
+      "preview_text": "",
+      "previewMode": null,
+      "source": [
+        "44:32",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Get Field Value"
+    }
+  },
+  "44:32": {
+    "inputs": {
+      "document_id": [
+        "45:1",
+        0
+      ],
+      "query_json": "{}",
+      "zmongo": [
+        "44:1",
+        0
+      ],
+      "collection_name": [
+        "45:0",
+        0
+      ],
+      "field_path": [
+        "45:2",
+        0
+      ]
+    },
+    "class_type": "ZMongoStarterGetValueNode",
+    "_meta": {
+      "title": "ZMongo Starter Get Value"
+    }
+  },
+  "44:38": {
+    "inputs": {
+      "zmongo": [
+        "44:25",
+        0
+      ],
+      "collection_name": [
+        "44:25",
+        1
+      ]
+    },
+    "class_type": "ZMongoStarterListRecordIdsNode",
+    "_meta": {
+      "title": "ZMongo Starter List Record Ids"
+    }
+  },
+  "44:25": {
+    "inputs": {
+      "collection_name": [
+        "45:0",
+        0
+      ],
+      "collection_index": -1,
+      "zmongo": [
+        "44:1",
+        0
+      ]
+    },
+    "class_type": "ZMongoStarterCollectionNode",
+    "_meta": {
+      "title": "ZMongo Starter Collection"
+    }
+  },
+  "44:42": {
+    "inputs": {
+      "field_path": [
+        "45:2",
+        0
+      ],
+      "record_json": [
+        "44:32",
+        2
+      ]
+    },
+    "class_type": "ZMongoPickFieldNode",
+    "_meta": {
+      "title": "ZMongo Pick Field"
+    }
+  },
+  "44:30": {
+    "inputs": {
+      "zmongo": [
+        "44:1",
+        0
+      ]
+    },
+    "class_type": "ZMongoListCollectionsNode",
+    "_meta": {
+      "title": "ZMongo List Collections"
+    }
+  },
+  "44:1": {
+    "inputs": {
+      "mongo_uri": "mongodb://127.0.0.1:27017",
+      "database_name": [
+        "45:3",
+        0
+      ],
+      "default_collection_name": [
+        "45:0",
+        0
+      ],
+      "cache_enabled": true,
+      "cache_ttl_seconds": 5,
+      "run_sync_timeout_seconds": 30
+    },
+    "class_type": "ZMongoStarterConnectNode",
+    "_meta": {
+      "title": "ZMongo Starter Connect"
+    }
+  },
+  "44:18": {
+    "inputs": {
+      "document_id": [
+        "45:1",
+        0
+      ],
+      "query_json": "{}",
+      "zmongo": [
+        "44:1",
+        0
+      ],
+      "collection_name": [
+        "45:0",
+        0
+      ],
+      "field_path": [
+        "45:2",
+        0
+      ]
+    },
+    "class_type": "ZMongoStarterGetValueNode",
+    "_meta": {
+      "title": "ZMongo Starter Get Value"
+    }
+  },
+  "45:0": {
+    "inputs": {
+      "value": "documents"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Selected Collection"
+    }
+  },
+  "45:1": {
+    "inputs": {
+      "value": "69d0e953e58fde5025f74bdc"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Selected document_id"
+    }
+  },
+  "45:2": {
+    "inputs": {
+      "value": "encounters.0.description"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Selected  Field Path"
+    }
+  },
+  "45:3": {
+    "inputs": {
+      "value": "dnd"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Database Name"
+    }
+  },
+  "45:4": {
+    "inputs": {
+      "preview_markdown": "",
+      "preview_text": "",
+      "previewMode": null,
+      "source": [
+        "44:38",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Available document_id"
+    }
+  },
+  "45:5": {
+    "inputs": {
+      "preview_markdown": "",
+      "preview_text": "",
+      "previewMode": null,
+      "source": [
+        "44:42",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Field Paths"
+    }
+  },
+  "45:6": {
+    "inputs": {
+      "preview_markdown": "",
+      "preview_text": "",
+      "previewMode": null,
+      "source": [
+        "44:30",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Available Collections"
+    }
+  }
+}

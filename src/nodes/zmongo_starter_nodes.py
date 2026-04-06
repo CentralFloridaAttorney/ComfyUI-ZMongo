@@ -157,8 +157,8 @@ class ZMongoStarterConnectNode:
         try:
             zmongo = ZMongo(
                 uri=mongo_uri,
-                db_name=database_name,
-                coll_name=default_collection_name or None,
+                db_name=database_name or "test",
+                coll_name=default_collection_name or "documents",
                 cache_enabled=cache_enabled,
                 cache_ttl_seconds=cache_ttl_seconds,
                 run_sync_timeout_seconds=run_sync_timeout_seconds,
@@ -234,6 +234,69 @@ class ZMongoStarterCollectionNode:
 
         return zmongo, selected_name, selected_index, _safe_json(collections)
 
+
+class ZMongoStarterListRecordIdsNode:
+    """
+    Output all _id values for every record in the selected collection.
+    """
+
+    CATEGORY = "ZMongo/Starter"
+    FUNCTION = "list_record_ids"
+    RETURN_TYPES = ("STRING", "INT", "STRING")
+    RETURN_NAMES = ("record_ids_json", "record_count", "numbered_record_ids_text")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "zmongo": ("ZMONGO_CONNECTION",),
+                "collection_name": ("STRING", {"forceInput": True}),
+            }
+        }
+
+    def list_record_ids(self, zmongo: ZMongo, collection_name: str):
+        if zmongo is None:
+            failure = SafeResult.fail("No ZMongo connection provided")
+            return "[]", 0, failure.to_json(indent=2)
+
+        try:
+            collection_name = str(collection_name or "").strip()
+            if not collection_name:
+                raise ValueError("collection_name is required")
+
+            result = zmongo.find_many(
+                coll=collection_name,
+                query={},
+                limit=100000,
+                cache=False,
+                projection={"_id": 1},
+            )
+
+            if not result.success:
+                return "[]", 0, result.to_json(indent=2)
+
+            documents = []
+            if isinstance(result.data, dict):
+                documents = result.data.get("documents", []) or []
+
+            record_ids = [
+                str(doc.get("_id"))
+                for doc in documents
+                if isinstance(doc, dict) and doc.get("_id") is not None
+            ]
+
+            numbered_record_ids_text = (
+                "\n".join(f"{idx}. {record_id}" for idx, record_id in enumerate(record_ids))
+                if record_ids
+                else "No record ids found."
+            )
+
+            return _safe_json(record_ids), len(record_ids), numbered_record_ids_text
+
+        except Exception as exc:
+            logger.exception("ZMongoStarterListRecordIdsNode failure")
+            failure = SafeResult.from_exception(exc, operation="list_record_ids")
+            return "[]", 0, failure.to_json(indent=2)
 
 class ZMongoStarterFieldNode:
     """
@@ -589,6 +652,7 @@ NODE_CLASS_MAPPINGS = {
     "ZMongoStarterGetValueNode": ZMongoStarterGetValueNode,
     "ZMongoStarterSaveValueNode": ZMongoStarterSaveValueNode,
     "ZMongoStarterRecordSelectorNode": ZMongoStarterRecordSelectorNode,
+    "ZMongoStarterListRecordIdsNode": ZMongoStarterListRecordIdsNode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -598,4 +662,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoStarterGetValueNode": "ZMongo Starter Get Value",
     "ZMongoStarterSaveValueNode": "ZMongo Starter Save Value",
     "ZMongoStarterRecordSelectorNode": "ZMongo Starter Record Selector",
+    "ZMongoStarterListRecordIdsNode": "ZMongo Starter List Record Ids",
 }
