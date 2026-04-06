@@ -1,4 +1,5 @@
 # SPECIALIZED MODEL NODE IMPORTS 🤖
+from .gguf_llm_node import ZMongoFastGGUFLLMNode
 from .zmongo_model_compatibility_display_node import ZMongoModelCompatibilityDisplayNode
 from .zmongo_model_introspector_node import ZMongoModelIntrospectorNode
 from .zmongo_universal_model_selector_node import ZMongoUniversalModelSelectorNode
@@ -14,4 +15,5 @@ __all__ = [
     "ZMongoUniversalModelLoaderNode",
     "ZMongoUniversalModelAdapterNode",
     "ZMongoBuiltInLoaderAdapterNode",
+    "ZMongoFastGGUFLLMNode",
 ]
