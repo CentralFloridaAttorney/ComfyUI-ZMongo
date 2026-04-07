@@ -15,7 +15,7 @@ if ROOT_PATH not in sys.path:
     sys.path.append(ROOT_PATH)
 
 # 2. WEB ASSET REGISTRATION 🌐
-WEB_DIRECTORY = "web"
+WEB_DIRECTORY = "./js"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ZMongo-Demo")

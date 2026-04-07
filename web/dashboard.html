@@ -2,9 +2,885 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZMongo Dashboard</title>
+    <style>
+        :root {
+            --bg: #0f1115;
+            --panel: #171a21;
+            --panel-2: #1e2430;
+            --border: #2d3647;
+            --text: #e8edf7;
+            --muted: #9aa7bd;
+            --accent: #4ea1ff;
+            --accent-2: #2f7dd6;
+            --danger: #d9534f;
+            --danger-2: #8f3030;
+            --success: #39b36b;
+            --warning: #d9a441;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, Helvetica, sans-serif;
+            height: 100%;
+        }
+
+        body {
+            padding: 20px;
+        }
+
+        .page {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 16px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            min-height: 300px;
+        }
+
+        .panel-header {
+            padding: 14px 16px;
+            background: var(--panel-2);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .panel-header h1,
+        .panel-header h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .panel-body {
+            padding: 16px;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .main {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .toolbar,
+        .toolbar-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .toolbar-row {
+            margin-bottom: 12px;
+        }
+
+        button,
+        select,
+        input,
+        textarea {
+            background: #11161e;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+        }
+
+        textarea {
+            min-height: 320px;
+            resize: vertical;
+            font-family: Consolas, Monaco, monospace;
+            line-height: 1.45;
+        }
+
+        button {
+            cursor: pointer;
+            background: var(--accent-2);
+            border-color: var(--accent-2);
+            min-width: 96px;
+        }
+
+        button:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        button.secondary {
+            background: #273142;
+            border-color: #334155;
+        }
+
+        button.secondary:hover {
+            background: #334155;
+        }
+
+        button.danger {
+            background: #6b2525;
+            border-color: var(--danger-2);
+        }
+
+        button.danger:hover {
+            background: var(--danger-2);
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .status {
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #101722;
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
+            font-size: 14px;
+            word-break: break-word;
+        }
+
+        .status.ok {
+            border-color: rgba(57, 179, 107, 0.35);
+            color: #8ee0ad;
+        }
+
+        .status.error {
+            border-color: rgba(217, 83, 79, 0.35);
+            color: #ffaaa7;
+        }
+
+        .status.warn {
+            border-color: rgba(217, 164, 65, 0.35);
+            color: #f4d58b;
+        }
+
+        .field {
+            margin-bottom: 14px;
+        }
+
+        .field label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .collection-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 420px;
+            overflow: auto;
+        }
+
+        .collection-item {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #10151d;
+            cursor: pointer;
+            transition: background 0.15s ease;
+            word-break: break-word;
+        }
+
+        .collection-item:hover {
+            background: #18202c;
+        }
+
+        .collection-item.active {
+            border-color: var(--accent);
+            background: #162538;
+        }
+
+        .doc-list {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            max-height: 320px;
+            overflow: auto;
+            background: #10151d;
+        }
+
+        .doc-item {
+            padding: 10px 12px;
+            border-bottom: 1px solid #232c3b;
+            cursor: pointer;
+        }
+
+        .doc-item:last-child {
+            border-bottom: none;
+        }
+
+        .doc-item:hover {
+            background: #18202c;
+        }
+
+        .doc-item.active {
+            background: #162538;
+        }
+
+        .doc-id {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 4px;
+            word-break: break-all;
+        }
+
+        .doc-summary {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 8px 12px;
+            font-size: 14px;
+        }
+
+        .info-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-family: Consolas, Monaco, monospace;
+            word-break: break-all;
+        }
+
+        .info-link:hover {
+            color: #8fc4ff;
+            text-decoration: underline;
+        }
+
+        .code {
+            font-family: Consolas, Monaco, monospace;
+            word-break: break-all;
+        }
+
+        .small {
+            font-size: 12px;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+
+        @media (max-width: 1100px) {
+            .page {
+                grid-template-columns: 1fr;
+            }
+
+            .split {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
+<div class="page">
+    <div class="sidebar">
+        <div class="panel">
+            <div class="panel-header">
+                <h1>ZMongo Dashboard</h1>
+                <button id="healthBtn" class="secondary">Health</button>
+            </div>
+            <div class="panel-body">
+                <div id="statusBox" class="status">Ready.</div>
 
+                <div class="field">
+                    <label for="collectionSearch">Filter Collections</label>
+                    <input id="collectionSearch" type="text" placeholder="Type to filter collections">
+                </div>
+
+                <div class="toolbar-row">
+                    <button id="refreshCollectionsBtn">Refresh</button>
+                </div>
+
+                <div class="field">
+                    <label for="newCollectionName">New Collection Name</label>
+                    <input id="newCollectionName" type="text" placeholder="example_collection">
+                </div>
+
+                <div class="toolbar-row">
+                    <button id="createCollectionBtn">Create Collection</button>
+                    <button id="deleteCollectionBtn" class="danger">Delete Collection</button>
+                </div>
+
+                <label class="checkbox-row muted">
+                    <input id="forceDeleteCollection" type="checkbox">
+                    <span>Force delete non-empty collection</span>
+                </label>
+
+                <div class="muted small" style="margin: 10px 0 14px 0;">
+                    Delete removes the currently selected collection. Non-empty collections require force delete unless
+                    the checkbox is enabled.
+                </div>
+
+                <div id="collectionList" class="collection-list"></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <h2>Connection</h2>
+            </div>
+            <div class="panel-body">
+                <div id="connectionLinks" class="info-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="panel">
+            <div class="panel-header">
+                <h2>Collection Viewer</h2>
+                <div class="toolbar">
+                    <button id="loadDocsBtn">Load Docs</button>
+                    <button id="newDocBtn" class="secondary">New</button>
+                    <button id="saveDocBtn">Save</button>
+                    <button id="deleteDocBtn" class="danger">Delete</button>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="split">
+                    <div>
+                        <div class="field">
+                            <label for="selectedCollection">Selected Collection</label>
+                            <input id="selectedCollection" type="text" readonly>
+                        </div>
+
+                        <div class="toolbar-row">
+                            <div style="flex: 1;">
+                                <label for="limitInput" class="muted">Limit</label>
+                                <input id="limitInput" type="number" value="50" min="1" max="500">
+                            </div>
+                            <div style="flex: 1;">
+                                <label for="skipInput" class="muted">Skip</label>
+                                <input id="skipInput" type="number" value="0" min="0">
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label>Documents</label>
+                            <div id="docList" class="doc-list"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="field">
+                            <label for="selectedId">Selected Document ID</label>
+                            <input id="selectedId" type="text" readonly>
+                        </div>
+
+                        <div class="field">
+                            <label for="jsonEditor">JSON</label>
+                            <textarea id="jsonEditor" placeholder='{"name": "example"}'></textarea>
+                        </div>
+
+                        <div class="muted small">
+                            For a new document, click <strong>New</strong>, enter JSON, then click <strong>Save</strong>.
+                            For an existing document, select it, edit JSON, then click <strong>Save</strong>.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        const API = "/zai/zmongo";
+
+        const state = {
+            collections: [],
+            filteredCollections: [],
+            selectedCollection: "",
+            docs: [],
+            selectedDocId: "",
+            selectedDoc: null,
+        };
+
+        const statusBox = document.getElementById("statusBox");
+        const collectionSearch = document.getElementById("collectionSearch");
+        const collectionList = document.getElementById("collectionList");
+        const selectedCollectionInput = document.getElementById("selectedCollection");
+        const docList = document.getElementById("docList");
+        const selectedIdInput = document.getElementById("selectedId");
+        const jsonEditor = document.getElementById("jsonEditor");
+        const limitInput = document.getElementById("limitInput");
+        const skipInput = document.getElementById("skipInput");
+        const newCollectionNameInput = document.getElementById("newCollectionName");
+        const forceDeleteCollectionInput = document.getElementById("forceDeleteCollection");
+
+        const refreshCollectionsBtn = document.getElementById("refreshCollectionsBtn");
+        const loadDocsBtn = document.getElementById("loadDocsBtn");
+        const newDocBtn = document.getElementById("newDocBtn");
+        const saveDocBtn = document.getElementById("saveDocBtn");
+        const deleteDocBtn = document.getElementById("deleteDocBtn");
+        const healthBtn = document.getElementById("healthBtn");
+        const createCollectionBtn = document.getElementById("createCollectionBtn");
+        const deleteCollectionBtn = document.getElementById("deleteCollectionBtn");
+
+        const connectionLinks = document.getElementById("connectionLinks");
+
+        function buildEndpointLinks() {
+            const selectedCollection = state.selectedCollection || "{coll}";
+            const encodedCollection = state.selectedCollection
+                ? encodeURIComponent(state.selectedCollection)
+                : "{coll}";
+
+            return [
+                {label: "API Prefix", href: `${API}`, text: `${API}`},
+                {label: "Health", href: `${API}/healthz`, text: `${API}/healthz`},
+                {label: "Collections", href: `${API}/collections`, text: `${API}/collections`},
+                {label: "Create Collection", href: `${API}/collections/create`, text: `${API}/collections/create`},
+                {label: "Delete Collection", href: `${API}/collections/delete`, text: `${API}/collections/delete`},
+                {
+                    label: "Documents",
+                    href: `${API}/docs/${encodedCollection}`,
+                    text: `${API}/docs/${selectedCollection}`,
+                },
+            ];
+        }
+
+        function renderConnectionLinks() {
+            if (!connectionLinks) return;
+
+            const links = buildEndpointLinks();
+            connectionLinks.innerHTML = "";
+
+            for (const item of links) {
+                const label = document.createElement("div");
+                label.className = "muted";
+                label.textContent = item.label;
+
+                const value = document.createElement("div");
+                const a = document.createElement("a");
+                a.className = "info-link";
+                a.href = item.href;
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+                a.textContent = item.text;
+
+                value.appendChild(a);
+                connectionLinks.appendChild(label);
+                connectionLinks.appendChild(value);
+            }
+        }
+
+        function setStatus(message, kind = "") {
+            statusBox.textContent = message;
+            statusBox.className = "status";
+            if (kind) {
+                statusBox.classList.add(kind);
+            }
+        }
+
+        async function apiFetch(path, options = {}) {
+            const response = await fetch(path, options);
+            let data = null;
+
+            try {
+                data = await response.json();
+            } catch (_) {
+                data = null;
+            }
+
+            if (!response.ok) {
+                const message = data && data.error ? data.error : `HTTP ${response.status}`;
+                throw new Error(message);
+            }
+
+            return data;
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function summarizeDoc(doc) {
+            if (!doc || typeof doc !== "object") {
+                return "";
+            }
+            const keys = Object.keys(doc).filter(k => k !== "_id").slice(0, 6);
+            return keys.length ? keys.join(", ") : "<only _id>";
+        }
+
+        function extractId(doc) {
+            if (!doc || !doc._id) return "";
+            if (typeof doc._id === "string") return doc._id;
+            if (doc._id.$oid) return doc._id.$oid;
+            return JSON.stringify(doc._id);
+        }
+
+        function renderCollections() {
+            collectionList.innerHTML = "";
+
+            if (!state.filteredCollections.length) {
+                collectionList.innerHTML = '<div class="muted">No collections found.</div>';
+                renderConnectionLinks();
+                return;
+            }
+
+            for (const name of state.filteredCollections) {
+                const div = document.createElement("div");
+                div.className = "collection-item" + (name === state.selectedCollection ? " active" : "");
+                div.textContent = name;
+                div.onclick = () => {
+                    state.selectedCollection = name;
+                    selectedCollectionInput.value = name;
+                    renderCollections();
+                    renderConnectionLinks();
+                };
+                collectionList.appendChild(div);
+            }
+        }
+
+        function applyCollectionFilter() {
+            const term = collectionSearch.value.trim().toLowerCase();
+            if (!term) {
+                state.filteredCollections = [...state.collections];
+            } else {
+                state.filteredCollections = state.collections.filter(name => name.toLowerCase().includes(term));
+            }
+            renderCollections();
+            renderConnectionLinks();
+        }
+
+        function renderDocs() {
+            docList.innerHTML = "";
+
+            if (!state.docs.length) {
+                docList.innerHTML = '<div class="doc-item muted">No documents loaded.</div>';
+                return;
+            }
+
+            for (const doc of state.docs) {
+                const id = extractId(doc);
+
+                const row = document.createElement("div");
+                row.className = "doc-item" + (id === state.selectedDocId ? " active" : "");
+                row.onclick = () => {
+                    state.selectedDocId = id;
+                    state.selectedDoc = doc;
+                    selectedIdInput.value = id;
+                    jsonEditor.value = JSON.stringify(doc, null, 2);
+                    renderDocs();
+                };
+
+                row.innerHTML = `
+                <div class="doc-id">${escapeHtml(id || "<no _id>")}</div>
+                <div class="doc-summary">${escapeHtml(summarizeDoc(doc))}</div>
+            `;
+                docList.appendChild(row);
+            }
+        }
+
+        function clearEditorForNewDoc() {
+            state.selectedDocId = "";
+            state.selectedDoc = null;
+            selectedIdInput.value = "";
+            jsonEditor.value = "{\n  \n}";
+            renderDocs();
+        }
+
+        async function loadHealth() {
+            setStatus("Checking health...");
+            try {
+                const data = await apiFetch(`${API}/healthz`);
+                setStatus(`Healthy: ${data.db_name}`, "ok");
+            } catch (err) {
+                setStatus(`Health check failed: ${err.message}`, "error");
+            }
+        }
+
+        async function loadCollections() {
+            setStatus("Loading collections...");
+            try {
+                const data = await apiFetch(`${API}/collections`);
+                state.collections = Array.isArray(data.collections) ? data.collections : [];
+
+                if (!state.selectedCollection && state.collections.length) {
+                    state.selectedCollection = state.collections[0];
+                    selectedCollectionInput.value = state.selectedCollection;
+                } else if (state.selectedCollection && !state.collections.includes(state.selectedCollection)) {
+                    state.selectedCollection = state.collections[0] || "";
+                    selectedCollectionInput.value = state.selectedCollection;
+                } else {
+                    selectedCollectionInput.value = state.selectedCollection;
+                }
+
+                applyCollectionFilter();
+                renderConnectionLinks();
+                setStatus(`Loaded ${state.collections.length} collections.`, "ok");
+            } catch (err) {
+                setStatus(`Failed to load collections: ${err.message}`, "error");
+            }
+        }
+
+        async function loadDocs() {
+            if (!state.selectedCollection) {
+                setStatus("Select a collection first.", "warn");
+                return;
+            }
+
+            const limit = Math.max(1, Math.min(500, parseInt(limitInput.value || "50", 10)));
+            const skip = Math.max(0, parseInt(skipInput.value || "0", 10));
+
+            setStatus(`Loading documents from ${state.selectedCollection}...`);
+
+            try {
+                const url = `${API}/docs/${encodeURIComponent(state.selectedCollection)}?limit=${limit}&skip=${skip}&sort_field=_id&sort_dir=desc`;
+                const data = await apiFetch(url);
+                state.docs = Array.isArray(data.docs) ? data.docs : [];
+
+                if (state.docs.length) {
+                    state.selectedDoc = state.docs[0];
+                    state.selectedDocId = extractId(state.docs[0]);
+                    selectedIdInput.value = state.selectedDocId;
+                    jsonEditor.value = JSON.stringify(state.docs[0], null, 2);
+                } else {
+                    clearEditorForNewDoc();
+                }
+
+                renderDocs();
+                renderConnectionLinks();
+                setStatus(`Loaded ${state.docs.length} document(s) from ${state.selectedCollection}.`, "ok");
+            } catch (err) {
+                setStatus(`Failed to load documents: ${err.message}`, "error");
+            }
+        }
+
+        async function saveDoc() {
+            if (!state.selectedCollection) {
+                setStatus("Select a collection first.", "warn");
+                return;
+            }
+
+            let payload;
+            try {
+                payload = JSON.parse(jsonEditor.value);
+            } catch (err) {
+                setStatus(`Invalid JSON: ${err.message}`, "error");
+                return;
+            }
+
+            try {
+                if (state.selectedDocId) {
+                    if (payload && typeof payload === "object") {
+                        delete payload._id;
+                    }
+
+                    await apiFetch(`${API}/update`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            collection: state.selectedCollection,
+                            id: state.selectedDocId,
+                            update: payload,
+                        }),
+                    });
+
+                    setStatus(`Updated document ${state.selectedDocId}.`, "ok");
+                } else {
+                    if (payload && typeof payload === "object") {
+                        delete payload._id;
+                    }
+
+                    await apiFetch(`${API}/create`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            collection: state.selectedCollection,
+                            document: payload,
+                        }),
+                    });
+
+                    setStatus("Created new document.", "ok");
+                }
+
+                await loadDocs();
+            } catch (err) {
+                setStatus(`Save failed: ${err.message}`, "error");
+            }
+        }
+
+        async function deleteDoc() {
+            if (!state.selectedCollection) {
+                setStatus("Select a collection first.", "warn");
+                return;
+            }
+
+            if (!state.selectedDocId) {
+                setStatus("Select a document first.", "warn");
+                return;
+            }
+
+            const confirmed = window.confirm(`Delete document ${state.selectedDocId}?`);
+            if (!confirmed) return;
+
+            try {
+                await apiFetch(`${API}/delete`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        collection: state.selectedCollection,
+                        id: state.selectedDocId,
+                    }),
+                });
+
+                setStatus(`Deleted document ${state.selectedDocId}.`, "ok");
+                await loadDocs();
+            } catch (err) {
+                setStatus(`Delete failed: ${err.message}`, "error");
+            }
+        }
+
+        async function createCollection() {
+            const name = (newCollectionNameInput.value || "").trim();
+            if (!name) {
+                setStatus("Enter a collection name first.", "warn");
+                return;
+            }
+
+            try {
+                const result = await apiFetch(`${API}/collections/create`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        collection: name,
+                    }),
+                });
+
+                state.selectedCollection = name;
+                selectedCollectionInput.value = name;
+                newCollectionNameInput.value = "";
+
+                if (result && result.created === false) {
+                    setStatus(`Collection ${name} already exists.`, "warn");
+                } else {
+                    setStatus(`Created collection ${name}.`, "ok");
+                }
+
+                await loadCollections();
+                renderConnectionLinks();
+            } catch (err) {
+                setStatus(`Create collection failed: ${err.message}`, "error");
+            }
+        }
+
+        async function deleteCollection() {
+            if (!state.selectedCollection) {
+                setStatus("Select a collection first.", "warn");
+                return;
+            }
+
+            const forceDelete = !!forceDeleteCollectionInput.checked;
+            const confirmed = window.confirm(
+                `Delete collection '${state.selectedCollection}'?${forceDelete ? "\n\nForce delete is enabled." : "\n\nThis will fail if the collection is not empty."}`
+            );
+            if (!confirmed) return;
+
+            try {
+                await apiFetch(`${API}/collections/delete`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        collection: state.selectedCollection,
+                        force: forceDelete,
+                    }),
+                });
+
+                const deletedName = state.selectedCollection;
+                state.selectedCollection = "";
+                state.docs = [];
+                state.selectedDoc = null;
+                state.selectedDocId = "";
+                selectedCollectionInput.value = "";
+                selectedIdInput.value = "";
+                jsonEditor.value = "";
+                renderDocs();
+                renderConnectionLinks();
+
+                setStatus(`Deleted collection ${deletedName}.`, "ok");
+                await loadCollections();
+            } catch (err) {
+                setStatus(`Delete collection failed: ${err.message}`, "error");
+            }
+        }
+
+        refreshCollectionsBtn.addEventListener("click", loadCollections);
+        loadDocsBtn.addEventListener("click", loadDocs);
+        newDocBtn.addEventListener("click", clearEditorForNewDoc);
+        saveDocBtn.addEventListener("click", saveDoc);
+        deleteDocBtn.addEventListener("click", deleteDoc);
+        healthBtn.addEventListener("click", loadHealth);
+        collectionSearch.addEventListener("input", applyCollectionFilter);
+        createCollectionBtn.addEventListener("click", createCollection);
+        deleteCollectionBtn.addEventListener("click", deleteCollection);
+
+        (async () => {
+            renderConnectionLinks();
+            await loadHealth();
+            await loadCollections();
+            renderConnectionLinks();
+        })();
+    })();
+</script>
 </body>
 </html>
