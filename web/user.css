@@ -1,0 +1,72 @@
+{
+  "id": "dark",                     // Must be unique, cannot be the same as other theme IDs
+  "name": "Dark (Default)",         // Theme name, displayed in theme selector
+  "colors": {
+    "node_slot": {                  // Node connection slot color configuration
+      "CLIP": "#FFD500",            // CLIP model connection slot color
+      "CLIP_VISION": "#A8DADC",     // CLIP Vision model connection slot color
+      "CLIP_VISION_OUTPUT": "#ad7452", // CLIP Vision output connection slot color
+      "CONDITIONING": "#FFA931",     // Conditioning control connection slot color
+      "CONTROL_NET": "#6EE7B7",     // ControlNet model connection slot color
+      "IMAGE": "#64B5F6",           // Image data connection slot color
+      "LATENT": "#FF9CF9",          // Latent space connection slot color
+      "MASK": "#81C784",            // Mask data connection slot color
+      "MODEL": "#B39DDB",           // Model connection slot color
+      "STYLE_MODEL": "#C2FFAE",     // Style model connection slot color
+      "VAE": "#FF6E6E",             // VAE model connection slot color
+      "NOISE": "#B0B0B0",           // Noise data connection slot color
+      "GUIDER": "#66FFFF",          // Guider connection slot color
+      "SAMPLER": "#ECB4B4",         // Sampler connection slot color
+      "SIGMAS": "#CDFFCD",          // Sigmas data connection slot color
+      "TAESD": "#DCC274"            // TAESD model connection slot color
+    },
+    "litegraph_base": {             // LiteGraph base interface configuration
+      "BACKGROUND_IMAGE": "",        // Background image, default is empty
+      "CLEAR_BACKGROUND_COLOR": "#222", // Main canvas background color
+      "NODE_TITLE_COLOR": "#999",    // Node title text color
+      "NODE_SELECTED_TITLE_COLOR": "#FFF", // Selected node title color
+      "NODE_TEXT_SIZE": 14,          // Node text size
+      "NODE_TEXT_COLOR": "#AAA",     // Node text color
+      "NODE_TEXT_HIGHLIGHT_COLOR": "#FFF", // Node text highlight color
+      "NODE_SUBTEXT_SIZE": 12,       // Node subtext size
+      "NODE_DEFAULT_COLOR": "#333",   // Node default color
+      "NODE_DEFAULT_BGCOLOR": "#353535", // Node default background color
+      "NODE_DEFAULT_BOXCOLOR": "#666", // Node default border color
+      "NODE_DEFAULT_SHAPE": 2,        // Node default shape
+      "NODE_BOX_OUTLINE_COLOR": "#FFF", // Node border outline color
+      "NODE_BYPASS_BGCOLOR": "#FF00FF", // Node bypass background color
+      "NODE_ERROR_COLOUR": "#E00",    // Node error state color
+      "DEFAULT_SHADOW_COLOR": "rgba(0,0,0,0.5)", // Default shadow color
+      "DEFAULT_GROUP_FONT": 24,       // Group default font size
+      "WIDGET_BGCOLOR": "#222",       // Widget background color
+      "WIDGET_OUTLINE_COLOR": "#666", // Widget outline color
+      "WIDGET_TEXT_COLOR": "#DDD",    // Widget text color
+      "WIDGET_SECONDARY_TEXT_COLOR": "#999", // Widget secondary text color
+      "WIDGET_DISABLED_TEXT_COLOR": "#666", // Widget disabled state text color
+      "LINK_COLOR": "#9A9",          // Connection line color
+      "EVENT_LINK_COLOR": "#A86",    // Event connection line color
+      "CONNECTING_LINK_COLOR": "#AFA", // Connecting line color
+      "BADGE_FG_COLOR": "#FFF",      // Badge foreground color
+      "BADGE_BG_COLOR": "#0F1F0F"    // Badge background color
+    },
+    "comfy_base": {                  // ComfyUI base interface configuration
+      "fg-color": "#fff",            // Foreground color
+      "bg-color": "#202020",         // Background color
+      "comfy-menu-bg": "#353535",    // Menu background color
+      "comfy-menu-secondary-bg": "#303030", // Secondary menu background color
+      "comfy-input-bg": "#222",      // Input field background color
+      "input-text": "#ddd",          // Input text color
+      "descrip-text": "#999",        // Description text color
+      "drag-text": "#ccc",           // Drag text color
+      "error-text": "#ff4444",       // Error text color
+      "border-color": "#4e4e4e",     // Border color
+      "tr-even-bg-color": "#222",    // Table even row background color
+      "tr-odd-bg-color": "#353535",  // Table odd row background color
+      "content-bg": "#4e4e4e",       // Content area background color
+      "content-fg": "#fff",          // Content area foreground color
+      "content-hover-bg": "#222",    // Content area hover background color
+      "content-hover-fg": "#fff",    // Content area hover foreground color
+      "bar-shadow": "rgba(16, 16, 16, 0.5) 0 0 0.5rem" // Bar shadow effect
+    }
+  }
+}

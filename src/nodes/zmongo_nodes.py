@@ -397,231 +397,6 @@ class ZMongoFlattenedFieldSelector:
         )
 
 
-class ZMongoSaveValueNode:
-    """
-    Saves a passed value from prior nodes into MongoDB using a flattened
-    dot-path field key.
-
-    Supports:
-    - source_record_json as one object
-    - source_record_json as a list of objects
-    - choosing a record from the list with source_record_index
-    - explicit query override
-    """
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "mongo_uri": ("STRING", {"default": "mongodb://127.0.0.1:27017"}),
-                "database_name": ("STRING", {"default": "test"}),
-
-                "source_record_json": ("STRING", {"forceInput": True}),
-                "source_record_index": ("INT", {"default": 1, "min": 1, "max": 1000000}),
-                "value_to_save": ("STRING", {"forceInput": True}),
-
-                "target_collection": ("STRING", {"default": "comfy"}),
-                "target_field_path": ("STRING", {"default": "responses.output.text"}),
-
-                "parse_value_as_json": ("BOOLEAN", {"default": False}),
-                "upsert_if_missing": ("BOOLEAN", {"default": False}),
-
-                "explicit_query_json": ("STRING", {"default": "", "multiline": True}),
-            }
-        }
-
-    RETURN_TYPES = (
-        "STRING",  # result_json
-        "STRING",  # target_query_json
-        "STRING",  # saved_value_json
-        "STRING",  # target_collection_out
-        "STRING",  # target_field_path_out
-    )
-    RETURN_NAMES = (
-        "result_json",
-        "target_query_json",
-        "saved_value_json",
-        "target_collection_out",
-        "target_field_path_out",
-    )
-    FUNCTION = "save_value"
-    CATEGORY = "ZMongo/Operations"
-
-    @staticmethod
-    def _parse_json_object(raw: str, field_name: str) -> Dict[str, Any]:
-        text = (raw or "").strip()
-        if not text:
-            return {}
-        try:
-            parsed = json.loads(text)
-        except Exception as exc:
-            raise ValueError(f"{field_name} is not valid JSON: {exc}") from exc
-        if not isinstance(parsed, dict):
-            raise ValueError(f"{field_name} must be a JSON object")
-        return parsed
-
-    @staticmethod
-    def _parse_source_record(raw: str, source_record_index: int) -> Dict[str, Any]:
-        text = (raw or "").strip()
-        if not text:
-            raise ValueError("source_record_json is empty")
-
-        try:
-            parsed = json.loads(text)
-        except Exception as exc:
-            raise ValueError(f"source_record_json is not valid JSON: {exc}") from exc
-
-        if isinstance(parsed, dict):
-            return parsed
-
-        if isinstance(parsed, list):
-            if not parsed:
-                raise ValueError("source_record_json list is empty")
-
-            bounded_index = max(1, min(int(source_record_index), len(parsed)))
-            selected = parsed[bounded_index - 1]
-
-            if not isinstance(selected, dict):
-                raise ValueError("Selected item from source_record_json list is not a JSON object")
-
-            return selected
-
-        raise ValueError("source_record_json must be a JSON object or a JSON list of objects")
-
-    @staticmethod
-    def _parse_value(raw_value: Any, parse_value_as_json: bool) -> Any:
-        if raw_value is None:
-            return None
-
-        if not parse_value_as_json:
-            return raw_value
-
-        if isinstance(raw_value, str):
-            stripped = raw_value.strip()
-            if not stripped:
-                return ""
-            try:
-                return json.loads(stripped)
-            except Exception:
-                return raw_value
-
-        return raw_value
-
-    @staticmethod
-    def _extract_target_query(
-        source_record: Dict[str, Any],
-        explicit_query_json: str,
-    ) -> Dict[str, Any]:
-        explicit_query = ZMongoSaveValueNode._parse_json_object(
-            explicit_query_json, "explicit_query_json"
-        )
-        if explicit_query:
-            return explicit_query
-
-        if isinstance(source_record, dict) and source_record.get("_id") is not None:
-            return {"_id": source_record["_id"]}
-
-        raise ValueError(
-            "No target query could be determined. Provide source_record_json with _id "
-            "or set explicit_query_json."
-        )
-
-    @staticmethod
-    def _extract_target_collection(
-        source_record: Dict[str, Any],
-        target_collection: str,
-    ) -> str:
-        if target_collection and target_collection.strip():
-            return target_collection.strip()
-
-        inferred = ""
-        if isinstance(source_record, dict):
-            inferred = str(source_record.get("_collection_name") or "").strip()
-
-        if inferred:
-            return inferred
-
-        raise ValueError(
-            "No target collection provided. Set target_collection or pass source_record_json "
-            "containing _collection_name."
-        )
-
-    def save_value(
-        self,
-        mongo_uri,
-        database_name,
-        source_record_json,
-        source_record_index,
-        value_to_save,
-        target_collection,
-        target_field_path,
-        parse_value_as_json,
-        upsert_if_missing,
-        explicit_query_json,
-    ):
-        try:
-            source_record = self._parse_source_record(source_record_json, source_record_index)
-            resolved_collection = self._extract_target_collection(source_record, target_collection)
-            target_query = self._extract_target_query(source_record, explicit_query_json)
-
-            if not target_field_path or not str(target_field_path).strip():
-                raise ValueError("target_field_path is required")
-
-            resolved_field_path = str(target_field_path).strip()
-            parsed_value = self._parse_value(value_to_save, parse_value_as_json)
-
-            update_doc = {
-                resolved_field_path: parsed_value
-            }
-
-            zmongo = _get_zmongo(uri=mongo_uri, db_name=database_name)
-            result = zmongo.run_sync(
-                zmongo.update_one,
-                resolved_collection,
-                target_query,
-                update_doc,
-                upsert_if_missing,
-            )
-
-            if not isinstance(result, SafeResult):
-                result = SafeResult.fail(
-                    f"Unexpected update result type: {type(result).__name__}"
-                )
-
-            result_payload = {
-                "success": result.success,
-                "message": result.message,
-                "error": result.error,
-                "data": result.data,
-                "target_collection": resolved_collection,
-                "target_field_path": resolved_field_path,
-                "target_query": target_query,
-                "source_record_index_used": int(source_record_index),
-            }
-
-            return (
-                _safe_json(result_payload),
-                _safe_json(target_query),
-                _safe_json(parsed_value),
-                str(resolved_collection),
-                str(resolved_field_path),
-            )
-
-        except Exception as exc:
-            error_payload = {
-                "success": False,
-                "error": str(exc),
-                "target_collection": target_collection,
-                "target_field_path": target_field_path,
-            }
-            return (
-                json.dumps(error_payload, indent=2),
-                "{}",
-                _safe_json(value_to_save),
-                str(target_collection or ""),
-                str(target_field_path or ""),
-            )
-
 class ZMongoSaveBatchTextNode:
     """
     Saves a batch of text items to file(s) in the ComfyUI output directory.
@@ -2760,14 +2535,12 @@ NODE_CLASS_MAPPINGS = {
     "ZMongoTextFetcher": ZMongoTextFetcher,
     "ZMongoOperationsNode": ZMongoOperationsNode,
     "ZMongoRecordSplitter": ZMongoRecordSplitter,
-    "ZMongoFieldSelector": ZMongoFieldSelector,
     "ZRetrieverNode": ZRetrieverNode,
     "ZMongoDatabaseBrowserNode": ZMongoDatabaseBrowserNode,
     "ZMongoRecordLoopNode": ZMongoRecordLoopNode,
     "ZMongoSaveTextNode": ZMongoSaveTextNode,
     "ZMongoDataPassThroughNode": ZMongoDataPassThroughNode,
     "ZMongoSaveBatchTextNode": ZMongoSaveBatchTextNode,
-    "ZMongoSaveValueNode": ZMongoSaveValueNode,
     "ZMongoFlattenedFieldSelector": ZMongoFlattenedFieldSelector,
 }
 
@@ -2776,13 +2549,11 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoTextFetcher": "ZMongo Text Fetcher",
     "ZMongoOperationsNode": "ZMongo Operations",
     "ZMongoRecordSplitter": "ZMongo Record Splitter",
-    "ZMongoFieldSelector": "ZMongo Field Selector",
     "ZRetrieverNode": "ZMongo Retriever",
     "ZMongoDatabaseBrowserNode": "ZMongo Database Browser",
     "ZMongoRecordLoopNode": "ZMongo Record Loop",
     "ZMongoSaveTextNode": "ZMongo Save Text Node",
     "ZMongoDataPassThroughNode": "ZMongo Data Pass Through Node",
     "ZMongoSaveBatchTextNode": "ZMongo Save Batch Text Node",
-    "ZMongoSaveValueNode": "ZMongo Save Value Node",
     "ZMongoFlattenedFieldSelector": "ZMongo Flattened Field Selector",
 }

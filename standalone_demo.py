@@ -4,6 +4,10 @@ import logging
 import asyncio
 from aiohttp import web
 
+from api import register_zmongo_field_selector_routes
+from api.zmongo_record_editor_api import register_zmongo_record_editor_routes
+from api.zmongo_tabular_record_view_api import register_zmongo_tabular_record_view_routes
+
 # 1. PATH CONFIGURATION 🛠️
 # Ensures we can find 'nodes' and 'zmongo_toolbag'
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -11,7 +15,7 @@ if ROOT_PATH not in sys.path:
     sys.path.append(ROOT_PATH)
 
 # 2. WEB ASSET REGISTRATION 🌐
-WEB_DIRECTORY = "./web"
+WEB_DIRECTORY = "web"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ZMongo-Demo")
@@ -19,9 +23,7 @@ logger = logging.getLogger("ZMongo-Demo")
 # 3. IMPORTS
 # We import the routes and the server class we just made
 from server import PromptServer
-from nodes.zmongo_field_selector_api import register_zmongo_field_selector_routes
-from nodes.zmongo_record_editor_api import register_zmongo_record_editor_routes
-from nodes.zmongo_tabular_record_view_api import register_zmongo_tabular_record_view_routes
+
 
 
 # 4. SERVER API REGISTRATION 🚦
