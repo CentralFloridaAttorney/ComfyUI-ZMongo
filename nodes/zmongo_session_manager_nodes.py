@@ -56,6 +56,13 @@ def _exception_output(exc: Exception):
         False,
     )
 
+def _require_client(client: Optional[ZTarotManagerSessionClient]) -> ZTarotManagerSessionClient:
+    if client is None:
+        raise RuntimeError(
+            "ZMongo session client is missing. The upstream 'ZMongo Session Connect' node failed. "
+            "Inspect its result_json/text_output."
+        )
+    return client
 
 def _choose_json_source(text_value: str, json_input: Optional[str]) -> str:
     if json_input is not None:
@@ -154,6 +161,7 @@ class ZMongoSessionManagerListCollectionsNode:
 
     def list_collections(self, client: ZTarotManagerSessionClient):
         try:
+            client = _require_client(client)
             payload = client.list_collections()
             return _standard_output(payload, extract_primary_json_value(payload))
         except Exception as exc:
