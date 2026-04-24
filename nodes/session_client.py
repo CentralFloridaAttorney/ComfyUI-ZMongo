@@ -16,6 +16,7 @@ load_dotenv(ENV_PATH2)
 
 DEFAULT_BASE_URL = os.getenv("ZTAROT_BASE_URL", "https://ztarot.app").rstrip("/")
 DEFAULT_TIMEOUT = int(os.getenv("ZTAROT_TIMEOUT_SECONDS", "30"))
+DEFAULT_IMAGE_FIELD_PATH = os.getenv("ZTAROT_DEFAULT_IMAGE_FIELD", "image_data")
 
 
 def json_dumps(value: Any) -> str:
@@ -94,8 +95,10 @@ def safe_get_by_path(data: Any, field_path: str, sep: str = ".") -> Any:
 def normalize_base_url(raw_base_url: str) -> str:
     base = (raw_base_url or DEFAULT_BASE_URL).strip().rstrip("/")
     suffixes = (
+        "/user/manager/api",
         "/user/manager",
         "/user/api-manager",
+        "/comfy-zmongo",
         "/user/login",
         "/user/dashboard",
         "/user/settings",
@@ -122,6 +125,7 @@ def ensure_payload_dict(payload: Any) -> Dict[str, Any]:
             "data": {},
             "error": {"msg": f"Unexpected payload type: {type(payload).__name__}"},
         }
+
     if "success" not in result:
         result["success"] = False
     if "status_code" not in result:
@@ -132,6 +136,7 @@ def ensure_payload_dict(payload: Any) -> Dict[str, Any]:
         result["error"] = None
     if result.get("data") is None:
         result["data"] = {}
+
     return result
 
 
@@ -249,7 +254,7 @@ class ZTarotManagerSessionClient:
     def _browser_headers(self, content_type: Optional[str] = None) -> Dict[str, str]:
         headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "User-Agent": "ztarot-session-client/3.0",
+            "User-Agent": "ztarot-session-client/4.0",
             "Origin": self.base_url,
             "Referer": f"{self.base_url}/user/login",
         }
@@ -261,10 +266,32 @@ class ZTarotManagerSessionClient:
         return {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "ztarot-session-client/3.0",
+            "User-Agent": "ztarot-session-client/4.0",
             "Origin": self.base_url,
             "Referer": f"{self.base_url}/user/manager/",
         }
+
+    def _request_browser(
+        self,
+        method: str,
+        url: str,
+        *,
+        data: Optional[Dict[str, Any]] = None,
+        allow_redirects: bool = True,
+    ) -> requests.Response:
+        response = self.session.request(
+            method=method.upper(),
+            url=url,
+            headers=self._browser_headers(
+                "application/x-www-form-urlencoded" if data is not None else None
+            ),
+            data=data,
+            timeout=self.timeout,
+            verify=self.verify_tls,
+            allow_redirects=allow_redirects,
+        )
+        response.raise_for_status()
+        return response
 
     def login(self, force: bool = False) -> Dict[str, Any]:
         if self.is_authenticated and not force:
@@ -283,22 +310,22 @@ class ZTarotManagerSessionClient:
         self._require_credentials()
         login_url = f"{self.base_url}/user/login"
 
-        self.session.get(
-            login_url,
-            headers=self._browser_headers(),
-            timeout=self.timeout,
-            verify=self.verify_tls,
-            allow_redirects=True,
-        )
+        try:
+            self._request_browser("GET", login_url, allow_redirects=True)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load login page at {login_url}: {exc}") from exc
 
-        response = self.session.post(
-            login_url,
-            headers=self._browser_headers("application/x-www-form-urlencoded"),
-            data={"username": self.username, "password": self.password},
-            timeout=self.timeout,
-            verify=self.verify_tls,
-            allow_redirects=False,
-        )
+        try:
+            response = self.session.post(
+                login_url,
+                headers=self._browser_headers("application/x-www-form-urlencoded"),
+                data={"username": self.username, "password": self.password},
+                timeout=self.timeout,
+                verify=self.verify_tls,
+                allow_redirects=False,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Login POST failed for {login_url}: {exc}") from exc
 
         if response.status_code not in (302, 303):
             snippet = response.text[:1200]
@@ -327,13 +354,11 @@ class ZTarotManagerSessionClient:
         location = response.headers.get("Location") or "/user/dashboard"
         if location.startswith("/"):
             location = f"{self.base_url}{location}"
-        self.session.get(
-            location,
-            headers=self._browser_headers(),
-            timeout=self.timeout,
-            verify=self.verify_tls,
-            allow_redirects=True,
-        )
+
+        try:
+            self._request_browser("GET", location, allow_redirects=True)
+        except Exception as exc:
+            raise RuntimeError(f"Login redirect follow failed for {location}: {exc}") from exc
 
         self.is_authenticated = True
         return {
@@ -343,6 +368,7 @@ class ZTarotManagerSessionClient:
                 "cookies": self.session.cookies.get_dict(),
                 "effective_base_url": self.base_url,
                 "login_url": login_url,
+                "redirect_url": location,
                 "refresh_session_each_request": self.refresh_session_each_request,
             },
             "status_code": 200,
@@ -358,10 +384,21 @@ class ZTarotManagerSessionClient:
             self.login()
 
     def _normalize_payload(self, response: requests.Response) -> Dict[str, Any]:
+        content_type = (response.headers.get("Content-Type") or "").lower()
+
         try:
-            payload = response.json()
-            if not isinstance(payload, dict):
-                payload = {"success": response.ok, "data": payload}
+            if "application/json" in content_type:
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    payload = {"success": response.ok, "data": payload}
+            else:
+                payload = {
+                    "success": response.ok,
+                    "message": response.reason or ("OK" if response.ok else "Request failed"),
+                    "data": {},
+                    "error": None if response.ok else {"msg": "Non-JSON response"},
+                    "raw_text": response.text,
+                }
         except ValueError:
             payload = {
                 "success": False,
@@ -370,34 +407,32 @@ class ZTarotManagerSessionClient:
                 "error": {"msg": "Response was not JSON"},
                 "raw_text": response.text,
             }
+
         payload = ensure_payload_dict(payload)
         payload["status_code"] = response.status_code
         if payload.get("message") == "" and response.ok:
             payload["message"] = "OK"
         return payload
 
-    def request(self, method: str, path: str, *, json_body: Optional[Dict[str, Any]] = None, allow_reauth: bool = True) -> Dict[str, Any]:
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: Optional[Dict[str, Any]] = None,
+        allow_reauth: bool = True,
+    ) -> Dict[str, Any]:
         if self.refresh_session_each_request:
             self.login(force=True)
         else:
             self.ensure_authenticated()
 
-        response = self.session.request(
-            method=method,
-            url=f"{self.base_url}{path}",
-            headers=self._manager_headers(),
-            json=json_body,
-            timeout=self.timeout,
-            verify=self.verify_tls,
-            allow_redirects=True,
-        )
-        payload = self._normalize_payload(response)
+        url = f"{self.base_url}{path}"
 
-        if allow_reauth and response.status_code in (401, 403):
-            self.login(force=True)
+        try:
             response = self.session.request(
                 method=method,
-                url=f"{self.base_url}{path}",
+                url=url,
                 headers=self._manager_headers(),
                 json=json_body,
                 timeout=self.timeout,
@@ -405,6 +440,41 @@ class ZTarotManagerSessionClient:
                 allow_redirects=True,
             )
             payload = self._normalize_payload(response)
+        except requests.RequestException as exc:
+            return ensure_payload_dict(
+                {
+                    "success": False,
+                    "message": f"Request failed: {exc}",
+                    "data": {},
+                    "error": {"msg": str(exc), "type": exc.__class__.__name__},
+                    "status_code": 0,
+                }
+            )
+
+        if allow_reauth and response.status_code in (401, 403):
+            try:
+                self.login(force=True)
+                response = self.session.request(
+                    method=method,
+                    url=url,
+                    headers=self._manager_headers(),
+                    json=json_body,
+                    timeout=self.timeout,
+                    verify=self.verify_tls,
+                    allow_redirects=True,
+                )
+                payload = self._normalize_payload(response)
+            except requests.RequestException as exc:
+                return ensure_payload_dict(
+                    {
+                        "success": False,
+                        "message": f"Re-authenticated request failed: {exc}",
+                        "data": {},
+                        "error": {"msg": str(exc), "type": exc.__class__.__name__},
+                        "status_code": 0,
+                    }
+                )
+
         return payload
 
     def list_collections(self) -> Dict[str, Any]:
@@ -412,7 +482,10 @@ class ZTarotManagerSessionClient:
 
     def list_docs(self, collection_name: str, limit: int = 50, skip: int = 0) -> Dict[str, Any]:
         quoted = urllib.parse.quote(collection_name, safe="")
-        query = f"?limit={max(1, min(int(limit), 200))}&skip={max(0, int(skip))}"
+        query = (
+            f"?limit={max(1, min(int(limit), 200))}"
+            f"&skip={max(0, int(skip))}"
+        )
         return self.request("GET", f"/user/manager/api/docs/{quoted}{query}")
 
     def get_doc(self, collection_name: str, document_id: str) -> Dict[str, Any]:
@@ -421,18 +494,53 @@ class ZTarotManagerSessionClient:
         return self.request("GET", f"/user/manager/api/doc/{quoted_coll}/{quoted_doc}")
 
     def create_collection(self, collection_name: str) -> Dict[str, Any]:
-        return self.request("POST", "/user/manager/api/collection/create", json_body={"name": collection_name})
+        return self.request(
+            "POST",
+            "/user/manager/api/collection/create",
+            json_body={"name": collection_name},
+        )
 
     def delete_collection(self, collection_name: str) -> Dict[str, Any]:
-        return self.request("POST", "/user/manager/api/collection/delete", json_body={"name": collection_name})
+        return self.request(
+            "POST",
+            "/user/manager/api/collection/delete",
+            json_body={"name": collection_name},
+        )
 
     def create_doc(self, collection_name: str, document: Dict[str, Any]) -> Dict[str, Any]:
-        return self.request("POST", "/user/manager/api/create", json_body={"collection": collection_name, "document": document})
+        return self.request(
+            "POST",
+            "/user/manager/api/create",
+            json_body={"collection": collection_name, "document": document},
+        )
 
-    def update_field(self, collection_name: str, document_id: str, field_path: str, value: Any) -> Dict[str, Any]:
-        return self.request("POST", "/user/manager/api/update", json_body={"collection": collection_name, "id": document_id, "key": field_path, "value": value})
+    def update_field(
+        self,
+        collection_name: str,
+        document_id: str,
+        field_path: str,
+        value: Any,
+    ) -> Dict[str, Any]:
+        return self.request(
+            "POST",
+            "/user/manager/api/update",
+            json_body={
+                "collection": collection_name,
+                "id": document_id,
+                "key": field_path,
+                "value": value,
+            },
+        )
 
-    def save_value_by_query(self, *, collection_name: str, query: Dict[str, Any], field_path: str, value: Any, upsert_if_missing: bool = True) -> Dict[str, Any]:
+    def save_value_by_query(
+        self,
+        *,
+        collection_name: str,
+        query: Dict[str, Any],
+        field_path: str,
+        value: Any,
+        upsert_if_missing: bool = True,
+    ) -> Dict[str, Any]:
         return self.request(
             "POST",
             "/user/manager/api/save-value",
@@ -445,7 +553,15 @@ class ZTarotManagerSessionClient:
             },
         )
 
-    def save_value_by_doc_key(self, *, collection_name: str, doc_key: str, field_path: str, value: Any, upsert_if_missing: bool = True) -> Dict[str, Any]:
+    def save_value_by_doc_key(
+        self,
+        *,
+        collection_name: str,
+        doc_key: str,
+        field_path: str,
+        value: Any,
+        upsert_if_missing: bool = True,
+    ) -> Dict[str, Any]:
         return self.save_value_by_query(
             collection_name=collection_name,
             query={"doc_key": doc_key},
@@ -455,7 +571,108 @@ class ZTarotManagerSessionClient:
         )
 
     def delete_doc(self, collection_name: str, document_id: str) -> Dict[str, Any]:
-        return self.request("POST", "/user/manager/api/delete", json_body={"collection": collection_name, "id": document_id})
+        return self.request(
+            "POST",
+            "/user/manager/api/delete",
+            json_body={"collection": collection_name, "id": document_id},
+        )
+
+    def upload_image_to_field(
+        self,
+        *,
+        collection_name: str,
+        image_bytes: bytes,
+        filename: str,
+        document_id: str = "",
+        field_path: str = DEFAULT_IMAGE_FIELD_PATH,
+        content_type: str = "image/png",
+    ) -> Dict[str, Any]:
+        if self.refresh_session_each_request:
+            self.login(force=True)
+        else:
+            self.ensure_authenticated()
+
+        url = f"{self.base_url}/user/manager/api/image-field/upload"
+        files = {
+            "image": (filename, image_bytes, content_type),
+        }
+        data = {
+            "collection": collection_name,
+            "field_path": field_path or DEFAULT_IMAGE_FIELD_PATH,
+        }
+        if document_id:
+            data["document_id"] = document_id
+
+        try:
+            response = self.session.post(
+                url,
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "ztarot-session-client/4.0",
+                    "Origin": self.base_url,
+                    "Referer": f"{self.base_url}/user/manager/",
+                },
+                data=data,
+                files=files,
+                timeout=self.timeout,
+                verify=self.verify_tls,
+                allow_redirects=True,
+            )
+            return self._normalize_payload(response)
+        except requests.RequestException as exc:
+            return ensure_payload_dict(
+                {
+                    "success": False,
+                    "message": f"Image upload failed: {exc}",
+                    "data": {},
+                    "error": {"msg": str(exc), "type": exc.__class__.__name__},
+                    "status_code": 0,
+                }
+            )
+
+    def build_image_view_url(
+        self,
+        *,
+        collection_name: str,
+        document_id: str,
+        field_path: str = DEFAULT_IMAGE_FIELD_PATH,
+    ) -> str:
+        quoted_coll = urllib.parse.quote(collection_name, safe="")
+        quoted_doc = urllib.parse.quote(document_id, safe="")
+        quoted_field = urllib.parse.quote(field_path or DEFAULT_IMAGE_FIELD_PATH, safe="")
+        return (
+            f"{self.base_url}/user/manager/api/image-field/view/"
+            f"{quoted_coll}/{quoted_doc}?field_path={quoted_field}"
+        )
+
+    def build_image_download_url(
+        self,
+        *,
+        collection_name: str,
+        document_id: str,
+        field_path: str = DEFAULT_IMAGE_FIELD_PATH,
+    ) -> str:
+        quoted_coll = urllib.parse.quote(collection_name, safe="")
+        quoted_doc = urllib.parse.quote(document_id, safe="")
+        quoted_field = urllib.parse.quote(field_path or DEFAULT_IMAGE_FIELD_PATH, safe="")
+        return (
+            f"{self.base_url}/user/manager/api/image-field/download/"
+            f"{quoted_coll}/{quoted_doc}?field_path={quoted_field}"
+        )
+
+    def vault_gallery(self) -> Dict[str, Any]:
+        return self.request("GET", "/user/manager/api/vault/gallery")
+
+    def build_vault_preview_url(self, file_id: str) -> str:
+        quoted_id = urllib.parse.quote(file_id, safe="")
+        return f"{self.base_url}/user/manager/api/vault/preview/{quoted_id}"
+
+    def delete_vault_asset(self, file_id: str) -> Dict[str, Any]:
+        return self.request(
+            "POST",
+            "/user/manager/api/vault/delete",
+            json_body={"id": file_id},
+        )
 
     def logout(self) -> Dict[str, Any]:
         try:
@@ -466,6 +683,19 @@ class ZTarotManagerSessionClient:
                 verify=self.verify_tls,
                 allow_redirects=True,
             )
-            return self._normalize_payload(response)
+            payload = self._normalize_payload(response)
+            payload["success"] = True
+            payload["message"] = payload.get("message") or "Logged out"
+            return payload
+        except requests.RequestException as exc:
+            return ensure_payload_dict(
+                {
+                    "success": False,
+                    "message": f"Logout failed: {exc}",
+                    "data": {},
+                    "error": {"msg": str(exc), "type": exc.__class__.__name__},
+                    "status_code": 0,
+                }
+            )
         finally:
             self.close()
