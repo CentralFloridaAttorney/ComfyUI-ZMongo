@@ -18,7 +18,7 @@
 
 Use it to:
 
-- log in to a ZMongo backend from ComfyUI,
+- log in to a ZMongo backend from ComfyUI (i.e. https://ztarot.app),
 - list user collections,
 - list documents in a collection,
 - select the nth collection or document from list outputs,
@@ -73,7 +73,7 @@ cd /path/to/ComfyUI/custom_nodes
 Clone the repository:
 
 ```bash
-git clone https://github.com/YOUR-USER-OR-ORG/ComfyUI-ZMongo.git
+git clone https://github.com/centralfloridaattorney/ComfyUI-ZMongo.git
 ```
 
 Install requirements using the same Python environment that runs ComfyUI:
