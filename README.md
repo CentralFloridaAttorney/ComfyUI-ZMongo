@@ -51,18 +51,7 @@ This is useful for workflows that need **persistent memory**, **image archives**
 
 ## Installation
 
-### Option 1: Install with ComfyUI Manager
-
-1. Open **ComfyUI Manager**.
-2. Choose **Install Custom Nodes**.
-3. Search for `ComfyUI-ZMongo` if it is listed.
-4. Install and restart ComfyUI.
-
-If the node pack is not listed yet, use the manual install method below.
-
----
-
-### Option 2: Manual install with Git
+### Manual install with Git
 
 Go to your ComfyUI `custom_nodes` folder:
 
