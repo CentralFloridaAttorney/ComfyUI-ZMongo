@@ -62,7 +62,7 @@ cd /path/to/ComfyUI/custom_nodes
 Clone the repository:
 
 ```bash
-git clone https://github.com/centralfloridaattorney/ComfyUI-ZMongo.git
+git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
 ```
 
 Install requirements using the same Python environment that runs ComfyUI:
@@ -101,7 +101,7 @@ python3 main.py --listen 0.0.0.0 --port 50003
 From `ComfyUI_windows_portable\ComfyUI\custom_nodes`:
 
 ```bat
-git clone https://github.com/centralfloridaattorney/ComfyUI-ZMongo.git
+git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
 cd ComfyUI-ZMongo
 ..\..\python_embeded\python.exe -m pip install -r requirements.txt
 ```
