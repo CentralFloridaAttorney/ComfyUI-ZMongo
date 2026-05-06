@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Tuple
 
-from . import zmongo_session_nodes
+from . import zmongo_api_nodes
 
 
 def _merge_node_mappings(
@@ -31,9 +31,9 @@ def _merge_node_mappings(
 
 NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
     (
-        "zmongo_session_nodes",
-        zmongo_session_nodes.NODE_CLASS_MAPPINGS,
-        zmongo_session_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+        "zmongo_api_nodes",
+        zmongo_api_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
 )
 
