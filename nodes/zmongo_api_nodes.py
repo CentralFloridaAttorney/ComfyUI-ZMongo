@@ -33,6 +33,81 @@ DEFAULT_COMFY_ZMONGO_FLEET_PREFIX = os.getenv("COMFY_ZMONGO_FLEET_PREFIX", "/com
 # Generic helpers
 # -----------------------------------------------------------------------------
 
+def _flatten_path_keys(
+    value: Any,
+    *,
+    parent_key: str = "",
+    sep: str = ".",
+    include_leaf_values: bool = False,
+    max_value_preview: int = 120,
+) -> dict[str, Any]:
+    """
+    Flatten nested dict/list data into dot-path keys.
+
+    Important:
+    - ZMongo binary envelopes are treated as atomic.
+    - This avoids turning image_data into image_data.data/image_data.encoding/etc.
+    """
+    flat: dict[str, Any] = {}
+
+    if isinstance(value, dict) and value.get("__type__") == "bytes":
+        flat[parent_key or "root"] = {
+            "type": "bytes_envelope",
+            "size_bytes": value.get("size_bytes"),
+            "encoding": value.get("encoding"),
+        } if include_leaf_values else None
+        return flat
+
+    if isinstance(value, dict):
+        if not value and parent_key:
+            flat[parent_key] = {} if include_leaf_values else None
+            return flat
+
+        for key, child in value.items():
+            child_key = f"{parent_key}{sep}{key}" if parent_key else str(key)
+            flat.update(
+                _flatten_path_keys(
+                    child,
+                    parent_key=child_key,
+                    sep=sep,
+                    include_leaf_values=include_leaf_values,
+                    max_value_preview=max_value_preview,
+                )
+            )
+        return flat
+
+    if isinstance(value, list):
+        if not value and parent_key:
+            flat[parent_key] = [] if include_leaf_values else None
+            return flat
+
+        for index, child in enumerate(value):
+            child_key = f"{parent_key}{sep}{index}" if parent_key else str(index)
+            flat.update(
+                _flatten_path_keys(
+                    child,
+                    parent_key=child_key,
+                    sep=sep,
+                    include_leaf_values=include_leaf_values,
+                    max_value_preview=max_value_preview,
+                )
+            )
+        return flat
+
+    if parent_key:
+        if include_leaf_values:
+            if isinstance(value, str):
+                preview = value[:max_value_preview]
+                if len(value) > max_value_preview:
+                    preview += "..."
+                flat[parent_key] = preview
+            else:
+                flat[parent_key] = value
+        else:
+            flat[parent_key] = None
+
+    return flat
+
 def _dirty_token(*parts: Any) -> str:
     prefix = ":".join(str(part) for part in parts if part is not None)
     return f"{prefix}:{time.time_ns()}:{uuid.uuid4().hex}"
@@ -1471,6 +1546,241 @@ class ZMongoApiDeleteDocNode(AlwaysDirtyMixin):
             return (_json_text(payload), token)
 
 
+class ZMongoApiGetValueNode(AlwaysDirtyMixin):
+    """
+    Get one value from a ZMongo document by dot-path.
+
+    Examples:
+    - field_path = metadata.prompt
+    - field_path = image_data.metadata.seed
+    - field_path = image_data
+    - field_path = ""  -> returns the whole document JSON
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "session": ("ZMONGO_API_SESSION",),
+                "collection_name": ("STRING", {"default": ""}),
+                "document_id": ("STRING", {"default": ""}),
+                "field_path": ("STRING", {"default": ""}),
+                "fallback": ("STRING", {"default": ""}),
+                "cache": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "BOOLEAN", "STRING", "STRING")
+    RETURN_NAMES = ("json", "value", "exists", "value_type", "refresh")
+    FUNCTION = "get_value"
+    CATEGORY = "ZMongo/API/03 Docs"
+
+    @staticmethod
+    def _clean_scalar(value: Any) -> str:
+        """
+        Normalize scalar values coming from ComfyUI links.
+
+        Handles:
+        - ["abc"] -> "abc"
+        - ("abc",) -> "abc"
+        - "(abc)" -> "abc"
+        - "('abc',)" -> "abc"
+        - '["abc"]' -> "abc"
+        """
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return ""
+            value = value[0]
+
+        if value is None:
+            return ""
+
+        text = str(value).strip()
+
+        for _ in range(4):
+            before = text
+
+            if text.startswith("[") and text.endswith("]"):
+                text = text[1:-1].strip()
+
+            if text.startswith("(") and text.endswith(")"):
+                text = text[1:-1].strip()
+
+            if text.endswith(","):
+                text = text[:-1].strip()
+
+            if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+                text = text[1:-1].strip()
+
+            if text == before:
+                break
+
+        return text.strip()
+
+    @staticmethod
+    def _stringify_value(value: Any) -> str:
+        if value is None:
+            return ""
+
+        if isinstance(value, str):
+            return value
+
+        if isinstance(value, (dict, list, tuple)):
+            return _json_text(value)
+
+        return str(value)
+
+    def get_value(
+        self,
+        session,
+        collection_name: str,
+        document_id: str,
+        field_path: str,
+        fallback: str,
+        cache: bool,
+        refresh_token: str = "",
+    ):
+        cleaned_collection = self._clean_scalar(collection_name)
+        cleaned_document_id = self._clean_scalar(document_id)
+        cleaned_field_path = self._clean_scalar(field_path)
+        cleaned_fallback = self._clean_scalar(fallback)
+
+        refresh = _dirty_token(
+            "get_value",
+            cleaned_collection,
+            cleaned_document_id,
+            cleaned_field_path,
+            refresh_token,
+        )
+
+        if session is None:
+            payload = _error_payload("No API session provided.")
+            return (_json_text(payload), cleaned_fallback, False, "missing_session", refresh)
+
+        if not cleaned_collection:
+            payload = _error_payload("collection_name is required.")
+            return (_json_text(payload), cleaned_fallback, False, "missing_collection_name", refresh)
+
+        if not cleaned_document_id:
+            payload = _error_payload("document_id is required.")
+            return (_json_text(payload), cleaned_fallback, False, "missing_document_id", refresh)
+
+        try:
+            api_payload = session.get_doc(
+                collection=cleaned_collection,
+                document_id=cleaned_document_id,
+                cache=cache,
+            )
+
+            document = _extract_document_from_payload(api_payload)
+
+            if not document:
+                payload = {
+                    "success": False,
+                    "message": "Document not found or API payload did not contain a document.",
+                    "data": {
+                        "collection_name": cleaned_collection,
+                        "document_id": cleaned_document_id,
+                        "field_path": cleaned_field_path,
+                        "fallback": cleaned_fallback,
+                        "api_payload_success": api_payload.get("success") if isinstance(api_payload, dict) else None,
+                        "api_payload_status_code": api_payload.get("status_code") if isinstance(api_payload, dict) else None,
+                        "api_payload_message": api_payload.get("message") if isinstance(api_payload, dict) else None,
+                        "refresh": refresh,
+                    },
+                    "error": {"msg": "No document returned."},
+                    "status_code": 404,
+                }
+                return (_json_text(payload), cleaned_fallback, False, "missing_document", refresh)
+
+            if cleaned_field_path:
+                value = safe_get_by_path(document, cleaned_field_path, default=None)
+                exists = value is not None
+                resolved_path = cleaned_field_path
+            else:
+                value = document
+                exists = True
+                resolved_path = ""
+
+            if not exists:
+                payload = {
+                    "success": False,
+                    "message": f"No value found at field path {cleaned_field_path!r}.",
+                    "data": {
+                        "collection_name": cleaned_collection,
+                        "document_id": cleaned_document_id,
+                        "field_path": cleaned_field_path,
+                        "fallback": cleaned_fallback,
+                        "document_top_level_keys": sorted(str(k) for k in document.keys()),
+                        "refresh": refresh,
+                        "checks": [
+                            "Confirm field_path is spelled correctly.",
+                            "Use 04 Metadata Flattened Paths with metadata_field_path blank to list all paths.",
+                            "Use 04 Debug Image Document to inspect image document structure.",
+                            "Leave field_path blank to return the whole document JSON.",
+                        ],
+                    },
+                    "error": {"msg": "Field path not found."},
+                    "status_code": 404,
+                }
+                return (_json_text(payload), cleaned_fallback, False, "missing_value", refresh)
+
+            value_type = type(value).__name__
+            value_text = self._stringify_value(value)
+
+            payload = {
+                "success": True,
+                "message": (
+                    "Loaded whole document."
+                    if not cleaned_field_path
+                    else f"Loaded value from field path {cleaned_field_path!r}."
+                ),
+                "data": {
+                    "collection_name": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "field_path": cleaned_field_path,
+                    "resolved_path": resolved_path,
+                    "exists": True,
+                    "value_type": value_type,
+                    "value": value,
+                    "value_text": value_text,
+                    "refresh": refresh,
+                },
+                "error": None,
+                "status_code": 200,
+            }
+
+            return (_json_text(payload), value_text, True, value_type, refresh)
+
+        except Exception as exc:
+            payload = {
+                "success": False,
+                "message": f"Get Value failed: {exc}",
+                "data": {
+                    "collection_name": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "field_path": cleaned_field_path,
+                    "fallback": cleaned_fallback,
+                    "refresh": refresh,
+                    "checks": [
+                        "Confirm API session is connected.",
+                        "Confirm collection_name is correct.",
+                        "Confirm document_id exists.",
+                        "Confirm field_path is a valid dot-path.",
+                    ],
+                },
+                "error": {
+                    "type": exc.__class__.__name__,
+                    "msg": str(exc),
+                },
+                "status_code": 0,
+            }
+            return (_json_text(payload), cleaned_fallback, False, "error", refresh)
+
+
 class ZMongoApiSaveValueNode(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
@@ -1483,16 +1793,69 @@ class ZMongoApiSaveValueNode(AlwaysDirtyMixin):
                 "field_path": ("STRING", {"default": ""}),
                 "value_json": ("STRING", {"default": "", "multiline": True}),
                 "parse_value_json": ("BOOLEAN", {"default": True}),
-                "upsert_if_missing": ("BOOLEAN", {"default": True}),
+                "upsert_if_missing": ("BOOLEAN", {"default": False}),
                 "parse_json_strings": ("BOOLEAN", {"default": True}),
                 "normalize_for_storage": ("BOOLEAN", {"default": False}),
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("json", "refresh")
+    RETURN_TYPES = ("STRING", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("json", "refresh", "success")
     FUNCTION = "save_value"
     CATEGORY = "ZMongo/API/03 Docs"
+
+    @staticmethod
+    def _clean_scalar(value: Any) -> str:
+        """
+        Normalize scalar values coming from ComfyUI links.
+
+        Handles:
+        - ["abc"] -> "abc"
+        - ("abc",) -> "abc"
+        - "(abc)" -> "abc"
+        - "('abc',)" -> "abc"
+        - '["abc"]' -> "abc"
+        """
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return ""
+            value = value[0]
+
+        if value is None:
+            return ""
+
+        text = str(value).strip()
+
+        for _ in range(4):
+            before = text
+
+            if text.startswith("[") and text.endswith("]"):
+                text = text[1:-1].strip()
+
+            if text.startswith("(") and text.endswith(")"):
+                text = text[1:-1].strip()
+
+            if text.endswith(","):
+                text = text[:-1].strip()
+
+            if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+                text = text[1:-1].strip()
+
+            if text == before:
+                break
+
+        return text.strip()
+
+    @staticmethod
+    def _parse_query_or_empty(query_json: Any) -> dict[str, Any]:
+        text = ZMongoApiSaveValueNode._clean_scalar(query_json)
+        if not text:
+            return {}
+
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict):
+            raise ValueError("query_json must be a JSON object.")
+        return parsed
 
     def save_value(
         self,
@@ -1507,27 +1870,133 @@ class ZMongoApiSaveValueNode(AlwaysDirtyMixin):
         parse_json_strings: bool,
         normalize_for_storage: bool,
     ):
-        token = _dirty_token("save_value", collection_name, field_path)
+        cleaned_collection = self._clean_scalar(collection_name)
+        cleaned_document_id = self._clean_scalar(document_id)
+        cleaned_field_path = self._clean_scalar(field_path)
+        cleaned_value_json = self._clean_scalar(value_json)
+
+        token = _dirty_token(
+            "save_value",
+            cleaned_collection,
+            cleaned_document_id,
+            cleaned_field_path,
+        )
+
         if session is None:
-            return (_json_text(_error_payload("No session provided.")), token)
+            payload = _error_payload("No API session provided.")
+            return (_json_text(payload), token, False)
+
+        if not cleaned_collection:
+            payload = _error_payload("collection_name is required.")
+            return (_json_text(payload), token, False)
+
+        if not cleaned_field_path:
+            payload = _error_payload("field_path is required.")
+            return (_json_text(payload), token, False)
 
         try:
-            query = _parse_json_object(query_json, "query_json")
-            value = _parse_any_json(value_json, parse_value_json)
+            query = self._parse_query_or_empty(query_json)
+
+            # ------------------------------------------------------------
+            # Critical fix:
+            # If a document_id is connected, use it as the explicit target.
+            # This avoids backend rejection: "query or document_id is required."
+            # ------------------------------------------------------------
+            query_used = dict(query)
+            document_id_used = cleaned_document_id
+
+            if cleaned_document_id:
+                query_used = {"_id": cleaned_document_id}
+                document_id_used = ""
+
+            if not query_used and not cleaned_document_id:
+                payload = {
+                    "success": False,
+                    "message": "Save Value requires a selected document_id or a non-empty query_json.",
+                    "data": {
+                        "collection_name": cleaned_collection,
+                        "document_id": cleaned_document_id,
+                        "query_json": query_json,
+                        "field_path": cleaned_field_path,
+                        "refresh": token,
+                        "checks": [
+                            "Connect document_id from 99 Select Nth Item.",
+                            "Or enter query_json such as {\"_id\": \"DOCUMENT_ID_HERE\"}.",
+                            "Confirm collection_name is connected from 99 Select Nth Item.",
+                            "Confirm field_path is the dot-path you want to write.",
+                        ],
+                    },
+                    "error": {"msg": "query or document_id is required."},
+                    "status_code": 400,
+                }
+                return (_json_text(payload), token, False)
+
+            value = _parse_any_json(cleaned_value_json, parse_value_json)
+
             payload = session.save_value(
-                collection=(collection_name or "").strip(),
-                query=query,
-                document_id=(document_id or "").strip(),
-                field_path=(field_path or "").strip(),
+                collection=cleaned_collection,
+                query=query_used,
+                document_id=document_id_used,
+                field_path=cleaned_field_path,
                 value=value,
                 upsert_if_missing=upsert_if_missing,
                 parse_json_strings=parse_json_strings,
                 normalize_for_storage=normalize_for_storage,
             )
-            return (_json_text(payload), token)
+
+            success = bool(payload.get("success")) if isinstance(payload, dict) else False
+
+            result_payload = {
+                "success": success,
+                "message": (
+                    f"Saved value to {cleaned_collection} at {cleaned_field_path}."
+                    if success
+                    else f"Failed to save value to {cleaned_collection} at {cleaned_field_path}."
+                ),
+                "data": {
+                    "operation": "save_value",
+                    "collection_name": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "query_used": query_used,
+                    "field_path": cleaned_field_path,
+                    "value_preview": cleaned_value_json[:300],
+                    "upsert_if_missing": bool(upsert_if_missing),
+                    "parse_json_strings": bool(parse_json_strings),
+                    "normalize_for_storage": bool(normalize_for_storage),
+                    "refresh": token,
+                    "api_response": payload,
+                },
+                "error": None if success else (
+                    payload.get("error") if isinstance(payload, dict) else "Save failed."
+                ),
+                "status_code": payload.get("status_code", 0) if isinstance(payload, dict) else 0,
+            }
+
+            return (_json_text(result_payload), token, success)
+
         except Exception as exc:
-            payload = _error_payload(str(exc))
-            return (_json_text(payload), token)
+            payload = {
+                "success": False,
+                "message": f"Save Value failed: {exc}",
+                "data": {
+                    "collection_name": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "field_path": cleaned_field_path,
+                    "refresh": token,
+                    "checks": [
+                        "Confirm query_json is valid JSON.",
+                        "Confirm value_json is valid JSON when parse_value_json is true.",
+                        "Confirm document_id is connected or query_json is non-empty.",
+                        "Confirm field_path is not empty.",
+                    ],
+                },
+                "error": {
+                    "type": exc.__class__.__name__,
+                    "msg": str(exc),
+                },
+                "status_code": 0,
+            }
+            return (_json_text(payload), token, False)
 
 
 # -----------------------------------------------------------------------------
@@ -2478,6 +2947,332 @@ class ZMongoApiJsonPickNode(AlwaysDirtyMixin):
         except Exception:
             return (fallback or "",)
 
+class ZMongoApiMetadataFlattenedPathsNode(AlwaysDirtyMixin):
+    """
+    Outputs flattened dot-path keys for:
+    - the whole document when metadata_field_path is empty
+    - metadata when metadata_field_path = metadata
+    - nested metadata when metadata_field_path = image_data.metadata
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "session": ("ZMONGO_API_SESSION",),
+                "collection_name": ("STRING", {"default": ""}),
+                "document_id": ("STRING", {"default": ""}),
+                "metadata_field_path": ("STRING", {"default": ""}),
+                "contains_text": ("STRING", {"default": ""}),
+                "include_leaf_values": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
+                "cache": ("BOOLEAN", {"default": False}),
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "*", "STRING", "INT")
+    RETURN_NAMES = ("json", "paths", "indexed", "count")
+    OUTPUT_IS_LIST = (False, True, False, False)
+    FUNCTION = "metadata_flattened_paths"
+    CATEGORY = "ZMongo/API/04 Images"
+
+    @staticmethod
+    def _clean_scalar(value: Any) -> str:
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return ""
+            value = value[0]
+
+        if value is None:
+            return ""
+
+        text = str(value).strip()
+
+        for _ in range(4):
+            before = text
+
+            if text.startswith("[") and text.endswith("]"):
+                text = text[1:-1].strip()
+
+            if text.startswith("(") and text.endswith(")"):
+                text = text[1:-1].strip()
+
+            if text.endswith(","):
+                text = text[:-1].strip()
+
+            if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+                text = text[1:-1].strip()
+
+            if text == before:
+                break
+
+        return text.strip()
+
+    @staticmethod
+    def _flatten_keys(
+        value: Any,
+        *,
+        parent_key: str = "",
+        include_leaf_values: bool = False,
+        max_value_preview: int = 120,
+    ) -> dict[str, Any]:
+        """
+        Flatten dict/list into dot-path keys.
+
+        Important:
+        ZMongo binary envelopes are atomic:
+            image_data = {"__type__": "bytes", "data": "..."}
+        becomes:
+            image_data
+        not:
+            image_data.data
+        """
+
+        flat: dict[str, Any] = {}
+
+        if isinstance(value, dict) and value.get("__type__") == "bytes":
+            key = parent_key or "root"
+            flat[key] = {
+                "type": "bytes_envelope",
+                "encoding": value.get("encoding"),
+                "size_bytes": value.get("size_bytes"),
+                "filename": value.get("filename"),
+                "content_type": value.get("content_type"),
+            } if include_leaf_values else None
+            return flat
+
+        if isinstance(value, dict):
+            if not value:
+                if parent_key:
+                    flat[parent_key] = {} if include_leaf_values else None
+                return flat
+
+            for key, child in value.items():
+                child_key = f"{parent_key}.{key}" if parent_key else str(key)
+                flat.update(
+                    ZMongoApiMetadataFlattenedPathsNode._flatten_keys(
+                        child,
+                        parent_key=child_key,
+                        include_leaf_values=include_leaf_values,
+                        max_value_preview=max_value_preview,
+                    )
+                )
+            return flat
+
+        if isinstance(value, list):
+            if not value:
+                if parent_key:
+                    flat[parent_key] = [] if include_leaf_values else None
+                return flat
+
+            for index, child in enumerate(value):
+                child_key = f"{parent_key}.{index}" if parent_key else str(index)
+                flat.update(
+                    ZMongoApiMetadataFlattenedPathsNode._flatten_keys(
+                        child,
+                        parent_key=child_key,
+                        include_leaf_values=include_leaf_values,
+                        max_value_preview=max_value_preview,
+                    )
+                )
+            return flat
+
+        if parent_key:
+            if include_leaf_values:
+                if isinstance(value, str):
+                    preview = value[:max_value_preview]
+                    if len(value) > max_value_preview:
+                        preview += "..."
+                    flat[parent_key] = preview
+                else:
+                    flat[parent_key] = value
+            else:
+                flat[parent_key] = None
+
+        return flat
+
+    @staticmethod
+    def _common_existing_paths(document: dict[str, Any]) -> list[str]:
+        common = [
+            "metadata",
+            "image_data",
+            "image_data.metadata",
+            "payload",
+            "payload.metadata",
+            "result",
+            "result.metadata",
+            "data",
+            "data.metadata",
+        ]
+
+        existing: list[str] = []
+        for path in common:
+            value = safe_get_by_path(document, path)
+            if value is not None:
+                existing.append(path)
+
+        return existing
+
+    def metadata_flattened_paths(
+        self,
+        session,
+        collection_name: str,
+        document_id: str,
+        metadata_field_path: str,
+        contains_text: str,
+        include_leaf_values: bool,
+        cache: bool = False,
+        refresh_token: str = "",
+    ):
+        if session is None:
+            payload = _error_payload("No API session provided.")
+            return (_json_text(payload), [], _indexed_list_text([]), 0)
+
+        cleaned_collection = self._clean_scalar(collection_name)
+        cleaned_document_id = self._clean_scalar(document_id)
+        cleaned_metadata_path = self._clean_scalar(metadata_field_path)
+        cleaned_contains = self._clean_scalar(contains_text).lower()
+
+        if not cleaned_collection:
+            payload = _error_payload("collection_name is required.")
+            return (_json_text(payload), [], _indexed_list_text([]), 0)
+
+        if not cleaned_document_id:
+            payload = _error_payload("document_id is required.")
+            return (_json_text(payload), [], _indexed_list_text([]), 0)
+
+        try:
+            api_payload = session.get_doc(
+                collection=cleaned_collection,
+                document_id=cleaned_document_id,
+                cache=cache,
+            )
+
+            document = _extract_document_from_payload(api_payload)
+
+            if not document:
+                payload = {
+                    "success": False,
+                    "message": "Document not found or API payload did not contain a document.",
+                    "data": {
+                        "collection_name": cleaned_collection,
+                        "document_id": cleaned_document_id,
+                        "metadata_field_path": cleaned_metadata_path,
+                        "api_payload_success": api_payload.get("success") if isinstance(api_payload, dict) else None,
+                        "api_payload_status_code": api_payload.get("status_code") if isinstance(api_payload, dict) else None,
+                        "api_payload_message": api_payload.get("message") if isinstance(api_payload, dict) else None,
+                        "refresh_token": refresh_token,
+                    },
+                    "error": {"msg": "No document returned."},
+                    "status_code": 404,
+                }
+                return (_json_text(payload), [], _indexed_list_text([]), 0)
+
+            # ------------------------------------------------------------
+            # KEY FIX:
+            # Empty metadata_field_path means flatten the whole document.
+            # Non-empty means flatten only that sub-object/path.
+            # ------------------------------------------------------------
+            if cleaned_metadata_path:
+                target_value = safe_get_by_path(document, cleaned_metadata_path)
+                target_label = cleaned_metadata_path
+            else:
+                target_value = document
+                target_label = ""
+
+            if target_value is None:
+                existing_paths = self._common_existing_paths(document)
+                payload = {
+                    "success": False,
+                    "message": f"No value found at field path {cleaned_metadata_path!r}.",
+                    "data": {
+                        "collection_name": cleaned_collection,
+                        "document_id": cleaned_document_id,
+                        "metadata_field_path": cleaned_metadata_path,
+                        "document_top_level_keys": sorted(str(k) for k in document.keys()),
+                        "common_existing_paths": existing_paths,
+                        "refresh_token": refresh_token,
+                        "checks": [
+                            "Leave metadata_field_path blank to flatten the whole document.",
+                            "Use metadata_field_path = metadata for root metadata.",
+                            "Use metadata_field_path = image_data.metadata for metadata inside the image envelope.",
+                            "Use 04 Debug Image Document to inspect document structure.",
+                        ],
+                    },
+                    "error": {"msg": "Field path not found."},
+                    "status_code": 404,
+                }
+                return (_json_text(payload), [], _indexed_list_text([]), 0)
+
+            flattened = self._flatten_keys(
+                target_value,
+                parent_key=target_label,
+                include_leaf_values=include_leaf_values,
+            )
+
+            paths = sorted(str(path) for path in flattened.keys())
+
+            if cleaned_contains:
+                paths = [path for path in paths if cleaned_contains in path.lower()]
+
+            path_values = {path: flattened.get(path) for path in paths} if include_leaf_values else {}
+
+            payload = {
+                "success": True,
+                "message": f"Found {len(paths)} flattened path(s).",
+                "data": {
+                    "collection_name": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "metadata_field_path": cleaned_metadata_path,
+                    "flatten_scope": "whole_document" if not cleaned_metadata_path else "selected_field",
+                    "contains_text": cleaned_contains,
+                    "include_leaf_values": bool(include_leaf_values),
+                    "count": len(paths),
+                    "paths": paths,
+                    "path_values": path_values,
+                    "target_type": type(target_value).__name__,
+                    "document_top_level_keys": sorted(str(k) for k in document.keys()),
+                    "common_existing_paths": self._common_existing_paths(document),
+                    "refresh_token": refresh_token,
+                },
+                "error": None,
+                "status_code": 200,
+            }
+
+            return (
+                _json_text(payload),
+                _as_comfy_list(paths),
+                _indexed_list_text(paths),
+                len(paths),
+            )
+
+        except Exception as exc:
+            payload = {
+                "success": False,
+                "message": f"Metadata flattened paths failed: {exc}",
+                "data": {
+                    "collection_name": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "metadata_field_path": cleaned_metadata_path,
+                    "refresh_token": refresh_token,
+                    "checks": [
+                        "Confirm API session is connected.",
+                        "Confirm collection_name is correct.",
+                        "Confirm document_id exists.",
+                        "Leave metadata_field_path blank to flatten the whole document.",
+                        "Use metadata_field_path = metadata to flatten only root metadata.",
+                        "Use metadata_field_path = image_data.metadata to flatten only image metadata.",
+                    ],
+                },
+                "error": {
+                    "type": exc.__class__.__name__,
+                    "msg": str(exc),
+                },
+                "status_code": 0,
+            }
+            return (_json_text(payload), [], _indexed_list_text([]), 0)
 
 # -----------------------------------------------------------------------------
 # ComfyUI mappings
@@ -2505,6 +3300,7 @@ NODE_CLASS_MAPPINGS = {
     "ZMongoApiCreateDocNode": ZMongoApiCreateDocNode,
     "ZMongoApiUpdateDocNode": ZMongoApiUpdateDocNode,
     "ZMongoApiDeleteDocNode": ZMongoApiDeleteDocNode,
+    "ZMongoApiGetValueNode": ZMongoApiGetValueNode,
     "ZMongoApiSaveValueNode": ZMongoApiSaveValueNode,
 
     # 04 Images
@@ -2512,6 +3308,7 @@ NODE_CLASS_MAPPINGS = {
     "ZMongoApiEasySaveImageNode": ZMongoApiEasySaveImageNode,
     "ZMongoApiDocumentImageDebugNode": ZMongoApiDocumentImageDebugNode,
     "ZMongoApiImageFieldCandidatesNode": ZMongoApiImageFieldCandidatesNode,
+    "ZMongoApiMetadataFlattenedPathsNode": ZMongoApiMetadataFlattenedPathsNode,
 
     # 05 Fleet
     "ZMongoApiFleetStatusNode": ZMongoApiFleetStatusNode,
@@ -2545,13 +3342,16 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoApiCreateDocNode": "03 Create Doc",
     "ZMongoApiUpdateDocNode": "03 Update Doc",
     "ZMongoApiDeleteDocNode": "03 Delete Doc",
+    "ZMongoApiGetValueNode": "03 Get Value",
     "ZMongoApiSaveValueNode": "03 Save Value",
+
 
     # 04 Images
     "ZMongoDisplayImageNode": "04 Display Image from ZMongo",
     "ZMongoApiEasySaveImageNode": "04 Easy Save Image",
     "ZMongoApiDocumentImageDebugNode": "04 Debug Image Document",
     "ZMongoApiImageFieldCandidatesNode": "04 Image Field Candidates",
+    "ZMongoApiMetadataFlattenedPathsNode": "04 Metadata Flattened Paths",
 
     # 05 Fleet
     "ZMongoApiFleetStatusNode": "05 Fleet Status",
