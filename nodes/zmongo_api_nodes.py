@@ -280,18 +280,54 @@ def _legacy_data_path(field_path: str) -> str:
     return cleaned if cleaned.endswith(".data") else f"{cleaned}.data"
 
 
+def _strip_known_image_leaf(field_path: str, default: str = "image_data") -> str:
+    """Return the public image field, not an internal envelope member.
+
+    ZMongo byte envelopes are normally stored as:
+        image_data = {"__type__": "bytes", "encoding": "base64", "data": "..."}
+
+    A user may accidentally type image_data.data after inspecting the JSON, but
+    the backend route must receive image_data so it can decode the envelope.
+    """
+    cleaned = _clean_field_path(field_path, default)
+    known_leafs = ("data", "base64", "b64", "bytes", "image", "content", "payload", "url")
+    parts = [part for part in cleaned.split(".") if part]
+
+    if len(parts) > 1 and parts[-1] in known_leafs:
+        return ".".join(parts[:-1]) or default
+
+    return cleaned
+
+
+def _route_image_field_path(field_path: str, default: str = "image_data") -> str:
+    """Field path to send to server image routes.
+
+    Never send image_data.data as the preferred route field.  The .data member
+    is part of the ZMongo binary envelope and should be decoded by the route,
+    not treated as the public image field.
+    """
+    return _strip_known_image_leaf(field_path, default)
+
+
 def _image_field_candidates(field_path: str, default: str = "image_data") -> list[str]:
+    """
+    Return the old working read candidates in priority order.
+
+    The save node and display node must agree on the same public field path.
+    For ZMongo byte envelopes, the image is stored at the field itself:
+        image_data = {"__type__": "bytes", "encoding": "base64", "data": "..."}
+
+    The legacy '<field>.data' path is only a fallback for older documents or
+    direct base64 members. Do not use it as the preferred public route field.
+    """
     exact = _clean_field_path(field_path, default)
-    candidates = [
-        exact,
-        _legacy_data_path(exact),
-        f"{exact}.base64",
-        f"{exact}.b64",
-        f"{exact}.bytes",
-        f"{exact}.image",
-        f"{exact}.url",
-    ]
-    return list(dict.fromkeys(candidates))
+    public_field = _strip_known_image_leaf(exact, default)
+    legacy = _legacy_data_path(public_field)
+    candidates = [public_field]
+    if exact != public_field:
+        candidates.append(exact)
+    candidates.append(legacy)
+    return list(dict.fromkeys(path for path in candidates if path))
 
 
 def _empty_comfy_image(width: int = 1, height: int = 1) -> torch.Tensor:
@@ -361,16 +397,112 @@ def _is_probable_url(value: Any) -> bool:
 
 
 def _image_url_from_value(value: Any) -> str:
-    if isinstance(value, str) and _is_probable_url(value):
-        return value.strip()
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith(("http://", "https://", "/")):
+            return stripped
 
     if isinstance(value, dict):
-        for key in ("url", "view_url", "download_url", "preview_url", "href"):
+        for key in ("url", "view_url", "download_url", "preview_url", "href", "src"):
             candidate = value.get(key)
-            if _is_probable_url(candidate):
-                return str(candidate).strip()
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
 
     return ""
+
+
+def _find_first_bytes_envelope(node: Any, path: str = "") -> tuple[str, dict[str, Any]] | None:
+    if isinstance(node, dict):
+        if node.get("__type__") == "bytes" and node.get("data"):
+            return path or "root", node
+        for key, value in node.items():
+            found = _find_first_bytes_envelope(value, f"{path}.{key}" if path else str(key))
+            if found:
+                return found
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            found = _find_first_bytes_envelope(value, f"{path}.{index}" if path else str(index))
+            if found:
+                return found
+    return None
+
+
+def _document_key_summary(document: Any) -> dict[str, Any]:
+    if not isinstance(document, dict):
+        return {"type": type(document).__name__}
+
+    keys = sorted(str(key) for key in document.keys())
+    field_types = {str(key): type(value).__name__ for key, value in document.items()}
+    likely_refs: dict[str, Any] = {}
+    for key in (
+        "_id", "file_id", "image_id", "asset_id", "gridfs_id", "blob_id",
+        "filename", "path", "filepath", "file_path", "url", "view_url",
+        "download_url", "preview_url", "r2_key", "object_key", "collection",
+    ):
+        if key in document:
+            likely_refs[key] = document.get(key)
+
+    return {
+        "top_level_keys": keys,
+        "field_types": field_types,
+        "likely_image_reference_fields": likely_refs,
+    }
+
+
+def _string_value_from_path(document: dict[str, Any], path: str) -> str:
+    value = safe_get_by_path(document, path)
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _image_reference_candidates(document: dict[str, Any]) -> list[dict[str, str]]:
+    """Return image/file-id references found in metadata-only documents.
+
+    Some workflows save an image document as metadata or a pointer to the
+    encrypted vault file, not as an inline image_data envelope.  This lets the
+    display node follow those pointers before failing.
+    """
+    if not isinstance(document, dict):
+        return []
+
+    candidates: list[dict[str, str]] = []
+
+    pointer_paths = (
+        "file_id", "image_id", "asset_id", "gridfs_id", "blob_id",
+        "payload.file_id", "payload.image_id", "payload.asset_id",
+        "metadata.file_id", "metadata.image_id", "metadata.asset_id",
+        "result.file_id", "data.file_id",
+    )
+    for path in pointer_paths:
+        value = _string_value_from_path(document, path)
+        if value:
+            candidates.append({"collection": "zai_fleet_files", "document_id": value, "field_path": "image_data", "source": path})
+
+    # If the selected document is itself a GridFS/zai_fleet_files metadata
+    # record, its _id is the image id even if the selected collection was
+    # named images by an older workflow.
+    looks_like_file_doc = any(key in document for key in ("filename", "length", "chunkSize", "uploadDate"))
+    object_id = _string_value_from_path(document, "_id")
+    if looks_like_file_doc and object_id:
+        candidates.append({"collection": "zai_fleet_files", "document_id": object_id, "field_path": "image_data", "source": "metadata._id"})
+
+    # Absolute/relative URLs can be loaded directly by the node.
+    for path in ("url", "view_url", "download_url", "preview_url", "payload.url", "metadata.url"):
+        value = _string_value_from_path(document, path)
+        if value.startswith(("http://", "https://", "/")):
+            candidates.append({"collection": "", "document_id": value, "field_path": "", "source": path})
+
+    deduped: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in candidates:
+        key = (item.get("collection", ""), item.get("document_id", ""), item.get("field_path", ""))
+        if key not in seen:
+            seen.add(key)
+            deduped.append(item)
+    return deduped
 
 
 # -----------------------------------------------------------------------------
@@ -718,7 +850,7 @@ class ZMongoApiSession:
         """
         quoted_coll = urllib.parse.quote(collection, safe="")
         quoted_doc = urllib.parse.quote(document_id, safe="")
-        clean_field = _clean_field_path(field_path, "image_data")
+        clean_field = _route_image_field_path(field_path, "image_data")
 
         extra_headers = {"X-Master-Key": (master_key_hex or os.getenv("ZAI_MASTER_KEY") or os.getenv("ZMONGO_KEY") or "").strip()}
 
@@ -1424,6 +1556,198 @@ class ZMongoDisplayImageNode(AlwaysDirtyMixin):
     FUNCTION = "display_image"
     CATEGORY = "ZMongo/API/04 Images"
 
+    def _open_image_bytes(self, image_bytes: bytes) -> tuple[torch.Tensor, Image.Image]:
+        if not image_bytes:
+            raise ValueError("Image bytes were empty.")
+        if image_bytes[:1] in (b"{", b"["):
+            raise ValueError(f"Got JSON/text instead of image bytes: {image_bytes[:500]!r}")
+        image = Image.open(io.BytesIO(image_bytes))
+        return _pil_to_comfy_image(image), image
+
+    @staticmethod
+    def _safe_preview_text(value: Any, max_chars: int = 300) -> str:
+        try:
+            text = str(value)
+        except Exception:
+            text = f"<{type(value).__name__}>"
+        text = text.replace("\n", " ").replace("\r", " ").strip()
+        return text[:max_chars] + ("..." if len(text) > max_chars else "")
+
+    @classmethod
+    def _diagnostic_image(cls, lines: list[str], *, width: int = 1024, height: int = 512) -> torch.Tensor:
+        """
+        Returns a visible non-black placeholder image with troubleshooting text.
+        This prevents PreviewImage from showing a misleading black frame when the
+        selected document simply does not contain an image.
+        """
+        import textwrap
+        from PIL import ImageDraw
+
+        image = Image.new("RGB", (width, height), "white")
+        draw = ImageDraw.Draw(image)
+
+        margin = 28
+        y = margin
+        line_height = 18
+        max_line_chars = 108
+
+        title = "ZMongo image not found"
+        draw.text((margin, y), title, fill="black")
+        y += line_height * 2
+
+        for raw_line in lines:
+            if y > height - margin - line_height:
+                draw.text((margin, y), "... see node status/json output for full details", fill="black")
+                break
+
+            wrapped = textwrap.wrap(str(raw_line), width=max_line_chars) or [""]
+            for line in wrapped:
+                if y > height - margin - line_height:
+                    draw.text((margin, y), "... see node status/json output for full details", fill="black")
+                    return _pil_to_comfy_image(image)
+                draw.text((margin, y), line, fill="black")
+                y += line_height
+            y += 4
+
+        return _pil_to_comfy_image(image)
+
+    @staticmethod
+    def _auth_hint(session) -> dict[str, Any]:
+        if session is None:
+            return {"session": "missing"}
+
+        api_key = getattr(session, "zai_api_key", "") or ""
+        username = getattr(session, "username", "") or ""
+        base_url = getattr(session, "base_url", "") or ""
+        comfy_prefix = getattr(session, "comfy_zmongo_prefix", "") or ""
+
+        return {
+            "base_url": base_url,
+            "comfy_zmongo_prefix": comfy_prefix,
+            "username": username,
+            "api_key_present": bool(api_key),
+            "api_key_preview": f"{api_key[:8]}...{api_key[-6:]}" if len(api_key) >= 16 else ("present" if api_key else "missing"),
+        }
+
+    @classmethod
+    def _failure_payload(
+        cls,
+        *,
+        session,
+        collection: str,
+        document_id: str,
+        requested_field_path: str,
+        route_field_path: str,
+        field_errors: list[str],
+        route_errors: list[str],
+        document: dict[str, Any],
+        api_payload: dict[str, Any],
+        refresh_token: str,
+    ) -> dict[str, Any]:
+        document_diag = _document_key_summary(document) if document else {"document": "not found or empty"}
+
+        first_envelope = _find_first_bytes_envelope(document) if document else None
+        first_envelope_data = None
+        if first_envelope:
+            first_envelope_data = {
+                "path": first_envelope[0],
+                "keys": sorted(str(k) for k in first_envelope[1].keys()),
+                "size_bytes": first_envelope[1].get("size_bytes"),
+                "suggested_field_path": first_envelope[0],
+            }
+
+        checks = [
+            "Verify the selected collection_name is the image collection, usually 'images'.",
+            "Verify the selected document_id is an image document, not metadata or another record type.",
+            "Verify field_path points to the image envelope, usually 'image_data', not 'image_data.data'.",
+            "Run the '04 Debug Image Document' node on the same collection/document/field.",
+            "Check that the API session username matches the user silo that owns the document.",
+            "Check that the API key belongs to that username and is active in auth.api_keys.",
+            "Check base_url and comfy_zmongo_prefix, usually https://ztarot.app and /comfy-zmongo.",
+            "If this is encrypted vault/GridFS storage, supply master_key_hex or use the vault/image-id loader path.",
+        ]
+
+        return {
+            "success": False,
+            "message": "No image could be loaded from the selected ZMongo document.",
+            "data": {
+                "collection_name": collection,
+                "document_id": document_id,
+                "requested_field_path": requested_field_path,
+                "route_field_path": route_field_path,
+                "field_candidates": _image_field_candidates(requested_field_path, "image_data"),
+                "auth_hint": cls._auth_hint(session),
+                "api_payload_success": api_payload.get("success") if isinstance(api_payload, dict) else None,
+                "api_payload_status_code": api_payload.get("status_code") if isinstance(api_payload, dict) else None,
+                "api_payload_message": api_payload.get("message") if isinstance(api_payload, dict) else None,
+                "document_diagnostic": document_diag,
+                "first_bytes_envelope": first_envelope_data,
+                "field_errors": field_errors,
+                "route_errors": route_errors,
+                "user_checks": checks,
+                "refresh_token": refresh_token,
+            },
+            "error": {
+                "type": "ImageNotFound",
+                "msg": "Selected document did not contain decodable image data at the requested field path.",
+            },
+            "status_code": 404,
+        }
+
+    @classmethod
+    def _failure_status(cls, payload: dict[str, Any]) -> str:
+        data = payload.get("data", {}) if isinstance(payload, dict) else {}
+        auth = data.get("auth_hint", {}) if isinstance(data, dict) else {}
+        first = data.get("first_bytes_envelope") if isinstance(data, dict) else None
+
+        parts = [
+            "No ZMongo image found.",
+            f"collection={data.get('collection_name', '')!r}",
+            f"document_id={data.get('document_id', '')!r}",
+            f"field_path={data.get('requested_field_path', '')!r}",
+            f"username={auth.get('username', '')!r}",
+            f"api_key={auth.get('api_key_preview', 'missing')}",
+            f"prefix={auth.get('comfy_zmongo_prefix', '')!r}",
+        ]
+
+        if first:
+            parts.append(f"Found bytes envelope at {first.get('path')!r}; try that field_path.")
+        else:
+            parts.append("Run '04 Debug Image Document' to inspect available image fields.")
+
+        return " ".join(parts)
+
+    @classmethod
+    def _failure_lines(cls, payload: dict[str, Any]) -> list[str]:
+        data = payload.get("data", {}) if isinstance(payload, dict) else {}
+        auth = data.get("auth_hint", {}) if isinstance(data, dict) else {}
+        doc_diag = data.get("document_diagnostic", {}) if isinstance(data, dict) else {}
+        first = data.get("first_bytes_envelope") if isinstance(data, dict) else None
+
+        lines = [
+            f"Collection: {data.get('collection_name', '')}",
+            f"Document _id: {data.get('document_id', '')}",
+            f"Field path: {data.get('requested_field_path', '')}",
+            f"Username: {auth.get('username', '')}",
+            f"API key: {auth.get('api_key_preview', 'missing')}",
+            f"Base URL: {auth.get('base_url', '')}",
+            f"Prefix: {auth.get('comfy_zmongo_prefix', '')}",
+        ]
+
+        if first:
+            lines.append(f"Found image bytes envelope at: {first.get('path')}. Try that as field_path.")
+        else:
+            top_keys = doc_diag.get("top_level_keys") if isinstance(doc_diag, dict) else None
+            if top_keys:
+                lines.append("Document top-level keys: " + ", ".join(str(k) for k in top_keys[:18]))
+            lines.append("No bytes envelope found at image_data or image_data.data.")
+
+        lines.extend([
+            "Check: collection name, document _id, field_path, username silo, API key, base_url, and route prefix.",
+            "Use '04 Debug Image Document' for a full JSON field report.",
+        ])
+        return lines
+
     def display_image(
         self,
         session,
@@ -1434,117 +1758,523 @@ class ZMongoDisplayImageNode(AlwaysDirtyMixin):
         cache: bool = False,
         refresh_token: str = "",
     ):
+        """
+        Load image using the old proven behavior:
+        1. Fetch document JSON.
+        2. Decode exact field path first.
+        3. Decode legacy <field>.data second.
+        4. Use backend image route as fallback.
+
+        Failure mode:
+        Returns a readable diagnostic placeholder image plus a status/json report,
+        instead of a black image or a generic RuntimeError.
+        """
+        cleaned_collection = (collection_name or "").strip()
+        cleaned_document_id = (document_id or "").strip()
+        requested_field_path = _clean_field_path(field_path, "image_data")
+        route_field_path = _route_image_field_path(requested_field_path, "image_data")
+
+        field_errors: list[str] = []
+        route_errors: list[str] = []
+        document: dict[str, Any] = {}
+        api_payload: dict[str, Any] = {}
+
+        def return_failure(extra_error: str | None = None):
+            if extra_error:
+                field_errors.append(extra_error)
+            payload = self._failure_payload(
+                session=session,
+                collection=cleaned_collection,
+                document_id=cleaned_document_id,
+                requested_field_path=requested_field_path,
+                route_field_path=route_field_path,
+                field_errors=field_errors,
+                route_errors=route_errors,
+                document=document,
+                api_payload=api_payload,
+                refresh_token=refresh_token,
+            )
+            status = self._failure_status(payload)
+            diagnostic_image = self._diagnostic_image(self._failure_lines(payload))
+            return (diagnostic_image, status, _json_text(payload))
+
+        if session is None:
+            return return_failure("No API session provided. Connect an API Key Session node.")
+        if not cleaned_collection:
+            return return_failure("collection_name is required. Select a collection first.")
+        if not cleaned_document_id:
+            return return_failure("document_id is required. Select a document first.")
+
+        # ------------------------------------------------------------------
+        # 1. Old working behavior: fetch JSON document and decode locally.
+        # ------------------------------------------------------------------
+        try:
+            api_payload = session.get_doc(
+                collection=cleaned_collection,
+                document_id=cleaned_document_id,
+                cache=cache,
+            )
+            document = _extract_document_from_payload(api_payload)
+        except Exception as exc:
+            field_errors.append(f"get_doc failed: {exc}")
+
+        if document:
+            for candidate_field_path in _image_field_candidates(requested_field_path, "image_data"):
+                try:
+                    image_value = safe_get_by_path(document, candidate_field_path)
+                    image_bytes = _decode_image_bytes_from_value(image_value)
+                    comfy_image, pil_image = self._open_image_bytes(image_bytes)
+                    payload = _success_payload(
+                        "Image loaded from document JSON.",
+                        {
+                            "collection": cleaned_collection,
+                            "document_id": cleaned_document_id,
+                            "requested_field_path": requested_field_path,
+                            "resolved_field_path": candidate_field_path,
+                            "source": "document_json",
+                            "width": pil_image.width,
+                            "height": pil_image.height,
+                            "refresh_token": refresh_token,
+                        },
+                    )
+                    return (
+                        comfy_image,
+                        f"Loaded image from document field {candidate_field_path}",
+                        _json_text(payload),
+                    )
+                except Exception as exc:
+                    field_errors.append(f"{candidate_field_path}: {exc}")
+        else:
+            field_errors.append(
+                "Document not found in API payload or payload did not contain data.document. "
+                "Check collection_name, document_id, username, and API key."
+            )
+
+        # ------------------------------------------------------------------
+        # 2. Route fallback, using the public field only.
+        # ------------------------------------------------------------------
+        try:
+            image_bytes, source = session.fetch_image_field(
+                collection=cleaned_collection,
+                document_id=cleaned_document_id,
+                field_path=route_field_path,
+                master_key_hex=(master_key_hex or "").strip(),
+            )
+            comfy_image, pil_image = self._open_image_bytes(image_bytes)
+            payload = _success_payload(
+                "Image loaded from backend route fallback.",
+                {
+                    "collection": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "requested_field_path": requested_field_path,
+                    "route_field_path": route_field_path,
+                    "source": source,
+                    "width": pil_image.width,
+                    "height": pil_image.height,
+                    "refresh_token": refresh_token,
+                },
+            )
+            return (
+                comfy_image,
+                f"Loaded image from route {source}",
+                _json_text(payload),
+            )
+        except Exception as exc:
+            route_errors.append(str(exc))
+
+        return return_failure()
+
+
+
+class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
+    """
+    Easy image saver for API-key ComfyUI-ZMongo workflows.
+
+    Rule:
+    - If document_id cleans to a non-empty value, update that exact document only.
+    - Create a new document only when document_id is empty after cleanup.
+
+    This fixes connected document IDs that arrive as strings like:
+        (69f420e535aff093fc71e58f)
+        ('69f420e535aff093fc71e58f',)
+        [69f420e535aff093fc71e58f]
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "session": ("ZMONGO_API_SESSION",),
+                "image": ("IMAGE",),
+                "collection_name": ("STRING", {"default": "images"}),
+                "field_path": ("STRING", {"default": "image_data"}),
+                "filename": ("STRING", {"default": "comfy_image.png"}),
+            },
+            "optional": {
+                "document_id": ("STRING", {"default": ""}),
+                "doc_key": ("STRING", {"default": ""}),
+                "metadata_json": ("STRING", {"default": "{}", "multiline": True}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("json", "document_id", "field_path", "refresh", "created_new_document")
+    FUNCTION = "save_image"
+    CATEGORY = "ZMongo/API/04 Images"
+
+    @staticmethod
+    def _unwrap_connected_value(value: Any) -> str:
+        """
+        Normalize scalar values coming from ComfyUI connections.
+
+        Handles:
+        - ["abc"] -> "abc"
+        - ("abc",) -> "abc"
+        - "(abc)" -> "abc"
+        - "('abc',)" -> "abc"
+        - '["abc"]' -> "abc"
+        - trailing tuple/list punctuation
+        """
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return ""
+            value = value[0]
+
+        if value is None:
+            return ""
+
+        text = str(value).strip()
+
+        # Peel repeated single-item wrappers, but avoid stripping meaningful chars inside ObjectId.
+        for _ in range(4):
+            before = text
+
+            if text.startswith("[") and text.endswith("]"):
+                text = text[1:-1].strip()
+
+            if text.startswith("(") and text.endswith(")"):
+                text = text[1:-1].strip()
+
+            if text.endswith(","):
+                text = text[:-1].strip()
+
+            if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+                text = text[1:-1].strip()
+
+            if text == before:
+                break
+
+        return text.strip()
+
+    @staticmethod
+    def _parse_metadata(metadata_json: Any) -> dict[str, Any]:
+        text = ZMongoApiEasySaveImageNode._unwrap_connected_value(metadata_json)
+        if not text:
+            return {}
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict):
+            raise ValueError("metadata_json must be a JSON object.")
+        return parsed
+
+    @staticmethod
+    def _first_image_from_batch(image: torch.Tensor) -> torch.Tensor:
+        if image is None:
+            raise ValueError("No image was provided.")
+        if not isinstance(image, torch.Tensor):
+            raise TypeError(f"Expected ComfyUI IMAGE tensor, got {type(image).__name__}.")
+
+        tensor = image.detach().cpu()
+        if tensor.ndim == 4:
+            if tensor.shape[0] < 1:
+                raise ValueError("Image batch is empty.")
+            tensor = tensor[0]
+        if tensor.ndim != 3:
+            raise ValueError(f"Expected IMAGE tensor with 3 or 4 dims, got shape {tuple(tensor.shape)}.")
+        return tensor
+
+    @classmethod
+    def _image_to_png_bytes(cls, image: torch.Tensor) -> bytes:
+        tensor = cls._first_image_from_batch(image).clamp(0.0, 1.0).numpy()
+        np_image = (tensor * 255.0).round().astype(np.uint8)
+        pil_image = Image.fromarray(np_image, mode="RGB")
+        buffer = io.BytesIO()
+        pil_image.save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    @staticmethod
+    def _build_image_envelope(
+        *,
+        image_bytes: bytes,
+        filename: str,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        safe_filename = (filename or "comfy_image.png").strip() or "comfy_image.png"
+        return {
+            "__type__": "bytes",
+            "encoding": "base64",
+            "size_bytes": len(image_bytes),
+            "data": base64.b64encode(image_bytes).decode("ascii"),
+            "filename": safe_filename,
+            "content_type": "image/png",
+            "source": "comfyui",
+            "storage_mode": "inline_zmongo_binary_envelope",
+            "metadata": metadata or {},
+            "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+
+    @staticmethod
+    def _extract_inserted_id(payload: dict[str, Any]) -> str:
+        data = payload.get("data", {}) if isinstance(payload, dict) else {}
+        if isinstance(data, dict):
+            for key in ("document_id", "inserted_id", "_id", "id"):
+                value = data.get(key)
+                if value:
+                    return ZMongoApiEasySaveImageNode._unwrap_connected_value(value)
+
+            for nested_key in ("result", "document"):
+                nested = data.get(nested_key)
+                if isinstance(nested, dict):
+                    for key in ("document_id", "inserted_id", "_id", "id"):
+                        value = nested.get(key)
+                        if value:
+                            return ZMongoApiEasySaveImageNode._unwrap_connected_value(value)
+        return ""
+
+    def save_image(
+        self,
+        session,
+        image,
+        collection_name: str,
+        field_path: str,
+        filename: str,
+        document_id: str = "",
+        doc_key: str = "",
+        metadata_json: str = "{}",
+    ):
+        cleaned_collection = self._unwrap_connected_value(collection_name) or "images"
+        cleaned_field_path = _clean_field_path(self._unwrap_connected_value(field_path), "image_data")
+        cleaned_filename = self._unwrap_connected_value(filename) or "comfy_image.png"
+        cleaned_document_id = self._unwrap_connected_value(document_id)
+        cleaned_doc_key = self._unwrap_connected_value(doc_key)
+
+        refresh = _dirty_token("easy_save_image", cleaned_collection, cleaned_document_id, cleaned_field_path)
+
+        if session is None:
+            payload = _error_payload("No API session provided.")
+            return (_json_text(payload), cleaned_document_id, cleaned_field_path, refresh, False)
+
+        try:
+            metadata = self._parse_metadata(metadata_json)
+            image_bytes = self._image_to_png_bytes(image)
+            image_envelope = self._build_image_envelope(
+                image_bytes=image_bytes,
+                filename=cleaned_filename,
+                metadata=metadata,
+            )
+
+            # Existing document path: never upsert/create here.
+            # IMPORTANT: send an explicit _id query. Some backend save-value
+            # route versions do not convert document_id into query when
+            # upsert_if_missing=False, which causes:
+            #   "No query provided and upsert is False"
+            if cleaned_document_id:
+                payload = session.save_value(
+                    collection=cleaned_collection,
+                    query={"_id": cleaned_document_id},
+                    document_id="",
+                    field_path=cleaned_field_path,
+                    value=image_envelope,
+                    upsert_if_missing=False,
+                    parse_json_strings=False,
+                    normalize_for_storage=False,
+                )
+
+                success = bool(payload.get("success")) if isinstance(payload, dict) else False
+                result_payload = {
+                    "success": success,
+                    "message": (
+                        f"Updated existing image document {cleaned_collection}/{cleaned_document_id} "
+                        f"at {cleaned_field_path}."
+                        if success
+                        else f"Failed to update existing document {cleaned_collection}/{cleaned_document_id}."
+                    ),
+                    "data": {
+                        "operation": "update_existing_document",
+                        "collection_name": cleaned_collection,
+                        "document_id": cleaned_document_id,
+                        "query_used": {"_id": cleaned_document_id},
+                        "field_path": cleaned_field_path,
+                        "filename": image_envelope["filename"],
+                        "size_bytes": image_envelope["size_bytes"],
+                        "created_new_document": False,
+                        "refresh": refresh,
+                        "api_response": payload,
+                        "checks": [
+                            "The connected document_id was cleaned before save.",
+                            "A new document is not created when cleaned document_id is non-empty.",
+                            "Confirm the document_id exists in the selected collection if update fails.",
+                            "Confirm the API key belongs to the same username silo.",
+                        ],
+                    },
+                    "error": None if success else (payload.get("error") if isinstance(payload, dict) else "Save failed."),
+                    "status_code": payload.get("status_code", 0) if isinstance(payload, dict) else 0,
+                }
+                return (_json_text(result_payload), cleaned_document_id, cleaned_field_path, refresh, False)
+
+            # New document path: only when document_id is empty after cleanup.
+            document: dict[str, Any] = {
+                cleaned_field_path: image_envelope,
+                "source": "comfyui",
+                "filename": image_envelope["filename"],
+                "content_type": "image/png",
+                "size_bytes": image_envelope["size_bytes"],
+            }
+            if cleaned_doc_key:
+                document["doc_key"] = cleaned_doc_key
+            if metadata:
+                document["metadata"] = metadata
+
+            payload = session.create_doc(collection=cleaned_collection, document=document)
+            new_document_id = self._extract_inserted_id(payload)
+            success = bool(payload.get("success")) and bool(new_document_id)
+
+            result_payload = {
+                "success": success,
+                "message": (
+                    f"Created new image document {cleaned_collection}/{new_document_id} "
+                    f"with image at {cleaned_field_path}."
+                    if success
+                    else "Failed to create new image document."
+                ),
+                "data": {
+                    "operation": "create_new_document",
+                    "collection_name": cleaned_collection,
+                    "document_id": new_document_id,
+                    "field_path": cleaned_field_path,
+                    "filename": image_envelope["filename"],
+                    "size_bytes": image_envelope["size_bytes"],
+                    "created_new_document": True,
+                    "refresh": refresh,
+                    "api_response": payload,
+                },
+                "error": None if success else (payload.get("error") if isinstance(payload, dict) else "Create failed."),
+                "status_code": payload.get("status_code", 0) if isinstance(payload, dict) else 0,
+            }
+            return (_json_text(result_payload), new_document_id, cleaned_field_path, refresh, True)
+
+        except Exception as exc:
+            payload = {
+                "success": False,
+                "message": f"Easy Save Image failed: {exc}",
+                "data": {
+                    "operation": "failed",
+                    "collection_name": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "field_path": cleaned_field_path,
+                    "filename": cleaned_filename,
+                    "created_new_document": False,
+                    "refresh": refresh,
+                    "checks": [
+                        "Confirm the API session is connected.",
+                        "Confirm collection_name is correct.",
+                        "Confirm the image input is connected.",
+                        "Confirm metadata_json is valid JSON.",
+                        "If document_id is connected, confirm it is not an empty string after cleanup.",
+                    ],
+                },
+                "error": {"type": exc.__class__.__name__, "msg": str(exc)},
+                "status_code": 0,
+            }
+            return (_json_text(payload), cleaned_document_id, cleaned_field_path, refresh, False)
+
+class ZMongoApiDocumentImageDebugNode(AlwaysDirtyMixin):
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "session": ("ZMONGO_API_SESSION",),
+                "collection_name": ("STRING", {"default": ""}),
+                "document_id": ("STRING", {"default": ""}),
+                "field_path": ("STRING", {"default": "image_data"}),
+            },
+            "optional": {
+                "cache": ("BOOLEAN", {"default": False}),
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "*", "STRING")
+    RETURN_NAMES = ("json", "candidate_paths", "summary")
+    OUTPUT_IS_LIST = (False, True, False)
+    FUNCTION = "debug_image_document"
+    CATEGORY = "ZMongo/API/04 Images"
+
+    def debug_image_document(
+        self,
+        session,
+        collection_name: str,
+        document_id: str,
+        field_path: str,
+        cache: bool = False,
+        refresh_token: str = "",
+    ):
         if session is None:
             payload = _error_payload("No session provided.")
-            _raise_display_image_error(payload["message"])
+            return (_json_text(payload), [], payload["message"])
 
         cleaned_collection = (collection_name or "").strip()
         cleaned_document_id = (document_id or "").strip()
         requested_field_path = _clean_field_path(field_path, "image_data")
-
-        if not cleaned_collection:
-            payload = _error_payload("collection_name is required.")
-            _raise_display_image_error(payload["message"])
-
-        if not cleaned_document_id:
-            payload = _error_payload("document_id is required.")
-            _raise_display_image_error(payload["message"])
-
-        field_errors: list[str] = []
-        route_errors: list[str] = []
-        resolved_source = ""
+        candidates = _image_field_candidates(requested_field_path, "image_data")
 
         try:
-            payload = session.get_doc(collection=cleaned_collection, document_id=cleaned_document_id, cache=cache)
+            payload = session.get_doc(
+                collection=cleaned_collection,
+                document_id=cleaned_document_id,
+                cache=cache,
+            )
             document = _extract_document_from_payload(payload)
+            candidate_report: list[dict[str, Any]] = []
 
-            if not document:
-                field_errors.append("Document not found in API payload.")
-            else:
-                for candidate_field_path in _image_field_candidates(requested_field_path, "image_data"):
-                    image_value = safe_get_by_path(document, candidate_field_path)
+            for candidate in candidates:
+                value = safe_get_by_path(document, candidate)
+                item = {
+                    "path": candidate,
+                    "type": type(value).__name__,
+                    "is_empty": value is None or value == "" or value == {},
+                }
+                if isinstance(value, dict):
+                    item["keys"] = sorted(str(k) for k in value.keys())
+                    item["is_zmongo_bytes_envelope"] = bool(value.get("__type__") == "bytes" and value.get("data"))
+                    item["size_bytes"] = value.get("size_bytes")
+                elif isinstance(value, str):
+                    item["length"] = len(value)
+                    item["starts_with"] = value[:40]
+                candidate_report.append(item)
 
-                    image_url = _image_url_from_value(image_value)
-                    if image_url:
-                        try:
-                            image_bytes = session.fetch_absolute_or_relative_bytes(image_url)
-                            image = Image.open(io.BytesIO(image_bytes))
-                            comfy_image = _pil_to_comfy_image(image)
-                            resolved_source = f"url field {candidate_field_path}"
-                            result_payload = _success_payload(
-                                "Image loaded.",
-                                {
-                                    "collection": cleaned_collection,
-                                    "document_id": cleaned_document_id,
-                                    "field_path": candidate_field_path,
-                                    "source": resolved_source,
-                                    "width": image.width,
-                                    "height": image.height,
-                                },
-                            )
-                            return (comfy_image, f"Loaded image from {resolved_source}", _json_text(result_payload))
-                        except Exception as exc:
-                            field_errors.append(f"{candidate_field_path} URL: {exc}")
-                            continue
-
-                    try:
-                        image_bytes = _decode_image_bytes_from_value(image_value)
-                        image = Image.open(io.BytesIO(image_bytes))
-                        comfy_image = _pil_to_comfy_image(image)
-                        resolved_source = f"document field {candidate_field_path}"
-                        result_payload = _success_payload(
-                            "Image loaded.",
-                            {
-                                "collection": cleaned_collection,
-                                "document_id": cleaned_document_id,
-                                "field_path": candidate_field_path,
-                                "source": resolved_source,
-                                "width": image.width,
-                                "height": image.height,
-                            },
-                        )
-                        return (comfy_image, f"Loaded image from {resolved_source}", _json_text(result_payload))
-                    except Exception as exc:
-                        field_errors.append(f"{candidate_field_path}: {exc}")
-
-            try:
-                image_bytes, resolved_source = session.fetch_image_field(
-                    collection=cleaned_collection,
-                    document_id=cleaned_document_id,
-                    field_path=requested_field_path,
-                    master_key_hex=(master_key_hex or "").strip(),
-                )
-                if image_bytes[:1] in (b"{", b"["):
-                    raise ValueError(f"Image route returned JSON/text instead of image bytes: {image_bytes[:500]!r}")
-                image = Image.open(io.BytesIO(image_bytes))
-                comfy_image = _pil_to_comfy_image(image)
-                result_payload = _success_payload(
-                    "Image loaded from image route fallback.",
-                    {
-                        "collection": cleaned_collection,
-                        "document_id": cleaned_document_id,
-                        "field_path": requested_field_path,
-                        "source": resolved_source,
-                        "width": image.width,
-                        "height": image.height,
-                    },
-                )
-                return (comfy_image, f"Loaded image from {resolved_source}", _json_text(result_payload))
-            except Exception as exc:
-                route_errors.append(str(exc))
-
-            message = "Could not load image. " + " | ".join(field_errors + route_errors)
-            error_payload = _error_payload(message)
-            _raise_display_image_error(message)
-
-        except UnidentifiedImageError as exc:
-            message = f"Image bytes were loaded but PIL could not identify the file format: {exc}"
-            error_payload = _error_payload(message)
-            _raise_display_image_error(message)
+            found_envelope = _find_first_bytes_envelope(document)
+            debug_payload = _success_payload(
+                "Document image debug complete.",
+                {
+                    "collection": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "requested_field_path": requested_field_path,
+                    "route_field_path": _route_image_field_path(requested_field_path, "image_data"),
+                    "candidate_report": candidate_report,
+                    "first_bytes_envelope": {
+                        "path": found_envelope[0],
+                        "keys": sorted(str(k) for k in found_envelope[1].keys()),
+                        "size_bytes": found_envelope[1].get("size_bytes"),
+                    } if found_envelope else None,
+                    "document_diagnostic": _document_key_summary(document),
+                    "refresh_token": refresh_token,
+                },
+            )
+            summary = "first_bytes_envelope=" + (found_envelope[0] if found_envelope else "None")
+            return (_json_text(debug_payload), _as_comfy_list(candidates), summary)
         except Exception as exc:
-            message = f"Display image failed: {exc}"
-            error_payload = _error_payload(message)
-            _raise_display_image_error(message)
+            payload = _error_payload(str(exc))
+            return (_json_text(payload), _as_comfy_list(candidates), str(exc))
 
 
 class ZMongoApiImageFieldCandidatesNode(AlwaysDirtyMixin):
@@ -1672,17 +2402,45 @@ class ZMongoApiSelectNthItemNode(AlwaysDirtyMixin):
     RETURN_NAMES = ("item", "status")
     FUNCTION = "select_nth_item"
     CATEGORY = "ZMongo/API/99 Helpers"
+    INPUT_IS_LIST = True
 
-    def select_nth_item(self, items_list, index: int, fallback: str):
-        items = _as_comfy_list(items_list)
-        cleaned = [str(item).strip() for item in items if str(item).strip()]
+    @staticmethod
+    def _unwrap_scalar(value: Any, default: Any = None) -> Any:
+        if isinstance(value, list):
+            if not value:
+                return default
+            return value[0]
+        return value if value is not None else default
 
+    @staticmethod
+    def _normalize_items(value: Any) -> list[Any]:
+        if value is None:
+            return []
+        if isinstance(value, tuple):
+            value = list(value)
+        if isinstance(value, list):
+            if len(value) == 1 and isinstance(value[0], (list, tuple)):
+                return list(value[0])
+            return value
+        return [value]
+
+    def select_nth_item(self, items_list, index, fallback):
+        raw_items = self._normalize_items(items_list)
+        fallback_value = str(self._unwrap_scalar(fallback, "") or "")
+        index_value = self._unwrap_scalar(index, 0)
+
+        try:
+            safe_index = int(index_value or 0)
+        except Exception:
+            safe_index = 0
+
+        cleaned = [str(item).strip() for item in raw_items if str(item).strip()]
         if not cleaned:
-            return ((fallback or ""), "Input list was empty.")
+            return (fallback_value, "Input list was empty.")
 
-        safe_index = max(0, min(int(index), len(cleaned) - 1))
-        selected = cleaned[safe_index]
-        return (selected, f"Selected {safe_index + 1}/{len(cleaned)}: {selected}")
+        selected_index = max(0, min(safe_index, len(cleaned) - 1))
+        selected = cleaned[selected_index]
+        return (selected, f"Selected {selected_index + 1}/{len(cleaned)}: {selected}")
 
 
 class ZMongoApiJsonPickNode(AlwaysDirtyMixin):
@@ -1751,6 +2509,8 @@ NODE_CLASS_MAPPINGS = {
 
     # 04 Images
     "ZMongoDisplayImageNode": ZMongoDisplayImageNode,
+    "ZMongoApiEasySaveImageNode": ZMongoApiEasySaveImageNode,
+    "ZMongoApiDocumentImageDebugNode": ZMongoApiDocumentImageDebugNode,
     "ZMongoApiImageFieldCandidatesNode": ZMongoApiImageFieldCandidatesNode,
 
     # 05 Fleet
@@ -1789,6 +2549,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 
     # 04 Images
     "ZMongoDisplayImageNode": "04 Display Image from ZMongo",
+    "ZMongoApiEasySaveImageNode": "04 Easy Save Image",
+    "ZMongoApiDocumentImageDebugNode": "04 Debug Image Document",
     "ZMongoApiImageFieldCandidatesNode": "04 Image Field Candidates",
 
     # 05 Fleet
