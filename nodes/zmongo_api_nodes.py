@@ -22,8 +22,11 @@ ENV_PATH2 = Path.home() / ".resources" / ".secrets"
 load_dotenv(ENV_PATH1)
 load_dotenv(ENV_PATH2)
 
-DEFAULT_BASE_URL = os.getenv("ZTAROT_BASE_URL", "https://ztarot.app").rstrip("/")
-DEFAULT_TIMEOUT = int(os.getenv("ZTAROT_TIMEOUT_SECONDS", "30"))
+DEFAULT_BASE_URL = os.getenv(
+    "BPA_BASE_URL",
+    os.getenv("ZMONGO_BASE_URL", "https://businessprocessapplications.com"),
+).rstrip("/")
+DEFAULT_TIMEOUT = int(os.getenv("BPA_TIMEOUT_SECONDS", os.getenv("ZMONGO_TIMEOUT_SECONDS", "30")))
 DEFAULT_COMFY_ZMONGO_PREFIX = os.getenv("COMFY_ZMONGO_API_PREFIX", "/comfy-zmongo")
 DEFAULT_FLEET_PREFIX = os.getenv("ZFLEET_API_PREFIX", "/fleet")
 DEFAULT_COMFY_ZMONGO_FLEET_PREFIX = os.getenv("COMFY_ZMONGO_FLEET_PREFIX", "/comfy-zmongo-fleet")

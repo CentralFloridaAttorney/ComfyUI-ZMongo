@@ -27,7 +27,7 @@ Use it to:
 - display saved images back as ComfyUI `IMAGE` tensors,
 - discover flattened dot-path keys for metadata and documents,
 - save values into selected document fields,
-- prepare for future fleet/agent routing once the Fleet backend routes are finalized.
+- route simple fleet/agent requests through the backend.
 
 This is useful for persistent workflow memory, image archives, metadata-driven prompts, document-backed workflows, batch frame storage, and database-driven ComfyUI routing.
 
@@ -45,12 +45,9 @@ ZMongo/API/01 Service
 ZMongo/API/02 Collections
 ZMongo/API/03 Docs
 ZMongo/API/04 Images
-ZMongo/API/05 Fleet        # experimental / not working yet
+ZMongo/API/05 Fleet
 ZMongo/API/99 Helpers
 ```
-
-
-> **Fleet status:** Fleet nodes are currently experimental and are not part of the reliable workflow yet. Use the API/session, document, image, metadata, save-value, and get-value nodes for current work.
 
 Default live backend:
 
@@ -75,12 +72,11 @@ comfy_zmongo_fleet_prefix = /comfy-zmongo-fleet
 | Document fetch | `03 Get Doc` | Loads one document by collection and document ID. |
 | Query/count/update/delete | `03 Query Docs`, `03 Count Docs`, `03 Update Doc`, `03 Delete Doc` | Basic API document operations. |
 | Save value | `03 Save Value` | Saves a value to a selected field path. |
-| Get value | `03 Get Value` | Reads a value from a selected document by dot-path. |
 | Image save | `04 Easy Save Image` | Saves an image as an inline ZMongo binary envelope. |
 | Image display | `04 Display Image from ZMongo` | Loads image bytes from document JSON first, route fallback second. |
 | Image debug | `04 Debug Image Document` | Reports image candidate fields and document shape. |
 | Metadata paths | `04 Metadata Flattened Paths` | Outputs flattened dot-path keys from metadata or the whole document. |
-| Fleet calls | `05 Fleet Status`, `05 Fleet Agents`, `05 Fleet Dispatch` | Experimental placeholders. Fleet is not working yet and should not be used in normal workflows. |
+| Fleet calls | `05 Fleet Status`, `05 Fleet Agents`, `05 Fleet Dispatch` | Basic backend/fleet inspection and dispatch. |
 | JSON pick | `99 JSON Pick` | Extracts one value from a JSON string by dot path. |
 
 ---
@@ -203,7 +199,6 @@ X-AGENT-USERNAME: <username>
 | `03 Update Doc` | `ZMongoApiUpdateDocNode` | Updates a document or field path. |
 | `03 Delete Doc` | `ZMongoApiDeleteDocNode` | Deletes a document by confirmed ID or query. |
 | `03 Save Value` | `ZMongoApiSaveValueNode` | Saves a value to a field path in an existing or queried document. |
-| `03 Get Value` | `ZMongoApiGetValueNode` | Reads a value from a selected document by dot-path. |
 
 ### `ZMongo/API/04 Images`
 
@@ -215,23 +210,13 @@ X-AGENT-USERNAME: <username>
 | `04 Image Field Candidates` | `ZMongoApiImageFieldCandidatesNode` | Shows exact and legacy image field candidates. |
 | `04 Metadata Flattened Paths` | `ZMongoApiMetadataFlattenedPathsNode` | Outputs flattened dot-path keys for metadata or the whole document. |
 
-### `ZMongo/API/05 Fleet` — experimental / not working yet
+### `ZMongo/API/05 Fleet`
 
-Fleet nodes are present in the codebase as placeholders for future backend/fleet integration. Do not rely on them for production workflows yet. The current reliable workflow is API session → collection selection → document selection → image/value/metadata operations.
-
-| Display name | Class | Current status |
+| Display name | Class | Purpose |
 |---|---|---|
-| `05 Fleet Status` | `ZMongoApiFleetStatusNode` | Experimental. Route compatibility still needs to be finalized. |
-| `05 Fleet Agents` | `ZMongoApiFleetAgentsNode` | Experimental. Route compatibility still needs to be finalized. |
-| `05 Fleet Dispatch` | `ZMongoApiFleetDispatchNode` | Experimental. Dispatch contract still needs to be finalized. |
-
-Planned Fleet work:
-
-- confirm the backend route prefix, likely `/fleet` or `/api/fleet`;
-- confirm request/response schemas for status, agents, and dispatch;
-- add a `05 Fleet Probe` node before exposing dispatch nodes as reliable;
-- return clear diagnostics when a route is missing or authentication fails;
-- add example workflows only after the backend routes are stable.
+| `05 Fleet Status` | `ZMongoApiFleetStatusNode` | Reads fleet status. |
+| `05 Fleet Agents` | `ZMongoApiFleetAgentsNode` | Lists registered fleet agents. |
+| `05 Fleet Dispatch` | `ZMongoApiFleetDispatchNode` | Dispatches a JSON payload to the fleet backend. |
 
 ### `ZMongo/API/99 Helpers`
 
@@ -444,35 +429,6 @@ This avoids backend errors like:
   "status_code": 400
 }
 ```
-
----
-
-### 7. Get a value from a selected document
-
-Use:
-
-```text
-03 Get Value
-```
-
-Recommended workflow:
-
-```text
-selected collection  -> collection_name
-selected document_id -> document_id
-field_path           -> metadata.caption
-```
-
-Examples:
-
-```text
-metadata.caption
-metadata.prompt
-image_data.metadata.seed
-image_data.metadata.prompt
-```
-
-Leave `field_path` blank to return the whole document as JSON text.
 
 ---
 
@@ -754,7 +710,6 @@ ComfyUI-ZMongo/
 - Add optional object-storage/R2 image persistence nodes.
 - Add query-builder nodes for common document filters.
 - Add typed metadata picker nodes for image workflows.
-- Re-enable Fleet documentation and example workflows after the backend Fleet routes are working.
 
 ---
 
