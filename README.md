@@ -1,43 +1,52 @@
-# ComfyUI-ZMongo
+# BusinessProcessApplications.com — ZMongo Integration
 
 <p align="center">
-  <strong>API-key ZMongo document selection, metadata field discovery, and image persistence for ComfyUI.</strong>
+  <strong>Business Process Applications: Practical automation, workflow intelligence, and database-backed tools for modern business operations.</strong>
 </p>
 
 <p align="center">
-  <a href="#installation"><img alt="Install" src="https://img.shields.io/badge/install-custom__nodes-blue"></a>
-  <a href="#nodes"><img alt="Nodes" src="https://img.shields.io/badge/nodes-ZMongo%2FAPI-green"></a>
+  <a href="#overview"><img alt="Overview" src="https://img.shields.io/badge/overview-doc-blue"></a>
+  <a href="#installation"><img alt="Installation" src="https://img.shields.io/badge/installation-guide-green"></a>
+  <a href="#nodes"><img alt="Nodes" src="https://img.shields.io/badge/nodes-ZMongo%2FAPI-yellow"></a>
   <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-lightgrey"></a>
 </p>
 
 ---
 
-## What is ComfyUI-ZMongo?
+## Overview
 
-**ComfyUI-ZMongo** is a ComfyUI custom node pack that lets workflows communicate with a ZMongo-compatible backend API.
+**BusinessProcessApplications.com** integrates a **ZMongo Data Feature** that allows ComfyUI workflows to store, retrieve, and display documents and images from a per-user silo.
 
-Use it to:
+**Key capabilities:**
 
-- connect to a ZMongo backend with an API key,
-- list user-silo collections,
-- list document IDs in a collection,
-- select one collection/document from ComfyUI list outputs,
-- fetch and inspect document JSON,
-- save generated images into ZMongo documents,
-- display saved images back as ComfyUI `IMAGE` tensors,
-- discover flattened dot-path keys for metadata and documents,
-- save values into selected document fields,
-- route simple fleet/agent requests through the backend.
+* API-key authentication for secure, per-user silo access.
+* Dynamic collection and document listing.
+* Document query, create, update, delete operations.
+* Image persistence with inline binary envelopes or Cloudflare R2 as backend storage.
+* Metadata flattening and dot-path key discovery.
+* Fleet routing and task dispatching for distributed workflows.
+* Live session token management and per-service usage tracking.
 
-This is useful for persistent workflow memory, image archives, metadata-driven prompts, document-backed workflows, batch frame storage, and database-driven ComfyUI routing.
+**Use cases:**
+
+* Persistent workflow memory and automation.
+* Image and metadata storage for AI/ComfyUI workflows.
+* Database-driven prompt and document pipelines.
+* Preview, debug, and route images inside ComfyUI without MongoDB direct access.
 
 ---
 
-## Current Architecture
+## Architecture
 
-The current node set uses **API-key authentication** and returns a `ZMONGO_API_SESSION`.
+**API-key model:**
 
-The older README described browser login/session nodes such as `ZMONGO_SESSION`, `ZMongo/Auth`, `ZMongo/Data`, and `ZMongo/Image`. The current workflow should use:
+* All nodes connect through a reusable `ZMONGO_API_SESSION`.
+* Default backend URL: `https://businessprocessapplications.com`.
+* ComfyUI-ZMongo prefix: `/comfy-zmongo`.
+* Fleet prefix: `/fleet`.
+* ComfyUI-ZMongo-fleet prefix: `/comfy-zmongo-fleet`.
+
+**Route structure:**
 
 ```text
 ZMongo/API/00 Auth
@@ -49,678 +58,158 @@ ZMongo/API/05 Fleet
 ZMongo/API/99 Helpers
 ```
 
-Default live backend:
+**Security and best practices:**
 
-```text
-base_url = https://ztarot.app
-comfy_zmongo_prefix = /comfy-zmongo
-fleet_prefix = /fleet
-comfy_zmongo_fleet_prefix = /comfy-zmongo-fleet
-```
-
----
-
-## Main Features
-
-| Feature | Node(s) | Description |
-|---|---|---|
-| API-key session | `00 API Key Session` | Creates a reusable `ZMONGO_API_SESSION`. |
-| Health/whoami | `01 Health`, `01 Who Am I` | Verifies API and authenticated username silo. |
-| Collection listing | `02 List Collections` | Lists collections available to the API key user. |
-| Document listing | `03 List Docs` | Lists document IDs from a collection. |
-| Select one list item | `99 Select Nth Item` | Selects one item from ComfyUI list outputs. |
-| Document fetch | `03 Get Doc` | Loads one document by collection and document ID. |
-| Query/count/update/delete | `03 Query Docs`, `03 Count Docs`, `03 Update Doc`, `03 Delete Doc` | Basic API document operations. |
-| Save value | `03 Save Value` | Saves a value to a selected field path. |
-| Image save | `04 Easy Save Image` | Saves an image as an inline ZMongo binary envelope. |
-| Image display | `04 Display Image from ZMongo` | Loads image bytes from document JSON first, route fallback second. |
-| Image debug | `04 Debug Image Document` | Reports image candidate fields and document shape. |
-| Metadata paths | `04 Metadata Flattened Paths` | Outputs flattened dot-path keys from metadata or the whole document. |
-| Fleet calls | `05 Fleet Status`, `05 Fleet Agents`, `05 Fleet Dispatch` | Basic backend/fleet inspection and dispatch. |
-| JSON pick | `99 JSON Pick` | Extracts one value from a JSON string by dot path. |
-
----
-
-## Installation
-
-### Manual install with Git
-
-Go to your ComfyUI `custom_nodes` folder:
-
-```bash
-cd /path/to/ComfyUI/custom_nodes
-```
-
-Clone the repository:
-
-```bash
-git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
-```
-
-Install requirements using the same Python environment that runs ComfyUI:
-
-```bash
-cd ComfyUI-ZMongo
-pip install -r requirements.txt
-```
-
-Restart ComfyUI.
-
-### Linux example
-
-```bash
-cd /home/comfyuser/comfy_build/ComfyUI/custom_nodes
-git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
-cd ComfyUI-ZMongo
-source /home/comfyuser/comfy_build/venv/bin/activate
-pip install -r requirements.txt
-```
-
-Restart ComfyUI:
-
-```bash
-cd /home/comfyuser/comfy_build/ComfyUI
-source /home/comfyuser/comfy_build/venv/bin/activate
-python3 main.py --listen 0.0.0.0 --port 50003
-```
-
-### Windows portable example
-
-From `ComfyUI_windows_portable\ComfyUI\custom_nodes`:
-
-```bat
-git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
-cd ComfyUI-ZMongo
-..\..\python_embeded\python.exe -m pip install -r requirements.txt
-```
-
-Restart ComfyUI.
-
----
-
-## Backend Setup
-
-ComfyUI-ZMongo does not connect directly to MongoDB. It talks to your backend API.
-
-Default values for the live backend:
-
-```text
-base_url = https://ztarot.app
-comfy_zmongo_prefix = /comfy-zmongo
-fleet_prefix = /fleet
-comfy_zmongo_fleet_prefix = /comfy-zmongo-fleet
-```
-
-The API key should belong to the same username silo that owns the documents.
-
-Important headers sent by the API session include:
-
-```text
-ZAI_API_KEY: <api key>
-Authorization: Bearer <api key>
-X-AGENT-USERNAME: <username>
-```
+* Do not embed API keys or credentials in workflows.
+* Authenticate via backend API; ensure per-user silo isolation.
+* Large assets should use object storage (Cloudflare R2) rather than inline JSON in MongoDB.
 
 ---
 
 ## Nodes
 
-### `ZMongo/API/00 Auth`
+### 00 Auth
 
-| Display name | Class | Purpose |
-|---|---|---|
-| `00 API Key Session` | `ZMongoApiKeySessionNode` | Creates the `ZMONGO_API_SESSION`. |
-| `00 Close API Session` | `ZMongoApiCloseSessionNode` | Closes the HTTP session. |
+| Display Name         | Class                       | Purpose                                 |
+| -------------------- | --------------------------- | --------------------------------------- |
+| 00 API Key Session   | `ZMongoApiKeySessionNode`   | Creates reusable session for API calls. |
+| 00 Close API Session | `ZMongoApiCloseSessionNode` | Closes the HTTP session.                |
 
-### `ZMongo/API/01 Service`
+### 01 Service
 
-| Display name | Class | Purpose |
-|---|---|---|
-| `01 Health` | `ZMongoApiHealthNode` | Checks backend health. |
-| `01 Who Am I` | `ZMongoApiWhoamiNode` | Returns authenticated username and silo database info. |
+| Display Name | Class                 | Purpose                             |
+| ------------ | --------------------- | ----------------------------------- |
+| 01 Health    | `ZMongoApiHealthNode` | Verifies backend health.            |
+| 01 Who Am I  | `ZMongoApiWhoamiNode` | Confirms username silo and DB info. |
 
-### `ZMongo/API/02 Collections`
+### 02 Collections
 
-| Display name | Class | Purpose |
-|---|---|---|
-| `02 List Collections` | `ZMongoApiListCollectionsNode` | Outputs collections as JSON, list, and indexed text. |
-| `02 Create Collection` | `ZMongoApiCreateCollectionNode` | Creates a collection. |
-| `02 Delete Collection` | `ZMongoApiDeleteCollectionNode` | Deletes a collection after confirmation. |
+| Display Name         | Class                           | Purpose                                          |
+| -------------------- | ------------------------------- | ------------------------------------------------ |
+| 02 List Collections  | `ZMongoApiListCollectionsNode`  | Lists collections available to the API key user. |
+| 02 Create Collection | `ZMongoApiCreateCollectionNode` | Creates a new collection.                        |
+| 02 Delete Collection | `ZMongoApiDeleteCollectionNode` | Deletes a collection after confirmation.         |
 
-### `ZMongo/API/03 Docs`
+### 03 Docs
 
-| Display name | Class | Purpose |
-|---|---|---|
-| `03 List Docs` | `ZMongoApiListDocsNode` | Lists document IDs in a collection. |
-| `03 Get Doc` | `ZMongoApiGetDocNode` | Gets a document by collection and document ID. |
-| `03 Query Docs` | `ZMongoApiQueryDocsNode` | Queries documents with JSON query/projection/sort. |
-| `03 Count Docs` | `ZMongoApiCountDocsNode` | Counts matching documents. |
-| `03 Create Doc` | `ZMongoApiCreateDocNode` | Creates a new document from JSON. |
-| `03 Update Doc` | `ZMongoApiUpdateDocNode` | Updates a document or field path. |
-| `03 Delete Doc` | `ZMongoApiDeleteDocNode` | Deletes a document by confirmed ID or query. |
-| `03 Save Value` | `ZMongoApiSaveValueNode` | Saves a value to a field path in an existing or queried document. |
+| Display Name  | Class                    | Purpose                                               |
+| ------------- | ------------------------ | ----------------------------------------------------- |
+| 03 List Docs  | `ZMongoApiListDocsNode`  | Lists document IDs in a collection.                   |
+| 03 Get Doc    | `ZMongoApiGetDocNode`    | Loads a single document.                              |
+| 03 Query Docs | `ZMongoApiQueryDocsNode` | Queries documents.                                    |
+| 03 Count Docs | `ZMongoApiCountDocsNode` | Counts matching documents.                            |
+| 03 Create Doc | `ZMongoApiCreateDocNode` | Creates a new document.                               |
+| 03 Update Doc | `ZMongoApiUpdateDocNode` | Updates a document field or full JSON.                |
+| 03 Delete Doc | `ZMongoApiDeleteDocNode` | Deletes a document by ID or query.                    |
+| 03 Save Value | `ZMongoApiSaveValueNode` | Saves a value to a field path in a selected document. |
+| 03 Get Value  | `ZMongoApiGetValueNode`  | Fetches one value from a document by dot-path.        |
 
-### `ZMongo/API/04 Images`
+### 04 Images
 
-| Display name | Class | Purpose |
-|---|---|---|
-| `04 Display Image from ZMongo` | `ZMongoDisplayImageNode` | Loads one saved image from a ZMongo document. |
-| `04 Easy Save Image` | `ZMongoApiEasySaveImageNode` | Saves a ComfyUI image to `image_data` or another field path. |
-| `04 Debug Image Document` | `ZMongoApiDocumentImageDebugNode` | Inspects image candidates and document structure. |
-| `04 Image Field Candidates` | `ZMongoApiImageFieldCandidatesNode` | Shows exact and legacy image field candidates. |
-| `04 Metadata Flattened Paths` | `ZMongoApiMetadataFlattenedPathsNode` | Outputs flattened dot-path keys for metadata or the whole document. |
+| Display Name                 | Class                                 | Purpose                                                |
+| ---------------------------- | ------------------------------------- | ------------------------------------------------------ |
+| 04 Display Image from ZMongo | `ZMongoDisplayImageNode`              | Shows image from a ZMongo document or fallback route.  |
+| 04 Easy Save Image           | `ZMongoApiEasySaveImageNode`          | Saves a ComfyUI IMAGE tensor to ZMongo document.       |
+| 04 Debug Image Document      | `ZMongoApiDocumentImageDebugNode`     | Outputs document image candidates and structure.       |
+| 04 Image Field Candidates    | `ZMongoApiImageFieldCandidatesNode`   | Returns all valid image field paths for a document.    |
+| 04 Metadata Flattened Paths  | `ZMongoApiMetadataFlattenedPathsNode` | Flattens dot-path keys for metadata or whole document. |
 
-### `ZMongo/API/05 Fleet`
+### 05 Fleet
 
-| Display name | Class | Purpose |
-|---|---|---|
-| `05 Fleet Status` | `ZMongoApiFleetStatusNode` | Reads fleet status. |
-| `05 Fleet Agents` | `ZMongoApiFleetAgentsNode` | Lists registered fleet agents. |
-| `05 Fleet Dispatch` | `ZMongoApiFleetDispatchNode` | Dispatches a JSON payload to the fleet backend. |
+| Display Name      | Class                        | Purpose                              |
+| ----------------- | ---------------------------- | ------------------------------------ |
+| 05 Fleet Status   | `ZMongoApiFleetStatusNode`   | Inspects fleet status.               |
+| 05 Fleet Agents   | `ZMongoApiFleetAgentsNode`   | Lists all registered agents.         |
+| 05 Fleet Dispatch | `ZMongoApiFleetDispatchNode` | Sends JSON payloads to fleet agents. |
 
-### `ZMongo/API/99 Helpers`
+### 99 Helpers
 
-| Display name | Class | Purpose |
-|---|---|---|
-| `99 Select Nth Item` | `ZMongoApiSelectNthItemNode` | Selects exactly one item from a ComfyUI list output. |
-| `99 JSON Pick` | `ZMongoApiJsonPickNode` | Extracts a value from JSON by dot path. |
-
----
-
-## Quick Start Workflows
-
-### 1. Connect and verify the user silo
-
-```text
-00 API Key Session
-  session
-    ↓
-01 Who Am I
-```
-
-Use `Who Am I` to verify:
-
-```text
-username
-silo_db_name / db_name
-success = true
-```
+| Display Name       | Class                        | Purpose                                        |
+| ------------------ | ---------------------------- | ---------------------------------------------- |
+| 99 Select Nth Item | `ZMongoApiSelectNthItemNode` | Picks a single item from ComfyUI list outputs. |
+| 99 JSON Pick       | `ZMongoApiJsonPickNode`      | Fetches a value from JSON by dot-path.         |
 
 ---
 
-### 2. Select a collection and document
+## Quick Workflows
+
+**Connect and verify session:**
 
 ```text
-00 API Key Session
-  session
-    ↓
-02 List Collections
-  collections
-    ↓
-99 Select Nth Item
-  item = selected collection
-    ↓
-03 List Docs
-  ids
-    ↓
-99 Select Nth Item
-  item = selected document_id
+00 API Key Session -> 01 Who Am I
 ```
 
-`99 Select Nth Item` uses zero-based indexing:
+**Select collection/document:**
 
 ```text
-index = 0 -> first item
-index = 1 -> second item
-index = 2 -> third item
+02 List Collections -> 99 Select Nth Item
+03 List Docs        -> 99 Select Nth Item
 ```
 
----
-
-### 3. Display an image from ZMongo
+**Display image:**
 
 ```text
-selected collection
-selected document_id
-field_path = image_data
-session
-    ↓
 04 Display Image from ZMongo
-    ↓
-PreviewImage
 ```
 
-Recommended field path:
+**Save image:**
 
 ```text
-image_data
-```
-
-Do not use this as the normal field path:
-
-```text
-image_data.data
-```
-
-`image_data.data` is an internal member of the binary envelope. The display node tries the public field first and only uses `.data` as a legacy fallback.
-
----
-
-### 4. Easy save one image
-
-```text
-Load Image / generated IMAGE
-  image
-    ↓
 04 Easy Save Image
+document_id connected → update
+document_id empty     → create new document
 ```
 
-Recommended values:
-
-```text
-collection_name = images
-field_path      = image_data
-filename        = comfy_image.png
-metadata_json   = {}
-```
-
-Behavior:
-
-- If `document_id` is connected and non-empty, the node updates that document only.
-- If `document_id` is empty, the node creates a new document.
-- Connected IDs like `(69fbd404309e0541c53fc0be)` are cleaned before saving.
-- Existing-document updates use an explicit `_id` query and do not upsert new documents.
-
-The saved image format is:
-
-```json
-{
-  "__type__": "bytes",
-  "encoding": "base64",
-  "size_bytes": 12345,
-  "data": "...",
-  "filename": "comfy_image.png",
-  "content_type": "image/png",
-  "source": "comfyui",
-  "storage_mode": "inline_zmongo_binary_envelope"
-}
-```
-
----
-
-### 5. Discover flattened metadata/path keys
-
-Use:
+**Flatten metadata paths:**
 
 ```text
 04 Metadata Flattened Paths
+metadata_field_path = ""  -> whole document
+metadata_field_path = "metadata"  -> root metadata
+metadata_field_path = "image_data.metadata" -> image metadata
 ```
 
-Common settings:
-
-#### Whole document
-
-```text
-metadata_field_path =
-```
-
-Leave blank to flatten the whole document.
-
-#### Root metadata only
-
-```text
-metadata_field_path = metadata
-```
-
-#### Metadata inside an image envelope
-
-```text
-metadata_field_path = image_data.metadata
-```
-
-The `paths` output is a ComfyUI list output and can connect to:
-
-```text
-99 Select Nth Item
-```
-
----
-
-### 6. Save a metadata value to a selected document
-
-Use:
+**Save a value to a field:**
 
 ```text
 03 Save Value
-```
-
-Recommended workflow:
-
-```text
-selected collection  -> collection_name
-selected document_id -> document_id
-selected field path  -> field_path
-value_json           -> value to save
-```
-
-Example settings:
-
-```text
-query_json = {}
-document_id = 69fbd404309e0541c53fc0be
-field_path = metadata.caption
-value_json = "A saved caption"
-parse_value_json = true
-upsert_if_missing = false
-```
-
-When `document_id` is connected, the node should target:
-
-```json
-{"_id": "69fbd404309e0541c53fc0be"}
-```
-
-This avoids backend errors like:
-
-```json
-{
-  "success": false,
-  "message": "query or document_id is required.",
-  "status_code": 400
-}
+collection_name -> selected collection
+document_id -> selected document
+field_path -> target dot-path
+value_json -> value to store
 ```
 
 ---
 
-## Field Paths
-
-ComfyUI-ZMongo uses dot-path strings to locate nested fields.
-
-Examples:
-
-```text
-image_data
-metadata.prompt
-metadata.caption
-image_data.metadata.seed
-images.0.image
-frames.12.preview
-```
-
-Rules:
-
-1. Save nodes use the field path you enter.
-2. Display/load nodes try the public field path first.
-3. `image_data` is the normal image field.
-4. `image_data.data` is usually an internal base64 member, not the preferred public field path.
-5. Use `04 Metadata Flattened Paths` to discover document or metadata keys.
-6. Use `04 Debug Image Document` to inspect image-specific fields.
-
----
-
-## Image Storage Notes
-
-### Inline ZMongo binary envelope
-
-The easy image saver stores image bytes in a JSON-safe envelope:
-
-```json
-{
-  "__type__": "bytes",
-  "encoding": "base64",
-  "size_bytes": 12345,
-  "data": "..."
-}
-```
-
-Display image behavior:
-
-1. Fetches the document JSON.
-2. Tries exact field path first, usually `image_data`.
-3. Tries legacy `<field>.data` fallback.
-4. Uses backend image route only after document decode fails.
-5. Returns a readable diagnostic placeholder image if no image is found.
-
-### Large files
-
-MongoDB documents have a size limit. For large image batches or videos, prefer object storage or GridFS-style storage with metadata pointers.
-
-Recommended production pattern:
-
-```text
-MongoDB document -> metadata + object-storage pointer
-Object storage   -> actual image/video bytes
-```
-
----
-
-## Troubleshooting
-
-### Nodes do not appear
-
-Check:
-
-1. The folder is inside `ComfyUI/custom_nodes/`.
-2. The folder contains `__init__.py`.
-3. You restarted ComfyUI after changing files.
-4. Requirements were installed into the same Python environment used by ComfyUI.
-5. The file compiles.
-
-Example:
+## Installation
 
 ```bash
-cd /home/comfyuser/comfy_build/ComfyUI/custom_nodes/ComfyUI-ZMongo
-python3 -m py_compile nodes/zmongo_api_nodes.py
-```
-
-Watch the ComfyUI terminal log for import errors.
-
----
-
-### API session fails
-
-Check:
-
-```text
-base_url
-zai_api_key
-username
-comfy_zmongo_prefix
-verify_tls
-```
-
-Recommended live values:
-
-```text
-base_url = https://ztarot.app
-comfy_zmongo_prefix = /comfy-zmongo
-```
-
-Use `01 Who Am I` to confirm the API key resolves to the expected username silo.
-
----
-
-### Collections or documents are empty
-
-Possible causes:
-
-- API key is missing or invalid.
-- Username does not match the silo that owns the documents.
-- You selected the wrong collection index.
-- The backend route prefix is wrong.
-- The user has no documents in that collection.
-
----
-
-### Select Nth outputs all items
-
-The fixed `99 Select Nth Item` uses `INPUT_IS_LIST = True` so it receives the whole list and outputs exactly one item.
-
-Use:
-
-```text
-02 List Collections.collections -> 99 Select Nth Item.items_list
-03 List Docs.ids                -> 99 Select Nth Item.items_list
-```
-
----
-
-### Image displays a diagnostic placeholder
-
-The display node no longer hides failures behind a black image. If no image is found, it returns a readable placeholder and JSON diagnostics.
-
-Check:
-
-```text
-collection_name
-document_id
-field_path
-username
-api_key
-base_url
-comfy_zmongo_prefix
-```
-
-Try:
-
-```text
-04 Debug Image Document
-04 Metadata Flattened Paths
-```
-
-Common field path:
-
-```text
-image_data
-```
-
----
-
-### Save Image creates a new document unexpectedly
-
-Expected behavior:
-
-- `document_id` present -> update existing document only.
-- `document_id` empty -> create new document.
-
-If a new document is created, inspect the `json` output and confirm `document_id` was non-empty after cleanup.
-
-The node cleans values such as:
-
-```text
-(69fbd404309e0541c53fc0be)
-('69fbd404309e0541c53fc0be',)
-["69fbd404309e0541c53fc0be"]
-```
-
-into:
-
-```text
-69fbd404309e0541c53fc0be
-```
-
----
-
-### Save Value says `query or document_id is required`
-
-Connect a selected document ID, or provide a non-empty query.
-
-Recommended:
-
-```text
-document_id <- 99 Select Nth Item.item
-query_json = {}
-```
-
-The fixed node converts the selected document ID into an explicit query:
-
-```json
-{"_id": "selected_document_id"}
-```
-
----
-
-### Metadata Flattened Paths returns `[]`
-
-Check `metadata_field_path`:
-
-```text
-blank                 -> flatten whole document
-metadata              -> flatten root metadata only
-image_data.metadata   -> flatten image envelope metadata only
-```
-
-If the whole document still returns `[]`, use `03 Get Doc` to verify the selected document exists.
-
----
-
-## Security
-
-- Do not commit API keys inside workflow JSON.
-- Rotate any API key accidentally pasted into a public issue, workflow, screenshot, or chat.
-- Do not put raw MongoDB credentials inside ComfyUI workflows.
-- Authenticate through the backend API.
-- Keep user data inside authenticated user silos.
-- Keep auth/API-key/token data in a separate auth database.
-- Store large files in object storage instead of inline MongoDB documents.
-- Never commit `.env`, `.secrets`, JWT keys, Cloudflare keys, database passwords, or R2 credentials.
-
----
-
-## Updating
-
-From the node folder:
-
-```bash
-cd /path/to/ComfyUI/custom_nodes/ComfyUI-ZMongo
-git pull
+# Navigate to ComfyUI custom_nodes folder
+cd /path/to/ComfyUI/custom_nodes
+git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
+cd ComfyUI-ZMongo
 pip install -r requirements.txt
 ```
 
-Restart ComfyUI after updating.
+Restart ComfyUI.
 
 ---
 
-## Suggested Repository Layout
+## Notes
 
-```text
-ComfyUI-ZMongo/
-├── __init__.py
-├── nodes/
-│   ├── zmongo_api_nodes.py
-│   ├── data_processor.py
-│   └── session_client.py
-├── web/
-│   └── zmongo_panel.js
-├── examples/
-│   └── zmong_save_image_DEMO.json
-├── requirements.txt
-├── pyproject.toml
-├── LICENSE
-└── README.md
-```
-
----
-
-## Roadmap
-
-- Add example workflows for save/display/metadata path selection.
-- Add screenshots for API session, Save Image, Display Image, Metadata Flattened Paths, and Save Value.
-- Add gallery/browser frontend widgets.
-- Add optional object-storage/R2 image persistence nodes.
-- Add query-builder nodes for common document filters.
-- Add typed metadata picker nodes for image workflows.
+* ZMongo-ZComfyUI nodes use the **backend API**; no direct MongoDB connection is needed.
+* Large images can be stored on **Cloudflare R2** or hybrid storage; previews are cached in MongoDB for fast display.
+* Node failure will produce readable diagnostic images and JSON logs instead of black screens.
+* Ensure session, API key, and document IDs are valid and connected.
 
 ---
 
 ## License
 
-ComfyUI-ZMongo is licensed under the Apache License 2.0.
-
-See `LICENSE` for details.
+Apache 2.0 — see LICENSE file.
 
 ---
 
 ## Credits
 
-Built for ComfyUI workflows that need durable state, database-backed document selection, reusable image/document persistence, and metadata-driven automation.
+Built for ComfyUI workflows needing durable state, document selection, image persistence, and metadata-driven automation.
