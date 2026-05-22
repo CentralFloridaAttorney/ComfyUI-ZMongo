@@ -1,215 +1,167 @@
-# BusinessProcessApplications.com — ZMongo Integration
+# ComfyUI-ZMongo
 
-<p align="center">
-  <strong>Business Process Applications: Practical automation, workflow intelligence, and database-backed tools for modern business operations.</strong>
-</p>
+[![Overview](https://img.shields.io/badge/overview-doc-blue)](#overview)
+[![Installation](https://img.shields.io/badge/installation-guide-green)](#installation)
+[![Nodes](https://img.shields.io/badge/nodes-ZMongo%2FAPI-yellow)](#nodes)
+[![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](#license)
 
-<p align="center">
-  <a href="#overview"><img alt="Overview" src="https://img.shields.io/badge/overview-doc-blue"></a>
-  <a href="#installation"><img alt="Installation" src="https://img.shields.io/badge/installation-guide-green"></a>
-  <a href="#nodes"><img alt="Nodes" src="https://img.shields.io/badge/nodes-ZMongo%2FAPI-yellow"></a>
-  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-lightgrey"></a>
-</p>
+**BusinessProcessApplications.com** integrates a **ZMongo Data Feature** that allows ComfyUI workflows to store, retrieve, and display documents and images from a secure, isolated per-user cloud silo. 
+
+Rather than requiring direct database exposure or managing raw connection strings, this suite routes securely through an API-driven session manager. It features automated metadata tree-flattening, atomic binary envelope management, and inline image serialization.
 
 ---
 
-## Overview
+## Key Capabilities
 
-**BusinessProcessApplications.com** integrates a **ZMongo Data Feature** that allows ComfyUI workflows to store, retrieve, and display documents and images from a per-user silo.
-
-**Key capabilities:**
-
-* API-key authentication for secure, per-user silo access.
-* Dynamic collection and document listing.
-* Document query, create, update, delete operations.
-* Image persistence with inline binary envelopes or Cloudflare R2 as backend storage.
-* Metadata flattening and dot-path key discovery.
-* Fleet routing and task dispatching for distributed workflows.
-* Live session token management and per-service usage tracking.
-
-**Use cases:**
-
-* Persistent workflow memory and automation.
-* Image and metadata storage for AI/ComfyUI workflows.
-* Database-driven prompt and document pipelines.
-* Preview, debug, and route images inside ComfyUI without MongoDB direct access.
+* **Secure Per-User Silos:** Authenticate via API keys without exposing raw database credentials inside your graph workflows.
+* **Atomic Binary Envelopes:** Automatically handles custom bytes-envelope wrappers (`__type__ = "bytes"`) to process base64 data structures seamlessly.
+* **Automated Metadata Flattening:** Advanced dot-path key discovery dynamically flattens deeply-nested structures into clean, targetable addresses.
+* **Robust Text Scalar Unwrapping:** Built-in safeguards peel punctuation artifacts, tuples, single-item lists, and quotation marks frequently introduced by complex graph link routing.
+* **Visual Diagnostic Engine:** Node exceptions or missing field references generate readable, non-black diagnostic placeholder image streams directly in your UI for lightning-fast troubleshooting.
 
 ---
 
-## Architecture
+## Architecture & Configuration
 
-**API-key model:**
+### API-Session Model
+All execution pathways route communication through a reusable, authenticated `ZMONGO_API_SESSION` connection client. 
+* **Default Backend URL:** `https://businessprocessapplications.com`
+* **ComfyUI-ZMongo Route Prefix:** `/comfy-zmongo`
 
-* All nodes connect through a reusable `ZMONGO_API_SESSION`.
-* Default backend URL: `https://businessprocessapplications.com`.
-* ComfyUI-ZMongo prefix: `/comfy-zmongo`.
-* Fleet prefix: `/fleet`.
-* ComfyUI-ZMongo-fleet prefix: `/comfy-zmongo-fleet`.
-
-**Route structure:**
-
+### Categorized Route Structure
+Nodes are strictly organized into predictable namespaces to streamline graph navigation:
 ```text
-ZMongo/00 Auth
-ZMongo/01 Service
-ZMongo/02 Collections
-ZMongo/03 Docs
-ZMongo/04 Images
-ZMongo/05 Fleet
-ZMongo/99 Helpers
-```
+ZMongo/00 Auth          - Session lifecycle and endpoint initialization
+ZMongo/01 Service       - Ecosystem connectivity verification and silo inspection
+ZMongo/02 Collections   - Direct collection lifecycle operations (Sandbox management)
+ZMongo/03 Docs          - Granular document CRUD, value mutations, and dot-path queries
+ZMongo/04 Images        - Automated tensor serialization, rendering, and structural profiling
+ZMongo/99 Helpers       - Scalar evaluation, item picking, and raw JSON parsing
 
-**Security and best practices:**
-
-* Do not embed API keys or credentials in workflows.
-* Authenticate via backend API; ensure per-user silo isolation.
-* Large assets should use object storage (Cloudflare R2) rather than inline JSON in MongoDB.
-
----
-
-## Nodes
-
-### 00 Auth
-
-| Display Name         | Class                       | Purpose                                 |
-| -------------------- | --------------------------- | --------------------------------------- |
-| 00 API Key Session   | `ZMongoApiKeySessionNode`   | Creates reusable session for API calls. |
-| 00 Close API Session | `ZMongoApiCloseSessionNode` | Closes the HTTP session.                |
-
-### 01 Service
-
-| Display Name | Class                 | Purpose                             |
-| ------------ | --------------------- | ----------------------------------- |
-| 01 Health    | `ZMongoApiHealthNode` | Verifies backend health.            |
-| 01 Who Am I  | `ZMongoApiWhoamiNode` | Confirms username silo and DB info. |
-
-### 02 Collections
-
-| Display Name         | Class                           | Purpose                                          |
-| -------------------- | ------------------------------- | ------------------------------------------------ |
-| 02 List Collections  | `ZMongoApiListCollectionsNode`  | Lists collections available to the API key user. |
-| 02 Create Collection | `ZMongoApiCreateCollectionNode` | Creates a new collection.                        |
-| 02 Delete Collection | `ZMongoApiDeleteCollectionNode` | Deletes a collection after confirmation.         |
-
-### 03 Docs
-
-| Display Name  | Class                    | Purpose                                               |
-| ------------- | ------------------------ | ----------------------------------------------------- |
-| 03 List Docs  | `ZMongoApiListDocsNode`  | Lists document IDs in a collection.                   |
-| 03 Get Doc    | `ZMongoApiGetDocNode`    | Loads a single document.                              |
-| 03 Query Docs | `ZMongoApiQueryDocsNode` | Queries documents.                                    |
-| 03 Count Docs | `ZMongoApiCountDocsNode` | Counts matching documents.                            |
-| 03 Create Doc | `ZMongoApiCreateDocNode` | Creates a new document.                               |
-| 03 Update Doc | `ZMongoApiUpdateDocNode` | Updates a document field or full JSON.                |
-| 03 Delete Doc | `ZMongoApiDeleteDocNode` | Deletes a document by ID or query.                    |
-| 03 Save Value | `ZMongoApiSaveValueNode` | Saves a value to a field path in a selected document. |
-| 03 Get Value  | `ZMongoApiGetValueNode`  | Fetches one value from a document by dot-path.        |
-
-### 04 Images
-
-| Display Name                 | Class                                 | Purpose                                                |
-| ---------------------------- | ------------------------------------- | ------------------------------------------------------ |
-| 04 Display Image from ZMongo | `ZMongoDisplayImageNode`              | Shows image from a ZMongo document or fallback route.  |
-| 04 Easy Save Image           | `ZMongoApiEasySaveImageNode`          | Saves a ComfyUI IMAGE tensor to ZMongo document.       |
-| 04 Debug Image Document      | `ZMongoApiDocumentImageDebugNode`     | Outputs document image candidates and structure.       |
-| 04 Image Field Candidates    | `ZMongoApiImageFieldCandidatesNode`   | Returns all valid image field paths for a document.    |
-| 04 Metadata Flattened Paths  | `ZMongoApiMetadataFlattenedPathsNode` | Flattens dot-path keys for metadata or whole document. |
-
-### 05 Fleet
-
-| Display Name      | Class                        | Purpose                              |
-| ----------------- | ---------------------------- | ------------------------------------ |
-| 05 Fleet Status   | `ZMongoApiFleetStatusNode`   | Inspects fleet status.               |
-| 05 Fleet Agents   | `ZMongoApiFleetAgentsNode`   | Lists all registered agents.         |
-| 05 Fleet Dispatch | `ZMongoApiFleetDispatchNode` | Sends JSON payloads to fleet agents. |
-
-### 99 Helpers
-
-| Display Name       | Class                        | Purpose                                        |
-| ------------------ | ---------------------------- | ---------------------------------------------- |
-| 99 Select Nth Item | `ZMongoApiSelectNthItemNode` | Picks a single item from ComfyUI list outputs. |
-| 99 JSON Pick       | `ZMongoApiJsonPickNode`      | Fetches a value from JSON by dot-path.         |
-
----
-
-## Quick Workflows
-
-**Connect and verify session:**
-
-```text
-00 API Key Session -> 01 Who Am I
-```
-
-**Select collection/document:**
-
-```text
-02 List Collections -> 99 Select Nth Item
-03 List Docs        -> 99 Select Nth Item
-```
-
-**Display image:**
-
-```text
-04 Display Image from ZMongo
-```
-
-**Save image:**
-
-```text
-04 Easy Save Image
-document_id connected → update
-document_id empty     → create new document
-```
-
-**Flatten metadata paths:**
-
-```text
-04 Metadata Flattened Paths
-metadata_field_path = ""  -> whole document
-metadata_field_path = "metadata"  -> root metadata
-metadata_field_path = "image_data.metadata" -> image metadata
-```
-
-**Save a value to a field:**
-
-```text
-03 Save Value
-collection_name -> selected collection
-document_id -> selected document
-field_path -> target dot-path
-value_json -> value to store
 ```
 
 ---
 
 ## Installation
 
+### Method 1: Via Pip (Recommended for Releases)
+
+Install the node suite directly into your active ComfyUI Python dependencies:
+
 ```bash
-# Navigate to ComfyUI custom_nodes folder
-cd /path/to/ComfyUI/custom_nodes
-git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
-cd ComfyUI-ZMongo
-pip install -r requirements.txt
+pip install ComfyUI-ZMongo
+
 ```
 
-Restart ComfyUI.
+### Method 2: Manual Git Setup
+
+To track raw upstream development or maintain a local link context:
+
+```bash
+cd /path/to/ComfyUI/custom_nodes
+git clone git@github.com:CentralFloridaAttorney/ComfyUI-ZMongo.git
+cd ComfyUI-ZMongo
+pip install -r requirements.txt
+
+```
 
 ---
 
-## Notes
+## Production Node Reference
 
-* ZMongo-ZComfyUI nodes use the **backend API**; no direct MongoDB connection is needed.
-* Large images can be stored on **Cloudflare R2** or hybrid storage; previews are cached in MongoDB for fast display.
-* Node failure will produce readable diagnostic images and JSON logs instead of black screens.
-* Ensure session, API key, and document IDs are valid and connected.
+### ZMongo/00 Auth
+
+| Display Name | Class | Purpose |
+| --- | --- | --- |
+| **00 API Key Session** | `ZMongoApiKeySessionNode` | Spawns a reusable authenticated HTTP connection state using your platform API token. |
+| **00 Close API Session** | `ZMongoApiCloseSessionNode` | Safely closes out and releases active requests connection pools. |
+
+### ZMongo/01 Service
+
+| Display Name | Class | Purpose |
+| --- | --- | --- |
+| **01 Health** | `ZMongoApiHealthNode` | Pings the backend service to verify API availability and health. |
+| **01 Who Am I** | `ZMongoApiWhoamiNode` | Resolves active identity traits including your isolated user username silo and database context. |
+
+### ZMongo/02 Collections
+
+| Display Name | Class | Purpose |
+| --- | --- | --- |
+| **02 List Collections** | `ZMongoApiListCollectionsNode` | Pulls an array of all sandboxed collection namespaces bound to your account. |
+| **02 Create Collection** | `ZMongoApiCreateCollectionNode` | Spins up a brand new collection bucket inside your cloud silo. |
+| **02 Delete Collection** | `ZMongoApiDeleteCollectionNode` | Destroys an isolated collection using absolute string-matching verification. |
+
+### ZMongo/03 Docs
+
+| Display Name | Class | Purpose |
+| --- | --- | --- |
+| **03 List Docs** | `ZMongoApiListDocsNode` | Returns document identifiers existing within a specified namespace. |
+| **03 Get Doc** | `ZMongoApiGetDocNode` | Retreives an entire raw JSON document structure via its object ID string. |
+| **03 Query Docs** | `ZMongoApiQueryDocsNode` | Executes structured Mongo-flavored queries with pagination, projection, and sorting. |
+| **03 Count Docs** | `ZMongoApiCountDocsNode` | Evaluates total records matching specified filter conditions without pulling raw records. |
+| **03 Create Doc** | `ZMongoApiCreateDocNode` | Commits a clean structured JSON document into your designated collection storage. |
+| **03 Update Doc** | `ZMongoApiUpdateDocNode` | Modifies an existing document using query matches or field mutations. |
+| **03 Delete Doc** | `ZMongoApiDeleteDocNode` | Evicts dynamic document configurations matching targeting query filters. |
+| **03 Get Value** | `ZMongoApiGetValueNode` | Targets and extracts a single deep property value via explicit dot-path formatting. |
+| **03 Save Value** | `ZMongoApiSaveValueNode` | Directly mutates or inserts properties deeply nested within explicit path contexts. |
+
+### ZMongo/04 Images
+
+| Display Name | Class | Purpose |
+| --- | --- | --- |
+| **04 Display Image from ZMongo** | `ZMongoDisplayImageNode` | Decodes inline data frames or falls back to backend routing to display images. |
+| **04 Easy Save Image** | `ZMongoApiEasySaveImageNode` | Encapsulates a ComfyUI tensor directly into an atomic binary envelope for transmission. |
+| **04 Debug Image Document** | `ZMongoApiDocumentImageDebugNode` | Inspects document candidate structures and validates envelope contents. |
+| **04 Image Field Candidates** | `ZMongoApiImageFieldCandidatesNode` | Evaluates field strings to score valid image mapping targets. |
+| **04 Metadata Flattened Paths** | `ZMongoApiMetadataFlattenedPathsNode` | Unfolds data trees into flat dot-notated addressing indexes. |
+
+### ZMongo/99 Helpers
+
+| Display Name | Class | Purpose |
+| --- | --- | --- |
+| **99 Select Nth Item** | `ZMongoApiSelectNthItemNode` | Isolates a specific element from streaming output list configurations safely. |
+| **99 JSON Pick** | `ZMongoApiJsonPickNode` | Utility to cleanly extract objects from stringified JSON blobs. |
+
+---
+
+## Core Graph Routing Blueprint Examples
+
+* **Establish Session and Profile Validation:**
+```text
+[00 API Key Session] -> [01 Who Am I]
+
+```
+
+
+* **Iterate Sandboxed Storage Contexts:**
+```text
+[02 List Collections] -> [99 Select Nth Item] -> [03 List Docs] -> [99 Select Nth Item]
+
+```
+
+
+* **Persistent Media Writing Flow Rules:**
+```text
+[04 Easy Save Image]
+* Providing a Document ID  -> Overwrites/Mutates that explicit index target.
+* Leaving Document ID Empty -> Instantiates a fresh base layout file automatically.
+
+```
+
+
+* **Deep Schema Tree Inspection:**
+```text
+[04 Metadata Flattened Paths]
+* Set metadata_field_path to ""                 -> Flattens complete target record.
+* Set metadata_field_path to "metadata"         -> Limits parsing to base prompt structures.
+* Set metadata_field_path to "image_data.metadata" -> Targets image generation tags exclusively.
+
+```
+
+
 
 ---
 
 ## License
 
-Apache 2.0 — see LICENSE file.
-
----
-
-## Credits
-
-Built for ComfyUI workflows needing durable state, document selection, image persistence, and metadata-driven automation.
+Distributed under the **Apache 2.0 License**. See accompanying `LICENSE` file for full authorization parameters.
