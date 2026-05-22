@@ -1,4 +1,8 @@
-from __future__ import annotations
+"""
+ComfyUI-ZMongo custom node package.
+
+This file is required by ComfyUI so it can import the custom node module.
+"""
 
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 

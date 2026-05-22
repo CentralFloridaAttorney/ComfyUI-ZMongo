@@ -49,13 +49,13 @@
 **Route structure:**
 
 ```text
-ZMongo/API/00 Auth
-ZMongo/API/01 Service
-ZMongo/API/02 Collections
-ZMongo/API/03 Docs
-ZMongo/API/04 Images
-ZMongo/API/05 Fleet
-ZMongo/API/99 Helpers
+ZMongo/00 Auth
+ZMongo/01 Service
+ZMongo/02 Collections
+ZMongo/03 Docs
+ZMongo/04 Images
+ZMongo/05 Fleet
+ZMongo/99 Helpers
 ```
 
 **Security and best practices:**

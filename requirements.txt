@@ -19,3 +19,4 @@ pymilvus[model]
 FlagEmbedding
 pytest
 quart
+pillow
