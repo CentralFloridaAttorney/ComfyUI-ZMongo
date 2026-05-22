@@ -20,3 +20,4 @@ FlagEmbedding
 pytest
 quart
 pillow
+python-dotenv
