@@ -1,0 +1,2593 @@
+{
+  "last_node_id": 28,
+  "last_link_id": 33,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "Note",
+      "pos": [
+        -950,
+        -640
+      ],
+      "size": [
+        760,
+        310
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Note"
+      },
+      "widgets_values": [
+        "# ComfyUI-ZMongo Documents Workflow — Upload, Select, Inspect, Edit\n\nThis workflow demonstrates the standardized document-node chaining pattern:\n\n```text\nDocument node → selectable_items → 99 Select Nth Item → next document node\n```\n\nIt covers:\n\n1. Authenticate with the existing **00 API Key Session** node.\n2. Pick a file from the ComfyUI server user's `~/Documents` folder.\n3. Upload the file into the authenticated ZMongo silo.\n4. Select the uploaded document ID with **99 Select Nth Item**.\n5. List documents and select one from the returned document list.\n6. Inspect field paths, select a field path, and read that value.\n7. Save review metadata and retrieve/extract text.\n8. Queue OCR and check OCR job status.\n"
+      ],
+      "title": "README: Document Nodes Demo"
+    },
+    {
+      "id": 2,
+      "type": "Note",
+      "pos": [
+        -950,
+        -290
+      ],
+      "size": [
+        760,
+        260
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Note"
+      },
+      "widgets_values": [
+        "## Setup Checklist\n\nBefore running:\n\n- Install the updated backend `document_routes.py` and mount it at `/documents`.\n- Install the updated ComfyUI node file as:\n\n```text\nComfyUI/custom_nodes/ComfyUI-ZMongo/nodes/document_api_nodes.py\n```\n\n- Restart ComfyUI.\n- Put a `.pdf`, `.txt`, `.md`, `.docx`, `.rtf`, `.csv`, or `.json` file in:\n\n```text\n/home/comfyuser/Documents\n```\n\nor set `custom_root` / `manual_path` in the file-browser node.\n"
+      ],
+      "title": "Setup Checklist"
+    },
+    {
+      "id": 3,
+      "type": "Note",
+      "pos": [
+        -950,
+        40
+      ],
+      "size": [
+        760,
+        250
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Note"
+      },
+      "widgets_values": [
+        "## Standardized Selectable Output Pattern\n\nEach document node now exposes:\n\n```text\nselectable_items\nindexed_items\nitem_count\n```\n\nUse `selectable_items` with **99 Select Nth Item**. The selector returns a single string `item`, which can feed the next node's `document_id`, `field_path`, `file_path`, or similar string input.\n\nExamples:\n\n```text\n06 List Documents.selectable_items → 99 Select Nth Item → 06 Get Document.document_id\n06 Document Field Paths.selectable_items → 99 Select Nth Item → 06 Get Document Value.field_path\n```\n"
+      ],
+      "title": "How Select Nth Works"
+    },
+    {
+      "id": 4,
+      "type": "Note",
+      "pos": [
+        -950,
+        330
+      ],
+      "size": [
+        760,
+        230
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Note"
+      },
+      "widgets_values": [
+        "## Upload Branch\n\nThe **06 Document File Browser** node defaults to the ComfyUI server user's Documents folder:\n\n```text\n~/Documents\n```\n\nThe browser cannot expose arbitrary client-side file paths to Python. If ComfyUI runs on a different machine, copy/upload the file to that machine first, or use the ComfyUI `input/` directory.\n\nAfter upload, the upload node returns `document_id` and also adds it to `selectable_items` for standardized chaining.\n"
+      ],
+      "title": "File Upload Notes"
+    },
+    {
+      "id": 5,
+      "type": "Note",
+      "pos": [
+        -950,
+        600
+      ],
+      "size": [
+        760,
+        220
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Note"
+      },
+      "widgets_values": [
+        "## Field Editing Branch\n\nThis workflow saves review metadata to:\n\n```text\nmetadata.review_status\n```\n\nThen it demonstrates field inspection and value retrieval. To inspect another field, change the index on **99 Select Field Path**, or type the field path directly into **06 Get Document Value**.\n"
+      ],
+      "title": "Field Editing Notes"
+    },
+    {
+      "id": 7,
+      "type": "ZMongoApiKeySessionNode",
+      "pos": [
+        -120,
+        -620
+      ],
+      "size": [
+        430,
+        330
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "links": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "status",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoApiKeySessionNode"
+      },
+      "widgets_values": [
+        "https://businessprocessapplications.com",
+        "PASTE_YOUR_BPA_API_KEY_HERE",
+        "qwer",
+        "/comfy-zmongo",
+        "/fleet",
+        "/comfy-zmongo-fleet",
+        30,
+        true,
+        true
+      ],
+      "title": "00 API Key Session"
+    },
+    {
+      "id": 8,
+      "type": "ZMongoDocumentHealth",
+      "pos": [
+        390,
+        -640
+      ],
+      "size": [
+        360,
+        170
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 1
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 5
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentHealth"
+      },
+      "widgets_values": [
+        "/documents",
+        ""
+      ],
+      "title": "06 Document API Health"
+    },
+    {
+      "id": 9,
+      "type": "ZMongoDocumentWhoAmI",
+      "pos": [
+        790,
+        -640
+      ],
+      "size": [
+        360,
+        190
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 2
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "username",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "silo_db_name",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 7
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentWhoAmI"
+      },
+      "widgets_values": [
+        "/documents",
+        ""
+      ],
+      "title": "06 Document WhoAmI"
+    },
+    {
+      "id": 10,
+      "type": "ZMongoDocumentFilePathBrowser",
+      "pos": [
+        -120,
+        -210
+      ],
+      "size": [
+        420,
+        260
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "file_path",
+          "type": "STRING",
+          "links": [
+            17
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "filename",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "content_type",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "size_bytes",
+          "type": "INT",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "exists",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "browser_root",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 7
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 8
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 9
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentFilePathBrowser"
+      },
+      "widgets_values": [
+        "Documents",
+        "__NO_DOCUMENT_FILES_FOUND__",
+        "",
+        "",
+        ""
+      ],
+      "title": "06 Document File Browser"
+    },
+    {
+      "id": 11,
+      "type": "ZMongoDocumentUploadFile",
+      "pos": [
+        380,
+        -260
+      ],
+      "size": [
+        470,
+        330
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 3
+        },
+        {
+          "name": "file_path",
+          "type": "STRING",
+          "link": 17
+        },
+        {
+          "name": "case_id",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "metadata_json",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "known_text",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "filename",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "size_bytes",
+          "type": "INT",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [
+            18
+          ],
+          "slot_index": 6
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 7
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 8
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentUploadFile"
+      },
+      "widgets_values": [
+        "",
+        "demo_case_001",
+        "{\n  \"source\": \"comfyui_document_workflow\",\n  \"upload_branch\": true,\n  \"practice_area\": \"document_review\"\n}",
+        "/documents",
+        "",
+        ""
+      ],
+      "title": "06 Upload Document File"
+    },
+    {
+      "id": 12,
+      "type": "ZMongoApiSelectNthItemNode",
+      "pos": [
+        910,
+        -250
+      ],
+      "size": [
+        320,
+        150
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "items_list",
+          "type": "*",
+          "link": 18
+        },
+        {
+          "name": "index",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "fallback",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "item",
+          "type": "STRING",
+          "links": [
+            19
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "status",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoApiSelectNthItemNode"
+      },
+      "widgets_values": [
+        0,
+        ""
+      ],
+      "title": "99 Select Uploaded Document ID"
+    },
+    {
+      "id": 13,
+      "type": "ZMongoDocumentGet",
+      "pos": [
+        1290,
+        -260
+      ],
+      "size": [
+        430,
+        250
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 4
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 19
+        },
+        {
+          "name": "include_file_data",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "document_json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "summary",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 7
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 8
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentGet"
+      },
+      "widgets_values": [
+        "",
+        false,
+        "/documents",
+        ""
+      ],
+      "title": "06 Get Uploaded Document"
+    },
+    {
+      "id": 14,
+      "type": "ZMongoDocumentCreateText",
+      "pos": [
+        -120,
+        120
+      ],
+      "size": [
+        470,
+        360
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 5
+        },
+        {
+          "name": "filename",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "case_id",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "metadata_json",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "document_json",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "filename",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "text_length",
+          "type": "INT",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [
+            20
+          ],
+          "slot_index": 6
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 7
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 8
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentCreateText"
+      },
+      "widgets_values": [
+        "comfyui_document_demo.txt",
+        "NOTICE OF DOCUMENT NODE DEMONSTRATION\n\nThis sample text document was created by the ComfyUI-ZMongo document workflow.\n\nIt demonstrates document creation, selection, field path inspection, metadata updates, and downstream text extraction.\n",
+        "demo_case_001",
+        "{\n  \"source\": \"comfyui_document_workflow\",\n  \"created_by_node\": \"06 Create Text Document\"\n}",
+        "{\n  \"title\": \"ComfyUI Document Node Demonstration\",\n  \"status\": \"draft\",\n  \"tags\": [\"demo\", \"documents\", \"zmongo\"]\n}",
+        "/documents",
+        ""
+      ],
+      "title": "06 Create Text Document"
+    },
+    {
+      "id": 15,
+      "type": "ZMongoApiSelectNthItemNode",
+      "pos": [
+        390,
+        140
+      ],
+      "size": [
+        330,
+        150
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "items_list",
+          "type": "*",
+          "link": 20
+        },
+        {
+          "name": "index",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "fallback",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "item",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "status",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoApiSelectNthItemNode"
+      },
+      "widgets_values": [
+        0,
+        ""
+      ],
+      "title": "99 Select Created Text Document ID"
+    },
+    {
+      "id": 16,
+      "type": "ZMongoDocumentList",
+      "pos": [
+        390,
+        70
+      ],
+      "size": [
+        470,
+        350
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 6
+        },
+        {
+          "name": "query_json",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "sort_json",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "limit",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "skip",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "include_file_data",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "documents_json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "document_ids_json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [
+            21
+          ],
+          "slot_index": 6
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 7
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 8
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentList"
+      },
+      "widgets_values": [
+        "{\n  \"case_id\": \"demo_case_001\"\n}",
+        "[\n  [\"updated_at\", -1]\n]",
+        25,
+        0,
+        false,
+        "/documents",
+        ""
+      ],
+      "title": "06 List Documents"
+    },
+    {
+      "id": 17,
+      "type": "ZMongoApiSelectNthItemNode",
+      "pos": [
+        910,
+        90
+      ],
+      "size": [
+        320,
+        150
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "items_list",
+          "type": "*",
+          "link": 21
+        },
+        {
+          "name": "index",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "fallback",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "item",
+          "type": "STRING",
+          "links": [
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            31
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "status",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoApiSelectNthItemNode"
+      },
+      "widgets_values": [
+        0,
+        ""
+      ],
+      "title": "99 Select Document From List"
+    },
+    {
+      "id": 18,
+      "type": "ZMongoDocumentGet",
+      "pos": [
+        1290,
+        60
+      ],
+      "size": [
+        430,
+        250
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 7
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 22
+        },
+        {
+          "name": "include_file_data",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "document_json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "summary",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 7
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 8
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentGet"
+      },
+      "widgets_values": [
+        "",
+        false,
+        "/documents",
+        ""
+      ],
+      "title": "06 Get Selected Listed Document"
+    },
+    {
+      "id": 19,
+      "type": "ZMongoDocumentFieldPaths",
+      "pos": [
+        1290,
+        350
+      ],
+      "size": [
+        430,
+        230
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 8
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 23
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "field_paths_json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "indexed_field_paths",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [
+            30
+          ],
+          "slot_index": 6
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 7
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 8
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentFieldPaths"
+      },
+      "widgets_values": [
+        "",
+        "/documents",
+        ""
+      ],
+      "title": "06 Document Field Paths"
+    },
+    {
+      "id": 20,
+      "type": "ZMongoApiSelectNthItemNode",
+      "pos": [
+        1770,
+        350
+      ],
+      "size": [
+        320,
+        150
+      ],
+      "flags": {},
+      "order": 20,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "items_list",
+          "type": "*",
+          "link": 30
+        },
+        {
+          "name": "index",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "fallback",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "item",
+          "type": "STRING",
+          "links": [
+            32
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "status",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoApiSelectNthItemNode"
+      },
+      "widgets_values": [
+        0,
+        "text"
+      ],
+      "title": "99 Select Field Path"
+    },
+    {
+      "id": 21,
+      "type": "ZMongoDocumentGetValue",
+      "pos": [
+        2140,
+        310
+      ],
+      "size": [
+        430,
+        250
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 9
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 31
+        },
+        {
+          "name": "field_path",
+          "type": "STRING",
+          "link": 32
+        },
+        {
+          "name": "fallback",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "value",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "exists",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "value_type",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 7
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentGetValue"
+      },
+      "widgets_values": [
+        "",
+        "",
+        "NOT_FOUND",
+        "/documents",
+        ""
+      ],
+      "title": "06 Get Selected Field Value"
+    },
+    {
+      "id": 22,
+      "type": "ZMongoDocumentSaveValue",
+      "pos": [
+        1770,
+        560
+      ],
+      "size": [
+        430,
+        260
+      ],
+      "flags": {},
+      "order": 22,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 10
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 24
+        },
+        {
+          "name": "field_path",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "value",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "parse_json",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "normalize_for_storage",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 6
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentSaveValue"
+      },
+      "widgets_values": [
+        "",
+        "metadata.review_status",
+        "{\n  \"status\": \"reviewed\",\n  \"reviewer\": \"ComfyUI workflow\",\n  \"notes\": \"Saved by 06 Save Document Value after standardized selection.\"\n}",
+        true,
+        false,
+        "/documents",
+        ""
+      ],
+      "title": "06 Save Review Metadata Value"
+    },
+    {
+      "id": 23,
+      "type": "ZMongoDocumentUpdateMetadata",
+      "pos": [
+        1770,
+        850
+      ],
+      "size": [
+        470,
+        340
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 11
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 25
+        },
+        {
+          "name": "metadata_json",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "case_id",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "status",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "title",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "description",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "tags_json",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 6
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentUpdateMetadata"
+      },
+      "widgets_values": [
+        "",
+        "{\n  \"workflow_review\": true,\n  \"review_status\": \"complete\"\n}",
+        "demo_case_001",
+        "reviewed",
+        "Reviewed from ComfyUI-ZMongo",
+        "This document was processed through the standardized document node workflow.",
+        "[\"demo\", \"reviewed\", \"comfyui-zmongo\"]",
+        "/documents",
+        ""
+      ],
+      "title": "06 Update Document Metadata"
+    },
+    {
+      "id": 24,
+      "type": "ZMongoDocumentGetText",
+      "pos": [
+        1290,
+        650
+      ],
+      "size": [
+        430,
+        210
+      ],
+      "flags": {},
+      "order": 24,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 12
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 26
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "text_length",
+          "type": "INT",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 7
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentGetText"
+      },
+      "widgets_values": [
+        "",
+        "/documents",
+        ""
+      ],
+      "title": "06 Get Document Text"
+    },
+    {
+      "id": 25,
+      "type": "ZMongoDocumentExtractText",
+      "pos": [
+        1290,
+        900
+      ],
+      "size": [
+        430,
+        230
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 13
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 27
+        },
+        {
+          "name": "save",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "text_length",
+          "type": "INT",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 7
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentExtractText"
+      },
+      "widgets_values": [
+        "",
+        true,
+        "/documents",
+        ""
+      ],
+      "title": "06 Extract Document Text"
+    },
+    {
+      "id": 26,
+      "type": "ZMongoDocumentQueueOCR",
+      "pos": [
+        1290,
+        1170
+      ],
+      "size": [
+        430,
+        240
+      ],
+      "flags": {},
+      "order": 26,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 14
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 28
+        },
+        {
+          "name": "priority",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "links": [
+            33
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "status",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 7
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentQueueOCR"
+      },
+      "widgets_values": [
+        "",
+        50,
+        "comfyui_zmongo_document_workflow",
+        "/documents",
+        ""
+      ],
+      "title": "06 Queue Document OCR"
+    },
+    {
+      "id": 27,
+      "type": "ZMongoDocumentOCRStatus",
+      "pos": [
+        1770,
+        1170
+      ],
+      "size": [
+        430,
+        220
+      ],
+      "flags": {},
+      "order": 27,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 15
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 33
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "status",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "has_text",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "last_error",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 7
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 8
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentOCRStatus"
+      },
+      "widgets_values": [
+        "",
+        "/documents",
+        ""
+      ],
+      "title": "06 Document OCR Status"
+    },
+    {
+      "id": 28,
+      "type": "ZMongoDocumentSaveText",
+      "pos": [
+        2140,
+        650
+      ],
+      "size": [
+        430,
+        260
+      ],
+      "flags": {},
+      "order": 28,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 16
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "link": 29
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "document_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "document_id",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "text_length",
+          "type": "INT",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "refresh",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "selectable_items",
+          "type": "*",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "item_count",
+          "type": "INT",
+          "links": [],
+          "slot_index": 7
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentSaveText"
+      },
+      "widgets_values": [
+        "",
+        "EDITED TEXT FROM WORKFLOW\n\nThis can replace or establish the document text field. Connect extracted text here if you want to save extracted content after review.",
+        "/documents",
+        ""
+      ],
+      "title": "06 Save Edited Text"
+    }
+  ],
+  "links": [
+    [
+      1,
+      7,
+      0,
+      8,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      2,
+      7,
+      0,
+      9,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      3,
+      7,
+      0,
+      11,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      4,
+      7,
+      0,
+      13,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      5,
+      7,
+      0,
+      14,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      6,
+      7,
+      0,
+      16,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      7,
+      7,
+      0,
+      18,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      8,
+      7,
+      0,
+      19,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      9,
+      7,
+      0,
+      21,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      10,
+      7,
+      0,
+      22,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      11,
+      7,
+      0,
+      23,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      12,
+      7,
+      0,
+      24,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      13,
+      7,
+      0,
+      25,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      14,
+      7,
+      0,
+      26,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      15,
+      7,
+      0,
+      27,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      16,
+      7,
+      0,
+      28,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      17,
+      10,
+      0,
+      11,
+      1,
+      "STRING"
+    ],
+    [
+      18,
+      11,
+      6,
+      12,
+      0,
+      "*"
+    ],
+    [
+      19,
+      12,
+      0,
+      13,
+      1,
+      "STRING"
+    ],
+    [
+      20,
+      14,
+      6,
+      15,
+      0,
+      "*"
+    ],
+    [
+      21,
+      16,
+      6,
+      17,
+      0,
+      "*"
+    ],
+    [
+      22,
+      17,
+      0,
+      18,
+      1,
+      "STRING"
+    ],
+    [
+      23,
+      17,
+      0,
+      19,
+      1,
+      "STRING"
+    ],
+    [
+      24,
+      17,
+      0,
+      22,
+      1,
+      "STRING"
+    ],
+    [
+      25,
+      17,
+      0,
+      23,
+      1,
+      "STRING"
+    ],
+    [
+      26,
+      17,
+      0,
+      24,
+      1,
+      "STRING"
+    ],
+    [
+      27,
+      17,
+      0,
+      25,
+      1,
+      "STRING"
+    ],
+    [
+      28,
+      17,
+      0,
+      26,
+      1,
+      "STRING"
+    ],
+    [
+      29,
+      17,
+      0,
+      28,
+      1,
+      "STRING"
+    ],
+    [
+      30,
+      19,
+      6,
+      20,
+      0,
+      "*"
+    ],
+    [
+      31,
+      17,
+      0,
+      21,
+      1,
+      "STRING"
+    ],
+    [
+      32,
+      20,
+      0,
+      21,
+      2,
+      "STRING"
+    ],
+    [
+      33,
+      26,
+      1,
+      27,
+      1,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "title": "Instructions",
+      "bounding": [
+        -980,
+        -680,
+        830,
+        1540
+      ],
+      "color": "#3f789e",
+      "font_size": 24
+    },
+    {
+      "title": "Authentication and Service Checks",
+      "bounding": [
+        -160,
+        -700,
+        1340,
+        300
+      ],
+      "color": "#4c6f36",
+      "font_size": 24
+    },
+    {
+      "title": "Upload New Document from Documents Folder",
+      "bounding": [
+        -160,
+        -320,
+        1930,
+        390
+      ],
+      "color": "#8a6d3b",
+      "font_size": 24
+    },
+    {
+      "title": "Create/List/Select Documents",
+      "bounding": [
+        -160,
+        40,
+        1930,
+        300
+      ],
+      "color": "#73527d",
+      "font_size": 24
+    },
+    {
+      "title": "Field Paths and Metadata Editing",
+      "bounding": [
+        1260,
+        320,
+        1360,
+        850
+      ],
+      "color": "#7d5252",
+      "font_size": 24
+    },
+    {
+      "title": "Text Extraction and OCR",
+      "bounding": [
+        1260,
+        620,
+        990,
+        810
+      ],
+      "color": "#526d7d",
+      "font_size": 24
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.55,
+      "offset": [
+        980,
+        560
+      ]
+    },
+    "workflow_notes": "Document node demonstration workflow for ComfyUI-ZMongo standardized selectable outputs."
+  },
+  "version": 0.4
+}

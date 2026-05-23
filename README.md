@@ -1,167 +1,205 @@
 # ComfyUI-ZMongo
 
-[![Overview](https://img.shields.io/badge/overview-doc-blue)](#overview)
-[![Installation](https://img.shields.io/badge/installation-guide-green)](#installation)
-[![Nodes](https://img.shields.io/badge/nodes-ZMongo%2FAPI-yellow)](#nodes)
-[![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](#license)
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**BusinessProcessApplications.com** integrates a **ZMongo Data Feature** that allows ComfyUI workflows to store, retrieve, and display documents and images from a secure, isolated per-user cloud silo. 
+**ComfyUI-ZMongo** is a custom node package for ComfyUI that integrates:
 
-Rather than requiring direct database exposure or managing raw connection strings, this suite routes securely through an API-driven session manager. It features automated metadata tree-flattening, atomic binary envelope management, and inline image serialization.
+- **ZMongo database backend** (with hybrid Cloudflare R2 support)
+- **Llama structured output nodes**
+- **Gemini API nodes** (user-specific API key integration)
 
----
-
-## Key Capabilities
-
-* **Secure Per-User Silos:** Authenticate via API keys without exposing raw database credentials inside your graph workflows.
-* **Atomic Binary Envelopes:** Automatically handles custom bytes-envelope wrappers (`__type__ = "bytes"`) to process base64 data structures seamlessly.
-* **Automated Metadata Flattening:** Advanced dot-path key discovery dynamically flattens deeply-nested structures into clean, targetable addresses.
-* **Robust Text Scalar Unwrapping:** Built-in safeguards peel punctuation artifacts, tuples, single-item lists, and quotation marks frequently introduced by complex graph link routing.
-* **Visual Diagnostic Engine:** Node exceptions or missing field references generate readable, non-black diagnostic placeholder image streams directly in your UI for lightning-fast troubleshooting.
+This package provides ready-to-use nodes for managing images, documents, and AI-powered chat/JSON generation in ComfyUI workflows.
 
 ---
 
-## Architecture & Configuration
+## Table of Contents
 
-### API-Session Model
-All execution pathways route communication through a reusable, authenticated `ZMONGO_API_SESSION` connection client. 
-* **Default Backend URL:** `https://businessprocessapplications.com`
-* **ComfyUI-ZMongo Route Prefix:** `/comfy-zmongo`
-
-### Categorized Route Structure
-Nodes are strictly organized into predictable namespaces to streamline graph navigation:
-```text
-ZMongo/00 Auth          - Session lifecycle and endpoint initialization
-ZMongo/01 Service       - Ecosystem connectivity verification and silo inspection
-ZMongo/02 Collections   - Direct collection lifecycle operations (Sandbox management)
-ZMongo/03 Docs          - Granular document CRUD, value mutations, and dot-path queries
-ZMongo/04 Images        - Automated tensor serialization, rendering, and structural profiling
-ZMongo/99 Helpers       - Scalar evaluation, item picking, and raw JSON parsing
-
-```
+1. [Installation](#installation)  
+2. [Node Categories](#node-categories)  
+3. [Usage Examples](#usage-examples)  
+4. [Gemini & Llama Integration](#gemini--llama-integration)  
+5. [Backend & Authentication](#backend--authentication)  
+6. [Contributing](#contributing)  
+7. [License](#license)  
 
 ---
 
 ## Installation
 
-### Method 1: Via Pip (Recommended for Releases)
-
-Install the node suite directly into your active ComfyUI Python dependencies:
-
 ```bash
-pip install ComfyUI-ZMongo
-
-```
-
-### Method 2: Manual Git Setup
-
-To track raw upstream development or maintain a local link context:
-
-```bash
-cd /path/to/ComfyUI/custom_nodes
-git clone git@github.com:CentralFloridaAttorney/ComfyUI-ZMongo.git
+cd ~/ComfyUI/custom_nodes
+git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
 cd ComfyUI-ZMongo
+# Ensure your virtualenv is active
 pip install -r requirements.txt
+````
 
+Make sure the backend (`BusinessProcessApplications`) is running:
+
+```bash
+export APP_BIND_PORT=50000
+python3 backend/bpa_app.py
+```
+
+Set environment variables for Gemini and Llama models:
+
+```bash
+export LLAMA_MODEL_FILE=/home/user/resources/models/tinyllama.gguf
+export GEMINI_API_KEY=<your_key>
 ```
 
 ---
 
-## Production Node Reference
+## Node Categories
 
-### ZMongo/00 Auth
-
-| Display Name | Class | Purpose |
-| --- | --- | --- |
-| **00 API Key Session** | `ZMongoApiKeySessionNode` | Spawns a reusable authenticated HTTP connection state using your platform API token. |
-| **00 Close API Session** | `ZMongoApiCloseSessionNode` | Safely closes out and releases active requests connection pools. |
-
-### ZMongo/01 Service
-
-| Display Name | Class | Purpose |
-| --- | --- | --- |
-| **01 Health** | `ZMongoApiHealthNode` | Pings the backend service to verify API availability and health. |
-| **01 Who Am I** | `ZMongoApiWhoamiNode` | Resolves active identity traits including your isolated user username silo and database context. |
-
-### ZMongo/02 Collections
-
-| Display Name | Class | Purpose |
-| --- | --- | --- |
-| **02 List Collections** | `ZMongoApiListCollectionsNode` | Pulls an array of all sandboxed collection namespaces bound to your account. |
-| **02 Create Collection** | `ZMongoApiCreateCollectionNode` | Spins up a brand new collection bucket inside your cloud silo. |
-| **02 Delete Collection** | `ZMongoApiDeleteCollectionNode` | Destroys an isolated collection using absolute string-matching verification. |
-
-### ZMongo/03 Docs
-
-| Display Name | Class | Purpose |
-| --- | --- | --- |
-| **03 List Docs** | `ZMongoApiListDocsNode` | Returns document identifiers existing within a specified namespace. |
-| **03 Get Doc** | `ZMongoApiGetDocNode` | Retreives an entire raw JSON document structure via its object ID string. |
-| **03 Query Docs** | `ZMongoApiQueryDocsNode` | Executes structured Mongo-flavored queries with pagination, projection, and sorting. |
-| **03 Count Docs** | `ZMongoApiCountDocsNode` | Evaluates total records matching specified filter conditions without pulling raw records. |
-| **03 Create Doc** | `ZMongoApiCreateDocNode` | Commits a clean structured JSON document into your designated collection storage. |
-| **03 Update Doc** | `ZMongoApiUpdateDocNode` | Modifies an existing document using query matches or field mutations. |
-| **03 Delete Doc** | `ZMongoApiDeleteDocNode` | Evicts dynamic document configurations matching targeting query filters. |
-| **03 Get Value** | `ZMongoApiGetValueNode` | Targets and extracts a single deep property value via explicit dot-path formatting. |
-| **03 Save Value** | `ZMongoApiSaveValueNode` | Directly mutates or inserts properties deeply nested within explicit path contexts. |
-
-### ZMongo/04 Images
-
-| Display Name | Class | Purpose |
-| --- | --- | --- |
-| **04 Display Image from ZMongo** | `ZMongoDisplayImageNode` | Decodes inline data frames or falls back to backend routing to display images. |
-| **04 Easy Save Image** | `ZMongoApiEasySaveImageNode` | Encapsulates a ComfyUI tensor directly into an atomic binary envelope for transmission. |
-| **04 Debug Image Document** | `ZMongoApiDocumentImageDebugNode` | Inspects document candidate structures and validates envelope contents. |
-| **04 Image Field Candidates** | `ZMongoApiImageFieldCandidatesNode` | Evaluates field strings to score valid image mapping targets. |
-| **04 Metadata Flattened Paths** | `ZMongoApiMetadataFlattenedPathsNode` | Unfolds data trees into flat dot-notated addressing indexes. |
-
-### ZMongo/99 Helpers
-
-| Display Name | Class | Purpose |
-| --- | --- | --- |
-| **99 Select Nth Item** | `ZMongoApiSelectNthItemNode` | Isolates a specific element from streaming output list configurations safely. |
-| **99 JSON Pick** | `ZMongoApiJsonPickNode` | Utility to cleanly extract objects from stringified JSON blobs. |
+| Category       | Nodes                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **00 Auth**    | Login, Register, Verify, WhoAmI                                                                                     |
+| **01 Service** | List Collections, List Documents, Create/Update/Delete Document, Save Value                                         |
+| **03 Docs**    | Query Documents, Count Documents, Get Single Document                                                               |
+| **04 Images**  | Display Image, Save Image, Preview Image                                                                            |
+| **05 Gemini**  | Key Status, Save/Delete/Test Gemini Key, Gemini Chat, Gemini JSON, List Models, Count Tokens, Chat & Save to ZMongo |
+| **06 Llama**   | Llama Chat, Llama JSON, Llama Enum, Citation Verification                                                           |
 
 ---
 
-## Core Graph Routing Blueprint Examples
+## Usage Examples
 
-* **Establish Session and Profile Validation:**
-```text
-[00 API Key Session] -> [01 Who Am I]
+### ZMongo Nodes
 
+* **List Documents**
+
+```json
+{
+  "collection": "images",
+  "limit": 10,
+  "skip": 0
+}
 ```
 
+* **Save Value to Document**
 
-* **Iterate Sandboxed Storage Contexts:**
-```text
-[02 List Collections] -> [99 Select Nth Item] -> [03 List Docs] -> [99 Select Nth Item]
-
+```json
+{
+  "collection": "images",
+  "document_id": "69fbd588309e0541c53fc0c1",
+  "field_path": "metadata.title",
+  "value": "My Image Title",
+  "upsert_if_missing": true
+}
 ```
 
-
-* **Persistent Media Writing Flow Rules:**
-```text
-[04 Easy Save Image]
-* Providing a Document ID  -> Overwrites/Mutates that explicit index target.
-* Leaving Document ID Empty -> Instantiates a fresh base layout file automatically.
+* **Get Image Preview**
 
 ```
-
-
-* **Deep Schema Tree Inspection:**
-```text
-[04 Metadata Flattened Paths]
-* Set metadata_field_path to ""                 -> Flattens complete target record.
-* Set metadata_field_path to "metadata"         -> Limits parsing to base prompt structures.
-* Set metadata_field_path to "image_data.metadata" -> Targets image generation tags exclusively.
-
+collection: images
+document_id: 69fbd588309e0541c53fc0c1
+field_path: image_data
+variant: preview
 ```
 
+---
 
+### Llama Nodes
+
+* **Llama Chat Node**
+
+  * Uses `/llama/api/chat` route
+  * Input: `prompt`, optional `max_tokens`
+  * Output: text + parsed JSON
+
+* **Citation Verification Node**
+
+  * Input: `legal_doc_path`, `cited_doc_paths`
+  * Uses structured JSON output schema
+  * Output: `is_quoted_correctly`, `misrepresentation_summary`, `overall_accuracy`, optional `correct_ruling`
+
+---
+
+### Gemini Nodes
+
+* **Save Gemini API Key**
+
+  * Saves key to `auth.users.integrations.gemini.api_key` (masked in UI)
+* **Test Gemini Key**
+
+  * Validates connectivity
+* **Gemini Chat**
+
+  * `/gemini/api/chat`
+  * Sends prompt and returns response text
+* **Gemini JSON**
+
+  * `/gemini/api/json`
+  * Returns structured JSON response
+* **List Models**
+
+  * Returns available Gemini model names
+* **Count Tokens**
+
+  * Returns estimated token usage for a prompt
+* **Chat & Save to ZMongo**
+
+  * Sends prompt, stores result in ZMongo collection
+
+---
+
+## Backend & Authentication
+
+* **Authentication**
+
+  * Supports `ZAI_API_KEY`, `Bearer JWT`, and browser session
+  * All keys stored under `auth.users`
+  * Tokens and usage limits enforced per user
+
+* **Storage**
+
+  * Hybrid MongoDB + Cloudflare R2 for images/assets
+  * Tracks per-user usage in `/user/manager/settings` page
+
+* **Routes**
+
+  * `/comfy-zmongo/api/*` — ZMongo operations
+  * `/llama/api/*` — Llama nodes
+  * `/gemini/api/*` — Gemini nodes
+
+---
+
+## Settings Page Integration
+
+* API keys for external AI models are managed under **API Management**
+* Gemini key stored securely (cannot be read back in plaintext)
+* Llama nodes use backend model path defined in `.env`
+
+Example HTML snippet in `settings.html`:
+
+```html
+<input id="gemini_api_key" type="password" placeholder="Paste Gemini API key"/>
+<button onclick="saveGeminiApiKey()">Save Gemini Key</button>
+<button onclick="deleteGeminiApiKey()">Delete Gemini Key</button>
+```
+
+---
+
+## Contributing
+
+* Fork the repo and submit PRs for bug fixes or new nodes.
+* Follow node naming convention: `ZMongo/XX Category`
+* Add usage examples for any new node in README.
 
 ---
 
 ## License
 
-Distributed under the **Apache 2.0 License**. See accompanying `LICENSE` file for full authorization parameters.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+```
+
+This fully integrates:
+
+- Gemini node panel.
+- Llama & Gemini route support.
+- ComfyZMongo connection conventions.
+- Usage examples ready for ComfyUI workflows.
+```
