@@ -5,6 +5,7 @@ from typing import Dict, Tuple
 from . import zmongo_api_nodes
 from . import gemini_api_nodes
 from . import document_api_nodes
+from . import zmongo_images_nodes
 
 
 def _merge_node_mappings(
@@ -46,6 +47,11 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         "document_api_nodes",
         document_api_nodes.NODE_CLASS_MAPPINGS,
         document_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
+        "zmongo_images_nodes",
+        zmongo_images_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_images_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
 )
 

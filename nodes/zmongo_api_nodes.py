@@ -2354,8 +2354,286 @@ class ZMongoDisplayImageNode(AlwaysDirtyMixin):
         except Exception as exc:
             route_errors.append(str(exc))
 
+
         return return_failure()
 
+
+class ZMongoApiBrowseCollectionImagesNode(AlwaysDirtyMixin):
+    """
+    Browse a user's image documents from any ZMongo collection.
+
+    Use this node with ComfyUI's built-in Preview Image node:
+      - image_batch shows multiple images from the selected collection/page.
+      - selected_image shows one image chosen by selected_index.
+
+    It does not require a new backend route. It uses the existing API session:
+      1. list_docs(collection, query, limit, skip)
+      2. decode each document's image_data locally when available
+      3. fall back to the backend /api/image/<collection>/<document_id> route
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "session": ("ZMONGO_API_SESSION",),
+                "collection_name": ("STRING", {"default": "images"}),
+                "field_path": ("STRING", {"default": "image_data"}),
+                "query_json": ("STRING", {"default": "{}", "multiline": True}),
+                "limit": ("INT", {"default": 12, "min": 1, "max": 64}),
+                "skip": ("INT", {"default": 0, "min": 0, "max": 1000000}),
+                "selected_index": ("INT", {"default": 0, "min": 0, "max": 1000000}),
+                "thumbnail_width": ("INT", {"default": 512, "min": 64, "max": 4096}),
+                "thumbnail_height": ("INT", {"default": 512, "min": 64, "max": 4096}),
+            },
+            "optional": {
+                "master_key_hex": ("STRING", {"default": "", "multiline": False}),
+                "cache": ("BOOLEAN", {"default": False}),
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "IMAGE", "STRING", "*", "STRING", "STRING", "INT", "STRING")
+    RETURN_NAMES = (
+        "image_batch",
+        "selected_image",
+        "json",
+        "document_ids",
+        "indexed_document_ids",
+        "selected_document_id",
+        "count",
+        "status",
+    )
+    OUTPUT_IS_LIST = (False, False, False, True, False, False, False, False)
+    FUNCTION = "browse_images"
+    CATEGORY = "ZMongo/04 Images"
+
+    @staticmethod
+    def _clean_scalar(value: Any) -> str:
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else ""
+        if value is None:
+            return ""
+        text = str(value).strip()
+        for _ in range(4):
+            before = text
+            if text.startswith("[") and text.endswith("]"):
+                text = text[1:-1].strip()
+            if text.startswith("(") and text.endswith(")"):
+                text = text[1:-1].strip()
+            if text.endswith(","):
+                text = text[:-1].strip()
+            if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+                text = text[1:-1].strip()
+            if text == before:
+                break
+        return text.strip()
+
+    @staticmethod
+    def _fit_pil_to_canvas(image: Image.Image, width: int, height: int) -> Image.Image:
+        """Letterbox an image so every image in the batch has the same shape."""
+        canvas_width = max(1, int(width or 512))
+        canvas_height = max(1, int(height or 512))
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        image.thumbnail((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGB", (canvas_width, canvas_height), "black")
+        x = (canvas_width - image.width) // 2
+        y = (canvas_height - image.height) // 2
+        canvas.paste(image, (x, y))
+        return canvas
+
+    @classmethod
+    def _diagnostic_tensor(cls, message: str, width: int, height: int) -> torch.Tensor:
+        import textwrap
+        from PIL import ImageDraw
+
+        canvas_width = max(256, int(width or 512))
+        canvas_height = max(256, int(height or 512))
+        image = Image.new("RGB", (canvas_width, canvas_height), "white")
+        draw = ImageDraw.Draw(image)
+        y = 24
+        for line in textwrap.wrap(str(message), width=max(30, canvas_width // 9))[:18]:
+            draw.text((24, y), line, fill="black")
+            y += 20
+        return _pil_to_comfy_image(image)
+
+    def _load_image_from_document_or_route(
+        self,
+        *,
+        session,
+        collection_name: str,
+        document: dict[str, Any],
+        document_id: str,
+        field_path: str,
+        master_key_hex: str,
+    ) -> tuple[Image.Image | None, str]:
+        errors: list[str] = []
+
+        for candidate_field_path in _image_field_candidates(field_path, "image_data"):
+            try:
+                image_value = safe_get_by_path(document, candidate_field_path)
+                image_bytes = _decode_image_bytes_from_value(image_value)
+                image = Image.open(io.BytesIO(image_bytes))
+                image.load()
+                return image, f"document_json:{candidate_field_path}"
+            except Exception as exc:
+                errors.append(f"{candidate_field_path}: {exc}")
+
+        try:
+            route_field_path = _route_image_field_path(field_path, "image_data")
+            image_bytes, source = session.fetch_image_field(
+                collection=collection_name,
+                document_id=document_id,
+                field_path=route_field_path,
+                master_key_hex=master_key_hex,
+            )
+            image = Image.open(io.BytesIO(image_bytes))
+            image.load()
+            return image, source
+        except Exception as exc:
+            errors.append(f"route: {exc}")
+
+        return None, " | ".join(errors)
+
+    def browse_images(
+        self,
+        session,
+        collection_name: str,
+        field_path: str,
+        query_json: str,
+        limit: int,
+        skip: int,
+        selected_index: int,
+        thumbnail_width: int,
+        thumbnail_height: int,
+        master_key_hex: str = "",
+        cache: bool = False,
+        refresh_token: str = "",
+    ):
+        cleaned_collection = self._clean_scalar(collection_name) or "images"
+        cleaned_field_path = _clean_field_path(self._clean_scalar(field_path), "image_data")
+        width = max(64, int(thumbnail_width or 512))
+        height = max(64, int(thumbnail_height or 512))
+        refresh = _dirty_token("browse_collection_images", cleaned_collection, skip, limit, refresh_token)
+
+        def failure(message: str, *, data: dict[str, Any] | None = None):
+            payload = _error_payload(message, data=data or {})
+            payload["data"]["refresh"] = refresh
+            diagnostic = self._diagnostic_tensor(message, width, height)
+            return (diagnostic, diagnostic, _json_text(payload), [], _indexed_list_text([]), "", 0, message)
+
+        if session is None:
+            return failure("No API session provided. Connect 00 API Key Session first.")
+
+        try:
+            query = _parse_json_object(query_json, "query_json")
+        except Exception as exc:
+            return failure(f"query_json must be a JSON object: {exc}")
+
+        try:
+            payload = session.list_docs(
+                collection=cleaned_collection,
+                limit=max(1, min(int(limit or 12), 64)),
+                skip=max(0, int(skip or 0)),
+                query=query,
+            )
+            documents = _extract_documents(payload)
+        except Exception as exc:
+            return failure(f"Failed to list image documents: {exc}")
+
+        if not documents:
+            return failure(
+                f"No documents returned from collection {cleaned_collection!r}.",
+                data={"collection_name": cleaned_collection, "query": query, "limit": limit, "skip": skip},
+            )
+
+        loaded_tensors: list[torch.Tensor] = []
+        loaded_ids: list[str] = []
+        loaded_sources: list[dict[str, Any]] = []
+        failed_items: list[dict[str, Any]] = []
+
+        for item_index, document in enumerate(documents):
+            document_id = str(document.get("_id") or document.get("id") or document.get("document_id") or "").strip()
+            if not document_id:
+                failed_items.append({"index": item_index, "error": "Document had no _id/id/document_id."})
+                continue
+
+            image, source = self._load_image_from_document_or_route(
+                session=session,
+                collection_name=cleaned_collection,
+                document=document,
+                document_id=document_id,
+                field_path=cleaned_field_path,
+                master_key_hex=(master_key_hex or "").strip(),
+            )
+            if image is None:
+                failed_items.append({"index": item_index, "document_id": document_id, "error": source})
+                continue
+
+            fitted = self._fit_pil_to_canvas(image, width, height)
+            loaded_tensors.append(_pil_to_comfy_image(fitted))
+            loaded_ids.append(document_id)
+            loaded_sources.append(
+                {
+                    "index": item_index,
+                    "document_id": document_id,
+                    "source": source,
+                    "original_width": image.width,
+                    "original_height": image.height,
+                    "thumbnail_width": width,
+                    "thumbnail_height": height,
+                }
+            )
+
+        if not loaded_tensors:
+            return failure(
+                "Documents were found, but none contained loadable images.",
+                data={
+                    "collection_name": cleaned_collection,
+                    "field_path": cleaned_field_path,
+                    "failed_items": failed_items[:20],
+                    "checks": [
+                        "Confirm the collection contains image documents.",
+                        "Use field_path image_data, not image_data.data, for normal ZMongo byte envelopes.",
+                        "Run 04 Debug Image Document on one listed document.",
+                    ],
+                },
+            )
+
+        image_batch = torch.cat(loaded_tensors, dim=0)
+        safe_selected_index = max(0, min(int(selected_index or 0), len(loaded_tensors) - 1))
+        selected_image = loaded_tensors[safe_selected_index]
+        selected_document_id = loaded_ids[safe_selected_index]
+
+        result_payload = _success_payload(
+            "Loaded image browser page.",
+            {
+                "collection_name": cleaned_collection,
+                "field_path": cleaned_field_path,
+                "query": query,
+                "limit": int(limit),
+                "skip": int(skip),
+                "count": len(loaded_tensors),
+                "selected_index": safe_selected_index,
+                "selected_document_id": selected_document_id,
+                "document_ids": loaded_ids,
+                "loaded_sources": loaded_sources,
+                "failed_items": failed_items[:20],
+                "cache": bool(cache),
+                "refresh": refresh,
+            },
+        )
+        status = f"Loaded {len(loaded_tensors)} image(s) from {cleaned_collection}; selected {safe_selected_index}: {selected_document_id}"
+        return (
+            image_batch,
+            selected_image,
+            _json_text(result_payload),
+            _as_comfy_list(loaded_ids),
+            _indexed_list_text(loaded_ids),
+            selected_document_id,
+            len(loaded_tensors),
+            status,
+        )
 
 
 class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
@@ -3308,6 +3586,7 @@ NODE_CLASS_MAPPINGS = {
 
     # 04 Images
     "ZMongoDisplayImageNode": ZMongoDisplayImageNode,
+    "ZMongoApiBrowseCollectionImagesNode": ZMongoApiBrowseCollectionImagesNode,
     "ZMongoApiEasySaveImageNode": ZMongoApiEasySaveImageNode,
     "ZMongoApiDocumentImageDebugNode": ZMongoApiDocumentImageDebugNode,
     "ZMongoApiImageFieldCandidatesNode": ZMongoApiImageFieldCandidatesNode,
@@ -3346,6 +3625,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 
     # 04 Images
     "ZMongoDisplayImageNode": "04 Display Image from ZMongo",
+    "ZMongoApiBrowseCollectionImagesNode": "04 Browse Collection Images",
     "ZMongoApiEasySaveImageNode": "04 Easy Save Image",
     "ZMongoApiDocumentImageDebugNode": "04 Debug Image Document",
     "ZMongoApiImageFieldCandidatesNode": "04 Image Field Candidates",
