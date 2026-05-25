@@ -3,102 +3,20 @@ from __future__ import annotations
 import base64
 import io
 import json
-import os
 import time
-import uuid
-from typing import Any, Dict, List, Optional, Tuple
-
-import numpy as np
+from typing import Any, List, Optional
 import torch
 from PIL import Image
 
-# Reuse the session, dirty tokens, and layout schemas established in your codebase
-from .zmongo_api_nodes import (
-    ZMongoApiSession,
-    AlwaysDirtyMixin,
-    _dirty_token,
-    _json_text,
-    _error_payload,
-    _success_payload,
-    _ensure_payload_dict,
-    _clean_field_path,
-    _pil_to_comfy_image,
-)
+from .generic_helpers import AlwaysDirtyMixin, _clean_scalar_string, _dirty_token, _json_text, _error_payload, \
+    _comfy_image_to_png_bytes, _build_binary_envelope, _extract_tensor_recursively, _success_payload, \
+    _pil_to_comfy_image
+
 
 # -----------------------------------------------------------------------------
 # Image Sequence Engine Helpers
 # -----------------------------------------------------------------------------
 
-
-def _comfy_image_to_png_bytes(frame_tensor: torch.Tensor) -> bytes:
-    """Converts a single frame tensor [H, W, C] to PNG byte data."""
-    tensor = frame_tensor.detach().cpu().clamp(0.0, 1.0).numpy()
-    np_image = (tensor * 255.0).round().astype(np.uint8)
-    pil_image = Image.fromarray(np_image, mode="RGB")
-    buffer = io.BytesIO()
-    pil_image.save(buffer, format="PNG")
-    return buffer.getvalue()
-
-
-def _build_binary_envelope(image_bytes: bytes, filename: str) -> dict[str, Any]:
-    """Generates an atomic binary payload envelope compliant with your database storage schema."""
-    return {
-        "__type__": "bytes",
-        "encoding": "base64",
-        "size_bytes": len(image_bytes),
-        "data": base64.b64encode(image_bytes).decode("ascii"),
-        "filename": filename,
-        "content_type": "image/png",
-        "storage_mode": "inline_zmongo_binary_envelope",
-        "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }
-
-
-def _clean_scalar_string(value: Any) -> str:
-    if isinstance(value, (list, tuple)) and value:
-        value = value[0]
-    if value is None:
-        return ""
-    return str(value).strip().strip("'\"[]()")
-
-
-def _extract_tensor_recursively(obj: Any) -> Optional[torch.Tensor]:
-    """
-    Aggressively digs through any arbitrary ComfyUI wrapper object,
-    list, or dictionary to find the underlying torch.Tensor batch.
-    """
-    if isinstance(obj, torch.Tensor):
-        return obj
-
-    if isinstance(obj, dict):
-        for key in ("images", "image"):
-            if key in obj:
-                res = _extract_tensor_recursively(obj[key])
-                if res is not None:
-                    return res
-        # Fallback check for any tensor in the dict values
-        for val in obj.values():
-            res = _extract_tensor_recursively(val)
-            if res is not None:
-                return res
-
-    if isinstance(obj, (list, tuple)):
-        for item in obj:
-            res = _extract_tensor_recursively(item)
-            if res is not None:
-                return res
-
-    # Inspect arbitrary object attributes (for node/class instances)
-    for attr in ("images", "image", "data"):
-        if hasattr(obj, attr):
-            try:
-                res = _extract_tensor_recursively(getattr(obj, attr))
-                if res is not None:
-                    return res
-            except Exception:
-                pass
-
-    return None
 
 
 # -----------------------------------------------------------------------------

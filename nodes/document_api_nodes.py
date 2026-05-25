@@ -1,15 +1,20 @@
 from __future__ import annotations
 
-import base64
-import json
 import mimetypes
 import os
-import re
-import time
-import uuid
 import urllib.parse
 from pathlib import Path
 from typing import Any, Optional
+from .generic_helpers import AlwaysDirtyMixin, SELECTABLE_RETURN_TYPES, SELECTABLE_RETURN_NAMES, \
+    SELECTABLE_OUTPUT_IS_LIST, _session_request, _dirty_token, _json_text, _extract_data, _get_document_browser_root, \
+    _resolve_document_file_path, ZMONGO_FILE_PATH, ZMONGO_FILENAME, ZMONGO_DOCUMENT_ID, _clean_scalar, \
+    _coerce_file_path_link, _ensure_payload_dict, _as_comfy_list, _selectable_tail, _parse_json_object, _extract_doc_id, \
+    _raise_if_failed, _extract_documents, _extract_doc_ids_from_documents, _extract_filenames_from_documents, \
+    _coerce_document_id, _prefer_link_value, _extract_document, _extract_text, _dedupe_strings, _flatten_document_paths, \
+    _indexed_list_text, _extract_field_paths, _coerce_field_path, _safe_get_by_path, _value_items, \
+    _is_immutable_document_field_path, _blocked_immutable_field_payload, _parse_any_json, _parse_json_list, \
+    _error_payload, ZMONGO_FIELD_PATH, _strip_index_prefix, _coerce_filename_link, _coerce_text_link, \
+    _coerce_document_id_link, _document_summary, ZMONGO_TEXT, _read_file_as_base64, _list_document_files
 
 DEFAULT_DOCUMENT_PREFIX = os.getenv("ZMONGO_DOCUMENT_API_PREFIX", "/documents").strip().rstrip("/") or "/documents"
 DEFAULT_MAX_UPLOAD_BYTES = int(os.getenv("ZMONGO_DOCUMENT_NODE_MAX_UPLOAD_BYTES", str(64 * 1024 * 1024)))
@@ -18,644 +23,6 @@ try:
     import folder_paths  # ComfyUI runtime helper for input/output/temp directories
 except Exception:  # Allows py_compile outside ComfyUI
     folder_paths = None
-
-DOCUMENT_FILE_EXTENSIONS = tuple(
-    ext.strip().lower()
-    for ext in os.getenv("ZMONGO_DOCUMENT_NODE_EXTENSIONS", ".pdf,.txt,.md,.docx,.rtf,.csv,.json").split(",")
-    if ext.strip()
-)
-
-
-def _get_comfy_input_directory() -> Path:
-    if folder_paths is not None:
-        get_input_directory = getattr(folder_paths, "get_input_directory", None)
-        if callable(get_input_directory):
-            return Path(get_input_directory()).expanduser().resolve()
-        input_directory = getattr(folder_paths, "input_directory", None)
-        if input_directory:
-            return Path(input_directory).expanduser().resolve()
-    return (Path.cwd() / "input").expanduser().resolve()
-
-
-def _get_default_documents_directory() -> Path:
-    configured = os.getenv("ZMONGO_DOCUMENT_BROWSER_ROOT", "").strip()
-    if configured:
-        return Path(os.path.expanduser(configured)).resolve()
-    documents_dir = (Path.home() / "Documents").expanduser().resolve()
-    if documents_dir.exists() and documents_dir.is_dir():
-        return documents_dir
-    return _get_comfy_input_directory()
-
-
-def _get_document_browser_root(root_mode: str = "Documents", custom_root: str = "") -> Path:
-    if custom_root and str(custom_root).strip():
-        return Path(os.path.expanduser(str(custom_root).strip())).resolve()
-    mode = str(root_mode or "Documents").strip().lower()
-    if mode in {"documents", "~/documents", "home_documents"}:
-        return _get_default_documents_directory()
-    if mode in {"comfy input", "comfy_input", "input"}:
-        return _get_comfy_input_directory()
-    return _get_default_documents_directory()
-
-
-def _list_document_files(root_mode: str = "Documents", custom_root: str = "") -> list[str]:
-    """
-    Return a stable dropdown list for ComfyUI.
-
-    The sentinel is always included so older workflows that saved
-    "__NO_DOCUMENT_FILES_FOUND__" remain valid after files later appear.
-    """
-    sentinel = "__NO_DOCUMENT_FILES_FOUND__"
-    base = _get_document_browser_root(root_mode=root_mode, custom_root=custom_root)
-    if not base.exists() or not base.is_dir():
-        return [sentinel]
-
-    files: list[str] = [sentinel]
-    for candidate in sorted(base.rglob("*")):
-        if not candidate.is_file():
-            continue
-        if DOCUMENT_FILE_EXTENSIONS and candidate.suffix.lower() not in DOCUMENT_FILE_EXTENSIONS:
-            continue
-        try:
-            files.append(candidate.relative_to(base).as_posix())
-        except ValueError:
-            files.append(candidate.name)
-
-    # Preserve order and remove duplicates.
-    seen: set[str] = set()
-    cleaned: list[str] = []
-    for item in files:
-        if item not in seen:
-            seen.add(item)
-            cleaned.append(item)
-    return cleaned
-
-
-def _dirty_token(*parts: Any) -> str:
-    prefix = ":".join(str(part) for part in parts if part is not None)
-    return f"{prefix}:{time.time_ns()}:{uuid.uuid4().hex}"
-
-
-def _json_text(value: Any) -> str:
-    return json.dumps(value, indent=2, ensure_ascii=False, default=str)
-
-
-def _clean_prefix(value: str, default: str = DEFAULT_DOCUMENT_PREFIX) -> str:
-    cleaned = (value or default).strip().rstrip("/")
-    if not cleaned.startswith("/"):
-        cleaned = f"/{cleaned}"
-    return cleaned or default
-
-
-def _clean_scalar(value: Any) -> str:
-    if isinstance(value, (list, tuple)):
-        if not value:
-            return ""
-        value = value[0]
-    if value is None:
-        return ""
-    text = str(value).strip()
-    for _ in range(6):
-        before = text
-        if text.startswith("[") and text.endswith("]"):
-            text = text[1:-1].strip()
-        if text.startswith("(") and text.endswith(")"):
-            text = text[1:-1].strip()
-        if text.endswith(","):
-            text = text[:-1].strip()
-        if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
-            text = text[1:-1].strip()
-        if text == before:
-            break
-    return text.strip()
-
-
-def _strip_index_prefix(value: Any) -> str:
-    text = _clean_scalar(value)
-    match = re.match(r"^\s*\d+\s*:\s*(.+?)\s*$", text, flags=re.DOTALL)
-    return match.group(1).strip() if match else text
-
-
-def _coerce_document_id(value: Any) -> str:
-    if isinstance(value, dict):
-        for key in ("_id", "document_id", "system_id", "id", "uuid", "inserted_id"):
-            item = value.get(key)
-            if item:
-                return _clean_scalar(item)
-        return ""
-    if isinstance(value, (list, tuple)):
-        return _coerce_document_id(value[0]) if value else ""
-    text = _strip_index_prefix(value)
-    if not text:
-        return ""
-    try:
-        parsed = json.loads(text)
-    except Exception:
-        return _clean_scalar(text)
-    return _coerce_document_id(parsed) if isinstance(parsed, (dict, list, tuple)) else _clean_scalar(parsed)
-
-
-def _coerce_field_path(value: Any) -> str:
-    text = _strip_index_prefix(value)
-    if not text:
-        return ""
-    try:
-        parsed = json.loads(text)
-        if isinstance(parsed, str):
-            return parsed.strip().strip(".")
-    except Exception:
-        pass
-    return text.strip().strip(".")
-
-
-IMMUTABLE_DOCUMENT_FIELD_PATHS = {
-    "_id",
-    "id",
-    "document_id",
-    "system_id",
-    "uuid",
-    "owner",
-    "username",
-    "created_by",
-    "created_at",
-}
-
-
-def _is_immutable_document_field_path(field_path: Any) -> bool:
-    """Return True for fields that must not be updated through Save Value."""
-    path = _coerce_field_path(field_path)
-    if not path:
-        return False
-    root = path.split(".", 1)[0].strip()
-    return path in IMMUTABLE_DOCUMENT_FIELD_PATHS or root == "_id"
-
-
-def _blocked_immutable_field_payload(*, document_id: str, field_path: str, refresh: str) -> dict[str, Any]:
-    return _ensure_payload_dict(
-        {
-            "success": False,
-            "message": (
-                f"Save skipped. The field path {field_path!r} is immutable/protected and cannot be updated. "
-                "Select a writable field path such as metadata.note, metadata.review_status, title, status, or text."
-            ),
-            "data": {
-                "document_id": document_id,
-                "field_path": field_path,
-                "blocked": True,
-                "blocked_reason": "immutable_or_protected_field",
-                "safe_examples": [
-                    "metadata.note",
-                    "metadata.review_status",
-                    "metadata.workflow_review",
-                    "title",
-                    "status",
-                    "text",
-                ],
-                "refresh": refresh,
-            },
-            "error": {
-                "type": "ImmutableFieldPath",
-                "msg": f"Refusing to update immutable/protected field path {field_path!r}.",
-            },
-            "status_code": 400,
-        }
-    )
-
-
-def _looks_like_document_id(value: Any) -> bool:
-    text = _clean_scalar(value)
-    if not text:
-        return False
-    # Mongo ObjectId-shaped strings used by this system are 24 hex chars.
-    if re.fullmatch(r"[0-9a-fA-F]{24}", text):
-        return True
-    # Accept UUIDs as document ids for future storage backends.
-    if re.fullmatch(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-        text,
-    ):
-        return True
-    return False
-
-
-def _coerce_document_id_link(value: Any) -> str:
-    """
-    Return a document id only when the value is actually an id or a document object.
-
-    This intentionally returns an empty string for field-path values such as
-    "_id", "filename", "text", or "metadata.review_status". That prevents a
-    field path selected from Document Field Paths from being accidentally wired
-    into a document_id input.
-    """
-    if isinstance(value, dict):
-        return _coerce_document_id(value)
-
-    if isinstance(value, (list, tuple)):
-        return _coerce_document_id_link(value[0]) if value else ""
-
-    text = _strip_index_prefix(value)
-    if not text:
-        return ""
-
-    try:
-        parsed = json.loads(text)
-    except Exception:
-        return text if _looks_like_document_id(text) else ""
-
-    if isinstance(parsed, dict):
-        return _coerce_document_id(parsed)
-    if isinstance(parsed, list):
-        return _coerce_document_id_link(parsed[0]) if parsed else ""
-    if isinstance(parsed, str):
-        return parsed.strip() if _looks_like_document_id(parsed) else ""
-
-    return ""
-
-
-def _coerce_file_path_link(value: Any) -> str:
-    text = _strip_index_prefix(value)
-    if not text:
-        return ""
-    # Do not treat field-path keys as file paths.
-    if text in {"_id", "id", "document_id", "system_id", "filename", "text"}:
-        return ""
-    expanded = os.path.expanduser(text)
-    if "/" in expanded or "\\" in expanded:
-        return expanded
-    suffix = Path(expanded).suffix.lower()
-    if suffix in DOCUMENT_FILE_EXTENSIONS:
-        return expanded
-    return ""
-
-
-def _coerce_filename_link(value: Any) -> str:
-    text = _strip_index_prefix(value)
-    if not text:
-        return ""
-    if "/" in text or "\\" in text:
-        return Path(text).name
-    suffix = Path(text).suffix.lower()
-    if suffix in DOCUMENT_FILE_EXTENSIONS:
-        return text
-    return ""
-
-
-def _coerce_text_link(value: Any) -> str:
-    text = _strip_index_prefix(value)
-    if not text:
-        return ""
-    if _coerce_document_id_link(text):
-        return ""
-    file_path = _coerce_file_path_link(text)
-    if file_path:
-        return ""
-    # Field-paths should not become text links.
-    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)*", text):
-        return ""
-    return text
-
-
-def _parse_json_object(value: Any, field_name: str = "json") -> dict[str, Any]:
-    text = _clean_scalar(value)
-    if not text:
-        return {}
-    parsed = json.loads(text)
-    if not isinstance(parsed, dict):
-        raise ValueError(f"{field_name} must be a JSON object.")
-    return parsed
-
-
-def _parse_json_list(value: Any, field_name: str = "json") -> list[Any]:
-    """
-    Parse a JSON list from a ComfyUI widget/link value.
-
-    This is intentionally tolerant for workflow UI fields:
-      - sort_json falls back to [["updated_at", -1]] when malformed.
-      - tags_json accepts JSON lists, quoted comma fragments, and bare comma lists.
-    """
-    text = _strip_index_prefix(value)
-    if not text:
-        return []
-
-    def default_for_field() -> list[Any]:
-        if field_name == "sort_json":
-            return [["updated_at", -1]]
-        return []
-
-    def parse_tags_fragment(fragment: str) -> list[str]:
-        fragment = _strip_index_prefix(fragment).strip()
-        if not fragment:
-            return []
-
-        candidates = [fragment]
-        if not fragment.startswith("["):
-            candidates.append("[" + fragment + "]")
-
-        double_quote = chr(34)
-        single_quote = chr(39)
-        if not fragment.startswith((double_quote, single_quote, "[")) and (double_quote in fragment or single_quote in fragment):
-            candidates.append("[" + double_quote + fragment + double_quote + "]")
-
-        for candidate in candidates:
-            try:
-                parsed_candidate = json.loads(candidate)
-                if isinstance(parsed_candidate, list):
-                    return [str(item).strip() for item in parsed_candidate if str(item).strip()]
-                if isinstance(parsed_candidate, str) and parsed_candidate.strip():
-                    return [parsed_candidate.strip()]
-            except Exception:
-                continue
-
-        if "," in fragment:
-            cleaned = []
-            for part in fragment.split(","):
-                item = part.strip().strip(double_quote).strip(single_quote).strip()
-                if item:
-                    cleaned.append(item)
-            return cleaned
-
-        item = fragment.strip().strip(double_quote).strip(single_quote).strip()
-        return [item] if item else []
-
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
-        parsed = None
-
-        if first_line and first_line != text:
-            try:
-                parsed = json.loads(_strip_index_prefix(first_line))
-            except Exception:
-                parsed = None
-
-        if parsed is None:
-            if field_name == "tags_json":
-                return parse_tags_fragment(text)
-            return default_for_field()
-
-    if not isinstance(parsed, list):
-        if field_name == "tags_json" and isinstance(parsed, str):
-            return parse_tags_fragment(parsed)
-        return default_for_field()
-
-    return parsed
-
-
-def _parse_any_json(value: Any, parse_json: bool = True) -> Any:
-    if not parse_json:
-        return _clean_scalar(value)
-    text = _clean_scalar(value)
-    if not text:
-        return ""
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return text
-
-
-def _ensure_payload_dict(payload: Any) -> dict[str, Any]:
-    if isinstance(payload, dict):
-        result = dict(payload)
-    else:
-        result = {
-            "success": False,
-            "message": "Payload was not a JSON object.",
-            "data": payload,
-            "error": {"msg": f"Unexpected payload type: {type(payload).__name__}"},
-            "status_code": 0,
-        }
-    result.setdefault("success", False)
-    result.setdefault("message", "OK" if result.get("success") else "")
-    result.setdefault("data", {})
-    result.setdefault("error", None)
-    result.setdefault("status_code", 0)
-    return result
-
-
-def _error_payload(message: str, *, data: Optional[dict[str, Any]] = None, status_code: int = 0) -> dict[str, Any]:
-    return _ensure_payload_dict({"success": False, "message": message, "data": data or {}, "error": {"msg": message}, "status_code": status_code})
-
-
-def _extract_data(payload: dict[str, Any]) -> dict[str, Any]:
-    data = payload.get("data")
-    return data if isinstance(data, dict) else {}
-
-
-def _extract_documents(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    data = payload.get("data", {}) if isinstance(payload, dict) else {}
-    if isinstance(data, dict):
-        documents = data.get("documents")
-        if isinstance(documents, list):
-            return [item for item in documents if isinstance(item, dict)]
-        document = data.get("document")
-        if isinstance(document, dict):
-            return [document]
-        if isinstance(data.get("results"), list):
-            return [item for item in data["results"] if isinstance(item, dict)]
-        if "_id" in data or "document_id" in data or "system_id" in data:
-            return [data]
-    if isinstance(data, list):
-        return [item for item in data if isinstance(item, dict)]
-    return []
-
-
-def _extract_document(payload: dict[str, Any]) -> dict[str, Any]:
-    docs = _extract_documents(payload)
-    return docs[0] if docs else {}
-
-
-def _extract_doc_id(payload: dict[str, Any]) -> str:
-    data = _extract_data(payload)
-    for key in ("document_id", "inserted_id", "_id", "id", "system_id", "uuid"):
-        value = data.get(key)
-        if value:
-            return _coerce_document_id(value)
-    return _coerce_document_id(_extract_document(payload))
-
-
-def _dedupe_strings(values: Any) -> list[str]:
-    cleaned: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        if value is None:
-            continue
-        text = str(value).strip()
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        cleaned.append(text)
-    return cleaned
-
-
-def _extract_doc_ids_from_documents(docs: list[dict[str, Any]]) -> list[str]:
-    return _dedupe_strings(_coerce_document_id(doc) for doc in docs)
-
-
-def _extract_filenames_from_documents(docs: list[dict[str, Any]]) -> list[str]:
-    names: list[str] = []
-    for doc in docs:
-        for key in ("filename", "original_name", "title"):
-            value = doc.get(key)
-            if value:
-                names.append(str(value))
-                break
-    return _dedupe_strings(names)
-
-
-def _safe_get_by_path(obj: Any, path: str, default: Any = None) -> Any:
-    if not path:
-        return obj
-    current = obj
-    for part in path.split("."):
-        if part == "":
-            continue
-        if isinstance(current, dict):
-            if part in current:
-                current = current[part]
-            else:
-                return default
-        elif isinstance(current, list) and part.isdigit():
-            index = int(part)
-            if 0 <= index < len(current):
-                current = current[index]
-            else:
-                return default
-        else:
-            return default
-    return current
-
-
-def _extract_text(payload: dict[str, Any]) -> str:
-    data = _extract_data(payload)
-    if "text" in data:
-        return str(data.get("text") or "")
-    doc = _extract_document(payload)
-    if "text" in doc:
-        return str(doc.get("text") or "")
-    return ""
-
-
-def _extract_field_paths(payload: dict[str, Any]) -> list[str]:
-    data = _extract_data(payload)
-    for key in ("field_paths", "paths"):
-        paths = data.get(key)
-        if isinstance(paths, list):
-            return _dedupe_strings(str(item) for item in paths if str(item).strip())
-    return []
-
-
-def _indexed_list_text(values: list[Any]) -> str:
-    return _json_text([f"{index}: {value}" for index, value in enumerate(values)])
-
-
-def _as_comfy_list(values: Any) -> list[Any]:
-    if values is None:
-        return []
-    if isinstance(values, list):
-        return values
-    if isinstance(values, tuple):
-        return list(values)
-    return [values]
-
-
-def _value_items(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return _dedupe_strings(_json_text(item) if isinstance(item, (dict, list, tuple)) else str(item) for item in value)
-    if isinstance(value, tuple):
-        return _value_items(list(value))
-    if isinstance(value, dict):
-        return [_json_text(value)]
-    return _dedupe_strings([str(value)])
-
-
-def _selectable_tail(items: list[Any]) -> tuple[list[str], str, int]:
-    cleaned = _dedupe_strings(items)
-    return (_as_comfy_list(cleaned), _indexed_list_text(cleaned), len(cleaned))
-
-
-def _document_summary(document: dict[str, Any]) -> str:
-    if not isinstance(document, dict) or not document:
-        return ""
-    keys = sorted(str(k) for k in document.keys())
-    doc_id = _coerce_document_id(document)
-    filename = document.get("filename") or document.get("original_name") or ""
-    text = str(document.get("text") or "")
-    return _json_text({"document_id": doc_id, "filename": filename, "text_length": len(text), "top_level_keys": keys})
-
-
-def _session_request(session: Any, method: str, prefix: str, path: str, *, json_body: Optional[dict[str, Any]] = None, params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-    if session is None:
-        return _error_payload("Missing ZMONGO_API_SESSION input.")
-    prefix = _clean_prefix(prefix)
-    path = path if path.startswith("/") else f"/{path}"
-    request_method = getattr(session, "request", None)
-    if callable(request_method):
-        return _ensure_payload_dict(request_method(method, prefix, path, json_body=json_body, params=params))
-    return _error_payload("Session object does not expose request(method, prefix, path, ...).", data={"session_type": type(session).__name__})
-
-
-def _raise_if_failed(payload: dict[str, Any], action: str) -> None:
-    if payload.get("success"):
-        return
-    message = payload.get("message") or payload.get("error") or f"{action} failed."
-    raise RuntimeError(f"{action} failed: {message}\n{_json_text(payload)}")
-
-
-def _read_file_as_base64(path: str) -> tuple[str, str, str, int]:
-    file_path = Path(os.path.expanduser(_clean_scalar(path))).resolve()
-    if not file_path.exists() or not file_path.is_file():
-        raise FileNotFoundError(f"Document file not found: {file_path}")
-    size_bytes = file_path.stat().st_size
-    if size_bytes > DEFAULT_MAX_UPLOAD_BYTES:
-        raise ValueError(f"File is too large for this node: {size_bytes} bytes. Limit is {DEFAULT_MAX_UPLOAD_BYTES} bytes.")
-    content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
-    return file_path.name, content_type, base64.b64encode(file_path.read_bytes()).decode("ascii"), size_bytes
-
-
-def _resolve_document_file_path(selected_file: str, manual_path: str = "", root_mode: str = "Documents", custom_root: str = "") -> Path:
-    manual = _clean_scalar(manual_path)
-    if manual:
-        return Path(os.path.expanduser(manual)).resolve()
-    selected = _clean_scalar(selected_file)
-    if not selected or selected == "__NO_DOCUMENT_FILES_FOUND__":
-        raise FileNotFoundError("No document file selected. Put the document in ~/Documents, set ZMONGO_DOCUMENT_BROWSER_ROOT, choose Comfy Input, or provide manual_path.")
-    base = _get_document_browser_root(root_mode=root_mode, custom_root=custom_root)
-    candidate = (base / selected).resolve()
-    try:
-        candidate.relative_to(base)
-    except ValueError as exc:
-        raise PermissionError(f"Selected file escapes document browser root: {candidate}") from exc
-    return candidate
-
-
-class AlwaysDirtyMixin:
-    @classmethod
-    def IS_CHANGED(cls, *args, **kwargs):
-        return _dirty_token(cls.__name__)
-
-
-SELECTABLE_RETURN_TYPES = ("*", "STRING", "INT")
-SELECTABLE_RETURN_NAMES = ("selectable_items", "indexed_items", "item_count")
-SELECTABLE_OUTPUT_IS_LIST = (True, False, False)
-
-# Semantic socket types. The normal STRING outputs remain for backwards compatibility.
-# These extra semantic sockets give ComfyUI/LiteGraph and the optional JS color helper
-# stable names/types for visually distinct connections.
-ZMONGO_DOCUMENT_ID = "ZMONGO_DOCUMENT_ID"
-ZMONGO_FIELD_PATH = "ZMONGO_FIELD_PATH"
-ZMONGO_FILE_PATH = "ZMONGO_FILE_PATH"
-ZMONGO_FILENAME = "ZMONGO_FILENAME"
-ZMONGO_TEXT = "ZMONGO_TEXT"
-ZMONGO_STATUS = "ZMONGO_STATUS"
-
-
-def _prefer_link_value(primary: Any, link_value: Any) -> Any:
-    linked = _clean_scalar(link_value)
-    return linked if linked else primary
-
 
 # -----------------------------------------------------------------------------
 # Nodes
@@ -734,7 +101,7 @@ class ZMongoDocumentFilePathBrowser(AlwaysDirtyMixin):
 class ZMongoDocumentUploadFile(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "file_path": ("STRING", {"default": ""}), "case_id": ("STRING", {"default": ""}), "metadata_json": ("STRING", {"default": "{}", "multiline": True}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"file_path_link": (ZMONGO_FILE_PATH,), "known_text": ("STRING", {"default": "", "multiline": True}), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "file_path": ("STRING", {"default": ""}), "case_id": ("STRING", {"default": ""}), "metadata_json": ("STRING", {"default": "{}", "multiline": True}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"file_path_link": ("*",), "known_text": ("STRING", {"default": "", "multiline": True}), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", ZMONGO_DOCUMENT_ID, "STRING", ZMONGO_FILENAME, "INT", "BOOLEAN", "STRING", "*", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "document_id", "document_id_link", "filename", "filename_link", "size_bytes", "success", "refresh", "document_ids", "filenames") + SELECTABLE_RETURN_NAMES
@@ -934,7 +301,7 @@ class ZMongoDocumentList(AlwaysDirtyMixin):
 class ZMongoDocumentGet(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "include_file_data": ("BOOLEAN", {"default": False}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "include_file_data": ("BOOLEAN", {"default": False}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "document_id", "document_json", "text", "summary", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
@@ -957,7 +324,7 @@ class ZMongoDocumentGet(AlwaysDirtyMixin):
 class ZMongoDocumentGetText(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "INT", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "text", "text_length", "success", "refresh", "text_items") + SELECTABLE_RETURN_NAMES
@@ -979,7 +346,19 @@ class ZMongoDocumentGetText(AlwaysDirtyMixin):
 class ZMongoDocumentFieldPaths(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "refresh_token": ("STRING", {"default": ""})}}
+        return {
+            "required": {
+                "session": ("ZMONGO_API_SESSION",),
+                "collection_name": ("STRING", {"default": "documents"}),
+                "document_id": ("STRING", {"default": ""}),
+                "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX}),
+            },
+            "optional": {
+                "document_id_link": ("*",),
+                "collection_name_link": ("*",),
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
 
     RETURN_TYPES = ("STRING", "STRING", "STRING", "INT", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "field_paths_json", "indexed_field_paths", "count", "success", "refresh", "field_paths") + SELECTABLE_RETURN_NAMES
@@ -988,19 +367,133 @@ class ZMongoDocumentFieldPaths(AlwaysDirtyMixin):
     CATEGORY = "ZMongo/06 Documents"
     OUTPUT_NODE = True
 
-    def field_paths(self, session: Any, document_id: str, document_prefix: str, document_id_link: str = "", refresh_token: str = ""):
+    def _local_field_paths_fallback(
+        self,
+        session: Any,
+        *,
+        collection_name: str,
+        document_id: str,
+        refresh: str,
+        prior_payload: Optional[dict[str, Any]] = None,
+    ):
+        get_doc = getattr(session, "get_doc", None)
+        if not callable(get_doc):
+            payload = _ensure_payload_dict({
+                "success": False,
+                "message": "Document field paths failed. The /documents route failed and the session does not expose get_doc for local fallback.",
+                "data": {
+                    "collection_name": collection_name,
+                    "document_id": document_id,
+                    "prior_payload": prior_payload,
+                    "refresh": refresh,
+                    "checks": [
+                        "For Local File Store, set collection_name to the local collection that contains the document.",
+                        "Connect document_id_link from 06 Select Nth Document Item or a compatible selector.",
+                        "If using the hosted backend, confirm document_prefix is /documents.",
+                    ],
+                },
+                "error": {"msg": "No compatible local get_doc fallback."},
+                "status_code": 404,
+            })
+            return (_json_text(payload), _json_text([]), _indexed_list_text([]), 0, False, refresh, _as_comfy_list([]), *_selectable_tail([]))
+
+        local_payload = _ensure_payload_dict(
+            get_doc(collection=collection_name, document_id=document_id, cache=False)
+        )
+        document = _extract_document(local_payload)
+        if not document:
+            payload = _ensure_payload_dict({
+                "success": False,
+                "message": "Document field paths failed. Local fallback could not load the document.",
+                "data": {
+                    "collection_name": collection_name,
+                    "document_id": document_id,
+                    "prior_payload": prior_payload,
+                    "local_payload": local_payload,
+                    "refresh": refresh,
+                    "checks": [
+                        "Confirm collection_name matches the Local File Store collection.",
+                        "Confirm document_id exists in that local collection.",
+                        "Use 03 List Docs or 06 List Documents to verify the document id.",
+                    ],
+                },
+                "error": {"msg": "Document not found in local fallback."},
+                "status_code": local_payload.get("status_code", 404),
+            })
+            return (_json_text(payload), _json_text([]), _indexed_list_text([]), 0, False, refresh, _as_comfy_list([]), *_selectable_tail([]))
+
+        paths = _dedupe_strings(_flatten_document_paths(document))
+        payload = _ensure_payload_dict({
+            "success": True,
+            "message": f"Found {len(paths)} field path(s) using local session fallback.",
+            "data": {
+                "collection_name": collection_name,
+                "document_id": document_id,
+                "field_paths": paths,
+                "count": len(paths),
+                "source": "local_session_get_doc_fallback",
+                "prior_payload": prior_payload,
+                "refresh": refresh,
+            },
+            "error": None,
+            "status_code": 200,
+        })
+        return (_json_text(payload), _json_text(paths), _indexed_list_text(paths), len(paths), True, refresh, _as_comfy_list(paths), *_selectable_tail(paths))
+
+    def field_paths(
+        self,
+        session: Any,
+        collection_name: str,
+        document_id: str,
+        document_prefix: str,
+        document_id_link: Any = "",
+        collection_name_link: Any = "",
+        refresh_token: str = "",
+    ):
         clean_id = _coerce_document_id(_prefer_link_value(document_id, document_id_link))
+        clean_collection = _clean_scalar(_prefer_link_value(collection_name, collection_name_link)) or "documents"
+        refresh = _dirty_token("document_field_paths", refresh_token, clean_collection, clean_id)
+
+        if not clean_id:
+            payload = _ensure_payload_dict({
+                "success": False,
+                "message": "Document field paths skipped: document_id is empty.",
+                "data": {
+                    "collection_name": clean_collection,
+                    "document_id": clean_id,
+                    "refresh": refresh,
+                    "checks": [
+                        "Connect document_id_link from 06 Select Nth Document Item.",
+                        "For Local File Store, select an actual document id, not a field path.",
+                    ],
+                },
+                "error": {"msg": "missing_document_id"},
+                "status_code": 400,
+            })
+            return (_json_text(payload), _json_text([]), _indexed_list_text([]), 0, False, refresh, _as_comfy_list([]), *_selectable_tail([]))
+
         quoted = urllib.parse.quote(clean_id, safe="")
         payload = _session_request(session, "GET", document_prefix, f"/api/field-paths/{quoted}")
-        _raise_if_failed(payload, "Document field paths")
-        paths = _extract_field_paths(payload)
-        return (_json_text(payload), _json_text(paths), _indexed_list_text(paths), len(paths), bool(payload.get("success")), _dirty_token("document_field_paths", refresh_token), _as_comfy_list(paths), *_selectable_tail(paths))
 
+        if payload.get("success"):
+            paths = _extract_field_paths(payload)
+            return (_json_text(payload), _json_text(paths), _indexed_list_text(paths), len(paths), True, refresh, _as_comfy_list(paths), *_selectable_tail(paths))
+
+        # Local File Store and generic ZMongo sessions do not implement the
+        # /documents field-path route.  Fall back to get_doc(collection, id) and
+        # flatten the document locally.
+        return self._local_field_paths_fallback(
+            session,
+            collection_name=clean_collection,
+            document_id=clean_id,
+            refresh=refresh,
+            prior_payload=payload,
+        )
 
 class ZMongoDocumentGetValue(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "field_path": ("STRING", {"default": "text"}), "fallback": ("STRING", {"default": ""}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "field_path_link": (ZMONGO_FIELD_PATH,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "field_path": ("STRING", {"default": "text"}), "fallback": ("STRING", {"default": ""}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "field_path_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN", "STRING", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "value", "exists", "value_type", "refresh", "value_items") + SELECTABLE_RETURN_NAMES
@@ -1016,7 +509,7 @@ class ZMongoDocumentGetValue(AlwaysDirtyMixin):
         payload = _session_request(session, "GET", document_prefix, f"/api/get/{quoted}")
         if not payload.get("success"):
             empty_tail = _selectable_tail([])
-            return (_json_text(payload), fallback or "", False, "missing_document", _dirty_token("document_get_value_error", refresh_token), *empty_tail)
+            return (_json_text(payload), fallback or "", False, "missing_document", _dirty_token("document_get_value_error", refresh_token), _as_comfy_list([]), *empty_tail)
         document = _extract_document(payload)
         marker = object()
         value = _safe_get_by_path(document, clean_path, marker)
@@ -1031,7 +524,7 @@ class ZMongoDocumentGetValue(AlwaysDirtyMixin):
 class ZMongoDocumentSaveText(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "text": ("STRING", {"default": "", "multiline": True}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "text": ("STRING", {"default": "", "multiline": True}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "INT", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "document_id", "text_length", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
@@ -1053,7 +546,7 @@ class ZMongoDocumentSaveText(AlwaysDirtyMixin):
 class ZMongoDocumentSaveValue(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "field_path": ("STRING", {"default": "metadata.note"}), "value": ("STRING", {"default": "", "multiline": True}), "parse_json": ("BOOLEAN", {"default": True}), "normalize_for_storage": ("BOOLEAN", {"default": False}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "field_path_link": (ZMONGO_FIELD_PATH,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "field_path": ("STRING", {"default": "metadata.note"}), "value": ("STRING", {"default": "", "multiline": True}), "parse_json": ("BOOLEAN", {"default": True}), "normalize_for_storage": ("BOOLEAN", {"default": False}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "field_path_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "document_id", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
@@ -1113,7 +606,7 @@ class ZMongoDocumentSaveValue(AlwaysDirtyMixin):
 class ZMongoDocumentUpdateMetadata(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "metadata_json": ("STRING", {"default": "{}", "multiline": True}), "case_id": ("STRING", {"default": ""}), "status": ("STRING", {"default": ""}), "title": ("STRING", {"default": ""}), "description": ("STRING", {"default": "", "multiline": True}), "tags_json": ("STRING", {"default": "[]", "multiline": True}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "metadata_json": ("STRING", {"default": "{}", "multiline": True}), "case_id": ("STRING", {"default": ""}), "status": ("STRING", {"default": ""}), "title": ("STRING", {"default": ""}), "description": ("STRING", {"default": "", "multiline": True}), "tags_json": ("STRING", {"default": "[]", "multiline": True}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "document_id", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
@@ -1147,7 +640,7 @@ class ZMongoDocumentUpdateMetadata(AlwaysDirtyMixin):
 class ZMongoDocumentExtractText(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "save": ("BOOLEAN", {"default": True}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "save": ("BOOLEAN", {"default": True}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "INT", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "text", "text_length", "success", "refresh", "text_items") + SELECTABLE_RETURN_NAMES
@@ -1242,7 +735,7 @@ class ZMongoDocumentExtractText(AlwaysDirtyMixin):
 class ZMongoDocumentQueueOCR(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "priority": ("INT", {"default": 50, "min": 0, "max": 100}), "source": ("STRING", {"default": "comfyui_zmongo_document_node"}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "priority": ("INT", {"default": 50, "min": 0, "max": 100}), "source": ("STRING", {"default": "comfyui_zmongo_document_node"}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "document_id", "status", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
@@ -1266,7 +759,7 @@ class ZMongoDocumentQueueOCR(AlwaysDirtyMixin):
 class ZMongoDocumentOCRStatus(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN", "STRING", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "status", "has_text", "last_error", "success", "refresh", "status_items") + SELECTABLE_RETURN_NAMES
@@ -1290,7 +783,7 @@ class ZMongoDocumentOCRStatus(AlwaysDirtyMixin):
 class ZMongoDocumentDelete(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "confirm_delete": ("BOOLEAN", {"default": False}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": (ZMONGO_DOCUMENT_ID,), "refresh_token": ("STRING", {"default": ""})}}
+        return {"required": {"session": ("ZMONGO_API_SESSION",), "document_id": ("STRING", {"default": ""}), "confirm_delete": ("BOOLEAN", {"default": False}), "document_prefix": ("STRING", {"default": DEFAULT_DOCUMENT_PREFIX})}, "optional": {"document_id_link": ("*",), "refresh_token": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN", "STRING", "*") + SELECTABLE_RETURN_TYPES
     RETURN_NAMES = ("json", "document_id", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES

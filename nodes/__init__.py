@@ -4,8 +4,10 @@ from typing import Dict, Tuple
 
 from . import zmongo_api_nodes
 from . import gemini_api_nodes
-from . import document_api_nodes
+from . import zmongo_image_nodes
 from . import zmongo_images_nodes
+from . import document_api_nodes
+
 
 
 def _merge_node_mappings(
@@ -39,6 +41,16 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         zmongo_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
     (
+        "zmongo_image_nodes",
+        zmongo_image_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_image_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
+        "zmongo_images_nodes",
+        zmongo_images_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_images_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
         "gemini_api_nodes",
         gemini_api_nodes.NODE_CLASS_MAPPINGS,
         gemini_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
@@ -48,12 +60,9 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         document_api_nodes.NODE_CLASS_MAPPINGS,
         document_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
-    (
-        "zmongo_images_nodes",
-        zmongo_images_nodes.NODE_CLASS_MAPPINGS,
-        zmongo_images_nodes.NODE_DISPLAY_NAME_MAPPINGS,
-    ),
 )
+
+print(f"[ComfyUI-ZMongo] nodes package registered nodes: {len(NODE_CLASS_MAPPINGS)}")
 
 __all__ = [
     "NODE_CLASS_MAPPINGS",
