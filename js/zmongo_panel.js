@@ -36,24 +36,10 @@ function clearElement(element) {
     }
 }
 
-function submitPostToNewTab(url, fields) {
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = url;
-    form.target = "_blank";
-    form.style.display = "none";
-
-    for (const [name, value] of Object.entries(fields)) {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = name;
-        input.value = value ?? "";
-        form.appendChild(input);
-    }
-
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
+function normalizeBaseUrl(value) {
+    return String(value || "")
+        .trim()
+        .replace(/\/+$/, "");
 }
 
 function openUrlInNewTab(url) {
@@ -68,10 +54,41 @@ function escapeHtmlAttribute(value) {
         .replace(/>/g, "&gt;");
 }
 
+function submitLoginToNewTab(baseUrl, username, password) {
+    const popup = window.open("about:blank", "_blank");
+    if (!popup) {
+        return false;
+    }
+
+    const actionUrl = `${baseUrl}/user/login`;
+    const nextUrl = `${baseUrl}/user/settings`;
+
+    popup.document.open();
+    popup.document.write(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Business Process Applications Login</title>
+</head>
+<body>
+  <form id="loginForm" method="POST" action="${escapeHtmlAttribute(actionUrl)}">
+    <input type="hidden" name="username" value="${escapeHtmlAttribute(username)}">
+    <input type="hidden" name="password" value="${escapeHtmlAttribute(password)}">
+    <input type="hidden" name="next" value="${escapeHtmlAttribute(nextUrl)}">
+  </form>
+  <script>
+    document.getElementById("loginForm").submit();
+  </script>
+</body>
+</html>`);
+    popup.document.close();
+    return true;
+}
+
 function buildPanel(container) {
     clearElement(container);
 
-    const baseUrl = "https://businessprocessapplications.com";
+    const defaultBaseUrl = "https://businessprocessapplications.com";
 
     const root = el("div", {
         className: "bpa-zmongo-panel-root",
@@ -85,23 +102,24 @@ function buildPanel(container) {
     });
 
     const title = el("div", {
-        text: "Business Process Applications — ZMongo",
+        text: "Business Process Applications / ZMongo",
         style: "font-size:16px;font-weight:700;"
     });
 
     const help = el("div", {
-        text: "ZMongo is available as a Business Process Applications feature. Enter credentials and open the BPA manager in a new tab.",
-        style: "font-size:12px;opacity:0.8;line-height:1.35;"
+        text: "Login with an existing account or register a new account. After login, copy your API key into the ZMongo API Key Session node.",
+        style: "font-size:12px;opacity:0.82;line-height:1.35;"
     });
 
     const status = el("div", {
-        text: "Idle",
+        text: "Ready",
         style: [
             "font-size:12px",
             "padding:6px 8px",
             "border:1px solid #444",
             "border-radius:6px",
-            "background:#111"
+            "background:#111",
+            "white-space:pre-wrap"
         ].join(";")
     });
 
@@ -112,7 +130,7 @@ function buildPanel(container) {
 
     const baseUrlInput = el("input", {
         type: "text",
-        value: baseUrl,
+        value: defaultBaseUrl,
         style: "width:100%;padding:8px;box-sizing:border-box;"
     });
 
@@ -144,28 +162,13 @@ function buildPanel(container) {
         style: "display:flex;flex-direction:column;gap:8px;"
     });
 
-    const openHomeButton = el("button", {
-        text: "Open Business Process Applications",
-        style: "padding:8px 10px;"
-    });
-
-    const openZMongoButton = el("button", {
-        text: "Open ZMongo Feature",
-        style: "padding:8px 10px;"
-    });
-
-    const openManagerButton = el("button", {
-        text: "Open Manager",
-        style: "padding:8px 10px;"
-    });
-
     const loginButton = el("button", {
-        text: "Login + Open Manager",
-        style: "padding:8px 10px;"
+        text: "Login",
+        style: "padding:8px 10px;font-weight:600;"
     });
 
-    const loginOnlyButton = el("button", {
-        text: "Login Only",
+    const registerButton = el("button", {
+        text: "Register",
         style: "padding:8px 10px;"
     });
 
@@ -175,110 +178,37 @@ function buildPanel(container) {
 
     function getValues() {
         return {
-            base: (baseUrlInput.value || "").trim().replace(/\/+$/, ""),
-            username: (usernameInput.value || "").trim(),
+            base: normalizeBaseUrl(baseUrlInput.value),
+            username: String(usernameInput.value || "").trim(),
             password: passwordInput.value || ""
         };
     }
-
-    openHomeButton.addEventListener("click", () => {
-        const { base } = getValues();
-        if (!base) {
-            updateStatus("Base URL is required.");
-            return;
-        }
-
-        openUrlInNewTab(base);
-        updateStatus(`Opened ${base}`);
-    });
-
-    openZMongoButton.addEventListener("click", () => {
-        const { base } = getValues();
-        if (!base) {
-            updateStatus("Base URL is required.");
-            return;
-        }
-
-        openUrlInNewTab(`${base}/zmongo`);
-        updateStatus(`Opened ${base}/zmongo`);
-    });
-
-    openManagerButton.addEventListener("click", () => {
-        const { base } = getValues();
-        if (!base) {
-            updateStatus("Base URL is required.");
-            return;
-        }
-
-        openUrlInNewTab(`${base}/user/manager`);
-        updateStatus(`Opened ${base}/user/manager`);
-    });
-
-    loginOnlyButton.addEventListener("click", () => {
-        const { base, username, password } = getValues();
-
-        if (!base || !username || !password) {
-            updateStatus("Base URL, username, and password are required.");
-            return;
-        }
-
-        submitPostToNewTab(`${base}/user/login`, {
-            username,
-            password
-        });
-
-        updateStatus("Submitted login form to new tab.");
-    });
 
     loginButton.addEventListener("click", () => {
         const { base, username, password } = getValues();
 
         if (!base || !username || !password) {
-            updateStatus("Base URL, username, and password are required.");
+            updateStatus("Base URL, username, and password are required to login.");
             return;
         }
 
-        const popup = window.open("about:blank", "_blank");
-        if (!popup) {
-            updateStatus("Popup blocked by browser.");
-            return;
-        }
-
-        const safeAction = `${base}/user/login`;
-        const safeNext = `${base}/user/manager`;
-
-        popup.document.open();
-        popup.document.write(`
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Business Process Applications Login</title>
-</head>
-<body>
-  <form id="loginForm" method="POST" action="${escapeHtmlAttribute(safeAction)}">
-    <input type="hidden" name="username" value="${escapeHtmlAttribute(username)}">
-    <input type="hidden" name="password" value="${escapeHtmlAttribute(password)}">
-    <input type="hidden" name="next" value="${escapeHtmlAttribute(safeNext)}">
-  </form>
-  <script>
-    document.getElementById("loginForm").submit();
-  </script>
-</body>
-</html>
-        `);
-        popup.document.close();
-
-        updateStatus("Opened login tab and submitted credentials.");
+        const submitted = submitLoginToNewTab(base, username, password);
+        updateStatus(submitted ? "Login submitted in a new tab." : "Popup blocked. Allow popups for ComfyUI and try again.");
     });
 
-    buttonsRow.append(
-        openHomeButton,
-        openZMongoButton,
-        openManagerButton,
-        loginButton,
-        loginOnlyButton
-    );
+    registerButton.addEventListener("click", () => {
+        const { base } = getValues();
+
+        if (!base) {
+            updateStatus("Base URL is required to register.");
+            return;
+        }
+
+        openUrlInNewTab(`${base}/user/register`);
+        updateStatus("Opened registration page in a new tab.");
+    });
+
+    buttonsRow.append(loginButton, registerButton);
 
     root.append(
         title,
@@ -304,10 +234,10 @@ app.registerExtension({
             id: "bpa-zmongo-browser",
             icon: "pi pi-database",
             title: "ZMongo",
-            tooltip: "Business Process Applications ZMongo Browser",
+            tooltip: "Business Process Applications ZMongo Login/Register",
             type: "custom",
-            render: (el) => {
-                buildPanel(el);
+            render: (element) => {
+                buildPanel(element);
             },
         });
     },

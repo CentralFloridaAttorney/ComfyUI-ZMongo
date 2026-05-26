@@ -1786,17 +1786,62 @@ class LocalZMongoSession:
 
     def request(self, method: str, prefix: str, path: str, *, json_body: Optional[dict[str, Any]] = None,
                 params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+        """Route a node-style request into the local file store.
+
+        This intentionally supports both route families used by ComfyUI-ZMongo:
+
+        1. Generic ZMongo routes:
+           /api/doc/<collection>/<id>, /api/query, /api/save-value, etc.
+
+        2. Document API node routes:
+           /health, /api/list, /api/get/<id>, /api/text/<id>,
+           /api/field-paths/<id>, /api/save-value/<id>, etc.
+
+        The document nodes default to the "documents" collection unless the
+        request body explicitly provides collection/collection_name.
+        """
         method = (method or "GET").upper()
         path = path if path.startswith("/") else f"/{path}"
         body = json_body or {}
         params = params or {}
+
+        def body_collection(default: str = "documents") -> str:
+            return body.get("collection") or body.get("collection_name") or default
+
+        def tail_after(marker: str) -> str:
+            return urllib.parse.unquote(path.rsplit(marker, 1)[1].strip("/"))
+
+        def payload_text_from_document(doc: dict[str, Any]) -> str:
+            text_value = doc.get("text")
+            if text_value is not None:
+                return str(text_value or "")
+
+            file_data = doc.get("file_data")
+            content_type = str(doc.get("content_type") or "")
+            if isinstance(file_data, str) and (
+                content_type.startswith("text/")
+                or str(doc.get("filename") or "").lower().endswith((".txt", ".md", ".csv", ".json", ".rtf"))
+            ):
+                try:
+                    return base64.b64decode(file_data.encode("ascii"), validate=False).decode("utf-8", errors="replace")
+                except Exception:
+                    return ""
+            return ""
+
         try:
-            if method == "GET" and path.endswith("/api/health"):
+            # -----------------------------------------------------------------
+            # Shared health/account routes
+            # -----------------------------------------------------------------
+            if method == "GET" and (path.endswith("/health") or path.endswith("/api/health")):
                 return self.health()
             if method == "GET" and path.endswith("/api/whoami"):
                 return self.whoami()
             if method == "GET" and path.endswith("/api/collections"):
                 return self.list_collections()
+
+            # -----------------------------------------------------------------
+            # Generic ZMongo collection/document routes
+            # -----------------------------------------------------------------
             if method == "POST" and path.endswith("/api/collection/create"):
                 return self.create_collection(
                     body.get("name") or body.get("collection") or body.get("collection_name") or "")
@@ -1804,11 +1849,10 @@ class LocalZMongoSession:
                 return self.delete_collection(
                     body.get("name") or body.get("collection") or body.get("collection_name") or "")
             if method == "POST" and path.endswith("/api/doc/create"):
-                return self.create_doc(collection=body.get("collection") or body.get("collection_name") or "documents",
-                                       document=body.get("document") or {})
+                return self.create_doc(collection=body_collection(), document=body.get("document") or {})
             if method == "POST" and path.endswith("/api/query"):
                 return self.query_docs(
-                    collection=body.get("collection") or body.get("collection_name") or "documents",
+                    collection=body_collection(),
                     query=body.get("query") or {},
                     document_id=body.get("document_id") or "",
                     many=body.get("many", True),
@@ -1820,14 +1864,14 @@ class LocalZMongoSession:
                 )
             if method == "POST" and path.endswith("/api/count"):
                 return self.count_docs(
-                    collection=body.get("collection") or body.get("collection_name") or "documents",
+                    collection=body_collection(),
                     query=body.get("query") or {},
                     document_id=body.get("document_id") or "",
                     cache=body.get("cache", False),
                 )
             if method == "POST" and path.endswith("/api/doc/update"):
                 return self.update_doc(
-                    collection=body.get("collection") or body.get("collection_name") or "documents",
+                    collection=body_collection(),
                     query=body.get("query") or {},
                     document_id=body.get("document_id") or "",
                     update=body.get("update"),
@@ -1837,13 +1881,13 @@ class LocalZMongoSession:
                 )
             if method == "POST" and path.endswith("/api/doc/delete"):
                 return self.delete_doc(
-                    collection=body.get("collection") or body.get("collection_name") or "documents",
+                    collection=body_collection(),
                     query=body.get("query") or {},
                     document_id=body.get("document_id") or "",
                 )
             if method == "POST" and path.endswith("/api/save-value"):
                 return self.save_value(
-                    collection=body.get("collection") or body.get("collection_name") or "documents",
+                    collection=body_collection(),
                     query=body.get("query") or {},
                     document_id=body.get("document_id") or "",
                     field_path=body.get("field_path") or "",
@@ -1853,7 +1897,7 @@ class LocalZMongoSession:
                     normalize_for_storage=body.get("normalize_for_storage", False),
                 )
             if method == "GET" and "/api/docs/" in path:
-                collection = urllib.parse.unquote(path.rsplit("/api/docs/", 1)[1].strip("/"))
+                collection = tail_after("/api/docs/")
                 query = {}
                 if params.get("query_json"):
                     try:
@@ -1863,12 +1907,189 @@ class LocalZMongoSession:
                 return self.list_docs(collection=collection, query=query, limit=int(params.get("limit", 50)),
                                       skip=int(params.get("skip", 0)))
             if method == "GET" and "/api/doc/" in path:
-                tail = path.rsplit("/api/doc/", 1)[1].strip("/")
+                tail = tail_after("/api/doc/")
                 parts = tail.split("/", 1)
                 if len(parts) == 2:
-                    return self.get_doc(collection=urllib.parse.unquote(parts[0]),
-                                        document_id=urllib.parse.unquote(parts[1]),
+                    return self.get_doc(collection=parts[0],
+                                        document_id=parts[1],
                                         cache=str(params.get("cache", "false")).lower() == "true")
+
+            # -----------------------------------------------------------------
+            # Document API node routes. These are the routes used by
+            # document_api_nodes.py and are backed locally by the "documents"
+            # collection.
+            # -----------------------------------------------------------------
+            if method == "POST" and path.endswith("/api/upload"):
+                filename = _local_clean_scalar(body.get("filename")) or "uploaded_document"
+                file_data = body.get("file_data") or ""
+                text_value = body.get("text") or ""
+                metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+                document = body.get("document") if isinstance(body.get("document"), dict) else {}
+                document.update({
+                    "filename": filename,
+                    "content_type": body.get("content_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream",
+                    "file_data": file_data,
+                    "size_bytes": len(base64.b64decode(file_data.encode("ascii"), validate=False)) if isinstance(file_data, str) and file_data else 0,
+                    "text": text_value,
+                    "case_id": body.get("case_id"),
+                    "metadata": metadata,
+                })
+                return self.create_doc(collection=body_collection(), document=document)
+
+            if method == "POST" and path.endswith("/api/create"):
+                filename = _local_clean_scalar(body.get("filename")) or "manual_document.txt"
+                metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+                document = body.get("document") if isinstance(body.get("document"), dict) else {}
+                document.update({
+                    "filename": filename,
+                    "content_type": body.get("content_type") or mimetypes.guess_type(filename)[0] or "text/plain",
+                    "text": body.get("text") or "",
+                    "case_id": body.get("case_id"),
+                    "metadata": metadata,
+                    "text_length": len(str(body.get("text") or "")),
+                })
+                payload = self.create_doc(collection=body_collection(), document=document)
+                if payload.get("success"):
+                    data = payload.setdefault("data", {})
+                    data["filename"] = filename
+                    data["text_length"] = len(str(body.get("text") or ""))
+                return payload
+
+            if method == "POST" and path.endswith("/api/list"):
+                return self.query_docs(
+                    collection=body_collection(),
+                    query=body.get("query") or {},
+                    many=True,
+                    limit=body.get("limit", 50),
+                    skip=body.get("skip", 0),
+                    sort=body.get("sort") or [],
+                    cache=False,
+                )
+
+            if method == "GET" and "/api/get/" in path:
+                document_id = tail_after("/api/get/")
+                return self.get_doc(collection=body_collection(), document_id=document_id,
+                                    cache=str(params.get("cache", "false")).lower() == "true")
+
+            if method == "GET" and "/api/text/" in path:
+                document_id = tail_after("/api/text/")
+                payload = self.get_doc(collection=body_collection(), document_id=document_id, cache=False)
+                if not payload.get("success"):
+                    return payload
+                doc = payload.get("data", {}).get("document", {})
+                text_value = payload_text_from_document(doc if isinstance(doc, dict) else {})
+                return _local_payload_ok("Loaded local document text.", {
+                    "document_id": document_id,
+                    "text": text_value,
+                    "text_length": len(text_value),
+                    "storage_backend": "local_file_store",
+                })
+
+            if method == "GET" and "/api/field-paths/" in path:
+                document_id = tail_after("/api/field-paths/")
+                collection = params.get("collection") or params.get("collection_name") or body_collection()
+                payload = self.get_doc(collection=str(collection), document_id=document_id, cache=False)
+                if not payload.get("success"):
+                    return payload
+                doc = payload.get("data", {}).get("document", {})
+                paths = dedupe_strings(flatten_document_paths(doc if isinstance(doc, dict) else {}))
+                return _local_payload_ok("Listed local document field paths.", {
+                    "collection": collection,
+                    "collection_name": collection,
+                    "document_id": document_id,
+                    "field_paths": paths,
+                    "paths": paths,
+                    "count": len(paths),
+                    "storage_backend": "local_file_store",
+                })
+
+            if method == "POST" and "/api/save-text/" in path:
+                document_id = tail_after("/api/save-text/")
+                text_value = str(body.get("text") or "")
+                return self.update_doc(
+                    collection=body_collection(),
+                    document_id=document_id,
+                    field_path="text",
+                    value=text_value,
+                    upsert=False,
+                )
+
+            if method == "POST" and "/api/save-value/" in path:
+                document_id = tail_after("/api/save-value/")
+                return self.save_value(
+                    collection=body_collection(),
+                    document_id=document_id,
+                    field_path=body.get("field_path") or "",
+                    value=body.get("value"),
+                    upsert_if_missing=False,
+                    parse_json_strings=body.get("parse_json_strings", True),
+                    normalize_for_storage=body.get("normalize_for_storage", False),
+                )
+
+            if method == "POST" and "/api/metadata/" in path:
+                document_id = tail_after("/api/metadata/")
+                update_values: dict[str, Any] = {}
+                if isinstance(body.get("metadata"), dict):
+                    update_values["metadata"] = body.get("metadata")
+                for key in ("case_id", "status", "title", "description", "tags"):
+                    if key in body and body.get(key) not in (None, ""):
+                        update_values[key] = body.get(key)
+                return self.update_doc(
+                    collection=body_collection(),
+                    document_id=document_id,
+                    update={"$set": update_values},
+                    upsert=False,
+                )
+
+            if method == "POST" and "/api/extract-text/" in path:
+                document_id = tail_after("/api/extract-text/")
+                text_payload = self.request("GET", prefix, f"/api/text/{document_id}")
+                if not text_payload.get("success"):
+                    return text_payload
+                if body.get("save", True):
+                    text_value = str(text_payload.get("data", {}).get("text") or "")
+                    self.update_doc(collection=body_collection(), document_id=document_id,
+                                    field_path="text", value=text_value, upsert=False)
+                return text_payload
+
+            if method == "POST" and "/api/ocr/queue/" in path:
+                document_id = tail_after("/api/ocr/queue/")
+                payload = self.update_doc(
+                    collection=body_collection(),
+                    document_id=document_id,
+                    update={"$set": {"ocr": {
+                        "status": "queued",
+                        "priority": int(body.get("priority") or 50),
+                        "source": body.get("source") or "comfyui_zmongo_document_node",
+                        "queued_at": _local_now_iso(),
+                    }}},
+                    upsert=False,
+                )
+                if payload.get("success"):
+                    payload["data"]["status"] = "queued"
+                return payload
+
+            if method == "GET" and "/api/ocr/status/" in path:
+                document_id = tail_after("/api/ocr/status/")
+                payload = self.get_doc(collection=body_collection(), document_id=document_id, cache=False)
+                if not payload.get("success"):
+                    return payload
+                doc = payload.get("data", {}).get("document", {})
+                ocr = doc.get("ocr", {}) if isinstance(doc, dict) and isinstance(doc.get("ocr"), dict) else {}
+                text_value = payload_text_from_document(doc if isinstance(doc, dict) else {})
+                return _local_payload_ok("Loaded local OCR status.", {
+                    "document_id": document_id,
+                    "status": ocr.get("status") or ("complete" if text_value else "not_queued"),
+                    "has_text": bool(text_value),
+                    "last_error": ocr.get("last_error") or "",
+                    "ocr": ocr,
+                    "storage_backend": "local_file_store",
+                })
+
+            if method == "POST" and "/api/delete/" in path:
+                document_id = tail_after("/api/delete/")
+                return self.delete_doc(collection=body_collection(), document_id=document_id)
+
             return _local_payload_error("Local request route is not implemented.", {
                 "method": method,
                 "prefix": prefix,

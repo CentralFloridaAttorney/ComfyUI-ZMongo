@@ -14,10 +14,103 @@ from .generic_helpers import AlwaysDirtyMixin, SELECTABLE_RETURN_TYPES, SELECTAB
     _indexed_list_text, _extract_field_paths, _coerce_field_path, _safe_get_by_path, _value_items, \
     _is_immutable_document_field_path, _blocked_immutable_field_payload, _parse_any_json, _parse_json_list, \
     _error_payload, ZMONGO_FIELD_PATH, _strip_index_prefix, _coerce_filename_link, _coerce_text_link, \
-    _coerce_document_id_link, _document_summary, ZMONGO_TEXT, _read_file_as_base64, _list_document_files
+    _coerce_document_id_link, _document_summary, ZMONGO_TEXT, _read_file_as_base64, _list_document_files, \
+    _session_get_doc, _session_api_request, _session_save_value
 
 DEFAULT_DOCUMENT_PREFIX = os.getenv("ZMONGO_DOCUMENT_API_PREFIX", "/documents").strip().rstrip("/") or "/documents"
+DEFAULT_DOCUMENT_COLLECTION = os.getenv("ZMONGO_DOCUMENT_COLLECTION", "documents").strip() or "documents"
 DEFAULT_MAX_UPLOAD_BYTES = int(os.getenv("ZMONGO_DOCUMENT_NODE_MAX_UPLOAD_BYTES", str(64 * 1024 * 1024)))
+
+
+def _is_route_not_found(payload: Any) -> bool:
+    payload = _ensure_payload_dict(payload)
+    status_code = int(payload.get("status_code") or 0)
+    if status_code == 404:
+        return True
+    raw_text = str(payload.get("raw_text") or "")
+    message = str(payload.get("message") or "")
+    return "404 Not Found" in raw_text or "Not Found" == message.strip()
+
+
+def _generic_document_get_fallback(session: Any, document_id: str, *, collection_name: str = DEFAULT_DOCUMENT_COLLECTION) -> dict[str, Any]:
+    if not document_id:
+        return _ensure_payload_dict({
+            "success": False,
+            "message": "Document get fallback skipped: document_id is empty.",
+            "data": {"collection": collection_name, "document_id": document_id},
+            "error": {"msg": "missing_document_id"},
+            "status_code": 400,
+        })
+    return _session_get_doc(session, collection_name, document_id, cache=False)
+
+
+def _generic_document_query_fallback(
+    session: Any,
+    *,
+    query: dict[str, Any],
+    sort: list[Any],
+    limit: int,
+    skip: int,
+    collection_name: str = DEFAULT_DOCUMENT_COLLECTION,
+) -> dict[str, Any]:
+    list_docs = getattr(session, "list_docs", None)
+    if callable(list_docs):
+        try:
+            return _ensure_payload_dict(
+                list_docs(collection=collection_name, query=query, limit=limit, skip=skip)
+            )
+        except TypeError:
+            pass
+        except Exception as exc:
+            return _ensure_payload_dict({
+                "success": False,
+                "message": f"Generic document list fallback failed: {exc}",
+                "data": {"collection": collection_name, "query": query, "limit": limit, "skip": skip},
+                "error": {"type": exc.__class__.__name__, "msg": str(exc)},
+                "status_code": 0,
+            })
+
+    return _session_api_request(
+        session,
+        "POST",
+        "/api/query",
+        json_body={
+            "collection": collection_name,
+            "query": query,
+            "sort": sort,
+            "limit": int(limit),
+            "skip": int(skip),
+            "many": True,
+            "cache": False,
+        },
+    )
+
+
+def _generic_document_create_fallback(
+    session: Any,
+    *,
+    document: dict[str, Any],
+    collection_name: str = DEFAULT_DOCUMENT_COLLECTION,
+) -> dict[str, Any]:
+    create_doc = getattr(session, "create_doc", None)
+    if callable(create_doc):
+        try:
+            return _ensure_payload_dict(create_doc(collection=collection_name, document=document))
+        except Exception as exc:
+            return _ensure_payload_dict({
+                "success": False,
+                "message": f"Generic document create fallback failed: {exc}",
+                "data": {"collection": collection_name, "document": document},
+                "error": {"type": exc.__class__.__name__, "msg": str(exc)},
+                "status_code": 0,
+            })
+
+    return _session_api_request(
+        session,
+        "POST",
+        "/api/doc/create",
+        json_body={"collection": collection_name, "document": document},
+    )
 
 try:
     import folder_paths  # ComfyUI runtime helper for input/output/temp directories
@@ -268,6 +361,17 @@ class ZMongoDocumentCreateText(AlwaysDirtyMixin):
     def create_text_document(self, session: Any, filename: str, text: str, case_id: str, metadata_json: str, document_json: str, document_prefix: str, refresh_token: str = ""):
         body = {"filename": _clean_scalar(filename) or "manual_document.txt", "text": text or "", "case_id": _clean_scalar(case_id) or None, "metadata": _parse_json_object(metadata_json, "metadata_json"), "document": _parse_json_object(document_json, "document_json")}
         payload = _session_request(session, "POST", document_prefix, "/api/create", json_body=body)
+        if not payload.get("success") and _is_route_not_found(payload):
+            document = dict(body.get("document") or {})
+            document.update({
+                "filename": body["filename"],
+                "text": body["text"],
+                "case_id": body.get("case_id"),
+                "metadata": body.get("metadata") or {},
+                "content_type": "text/plain",
+                "text_length": len(body["text"]),
+            })
+            payload = _generic_document_create_fallback(session, document=document)
         _raise_if_failed(payload, "Document create")
         data = _extract_data(payload)
         document_id = _extract_doc_id(payload)
@@ -292,6 +396,14 @@ class ZMongoDocumentList(AlwaysDirtyMixin):
     def list_documents(self, session: Any, query_json: str, sort_json: str, limit: int, skip: int, include_file_data: bool, document_prefix: str, refresh_token: str = ""):
         body = {"query": _parse_json_object(query_json, "query_json"), "sort": _parse_json_list(sort_json, "sort_json"), "limit": int(limit), "skip": int(skip), "include_file_data": bool(include_file_data)}
         payload = _session_request(session, "POST", document_prefix, "/api/list", json_body=body)
+        if not payload.get("success") and _is_route_not_found(payload):
+            payload = _generic_document_query_fallback(
+                session,
+                query=body["query"],
+                sort=body["sort"],
+                limit=int(limit),
+                skip=int(skip),
+            )
         _raise_if_failed(payload, "Document list")
         docs = _extract_documents(payload)
         ids = _extract_doc_ids_from_documents(docs)
@@ -314,6 +426,8 @@ class ZMongoDocumentGet(AlwaysDirtyMixin):
         clean_id = _coerce_document_id(_prefer_link_value(document_id, document_id_link))
         quoted = urllib.parse.quote(clean_id, safe="")
         payload = _session_request(session, "GET", document_prefix, f"/api/get/{quoted}", params={"include_file_data": "true" if include_file_data else "false"})
+        if not payload.get("success") and _is_route_not_found(payload):
+            payload = _generic_document_get_fallback(session, clean_id)
         _raise_if_failed(payload, "Document get")
         document = _extract_document(payload)
         resolved_id = _coerce_document_id(document) or clean_id
@@ -337,6 +451,8 @@ class ZMongoDocumentGetText(AlwaysDirtyMixin):
         clean_id = _coerce_document_id(_prefer_link_value(document_id, document_id_link))
         quoted = urllib.parse.quote(clean_id, safe="")
         payload = _session_request(session, "GET", document_prefix, f"/api/text/{quoted}")
+        if not payload.get("success") and _is_route_not_found(payload):
+            payload = _generic_document_get_fallback(session, clean_id)
         _raise_if_failed(payload, "Document text get")
         text = _extract_text(payload)
         items = [text] if text else []
@@ -376,29 +492,10 @@ class ZMongoDocumentFieldPaths(AlwaysDirtyMixin):
         refresh: str,
         prior_payload: Optional[dict[str, Any]] = None,
     ):
-        get_doc = getattr(session, "get_doc", None)
-        if not callable(get_doc):
-            payload = _ensure_payload_dict({
-                "success": False,
-                "message": "Document field paths failed. The /documents route failed and the session does not expose get_doc for local fallback.",
-                "data": {
-                    "collection_name": collection_name,
-                    "document_id": document_id,
-                    "prior_payload": prior_payload,
-                    "refresh": refresh,
-                    "checks": [
-                        "For Local File Store, set collection_name to the local collection that contains the document.",
-                        "Connect document_id_link from 06 Select Nth Document Item or a compatible selector.",
-                        "If using the hosted backend, confirm document_prefix is /documents.",
-                    ],
-                },
-                "error": {"msg": "No compatible local get_doc fallback."},
-                "status_code": 404,
-            })
-            return (_json_text(payload), _json_text([]), _indexed_list_text([]), 0, False, refresh, _as_comfy_list([]), *_selectable_tail([]))
-
-        local_payload = _ensure_payload_dict(
-            get_doc(collection=collection_name, document_id=document_id, cache=False)
+        local_payload = _generic_document_get_fallback(
+            session,
+            document_id,
+            collection_name=collection_name or DEFAULT_DOCUMENT_COLLECTION,
         )
         document = _extract_document(local_payload)
         if not document:
@@ -507,6 +604,8 @@ class ZMongoDocumentGetValue(AlwaysDirtyMixin):
         clean_path = _coerce_field_path(_prefer_link_value(field_path, field_path_link))
         quoted = urllib.parse.quote(clean_id, safe="")
         payload = _session_request(session, "GET", document_prefix, f"/api/get/{quoted}")
+        if not payload.get("success") and _is_route_not_found(payload):
+            payload = _generic_document_get_fallback(session, clean_id)
         if not payload.get("success"):
             empty_tail = _selectable_tail([])
             return (_json_text(payload), fallback or "", False, "missing_document", _dirty_token("document_get_value_error", refresh_token), _as_comfy_list([]), *empty_tail)
@@ -537,6 +636,16 @@ class ZMongoDocumentSaveText(AlwaysDirtyMixin):
         clean_id = _coerce_document_id(_prefer_link_value(document_id, document_id_link))
         quoted = urllib.parse.quote(clean_id, safe="")
         payload = _session_request(session, "POST", document_prefix, f"/api/save-text/{quoted}", json_body={"text": text or ""})
+        if not payload.get("success") and _is_route_not_found(payload):
+            payload = _session_save_value(
+                session,
+                collection_name=DEFAULT_DOCUMENT_COLLECTION,
+                document_id=clean_id,
+                query=None,
+                field_path="text",
+                value=text or "",
+                upsert=False,
+            )
         _raise_if_failed(payload, "Document save text")
         resolved_id = _extract_doc_id(payload) or clean_id
         ids = [resolved_id] if resolved_id else []
@@ -594,6 +703,16 @@ class ZMongoDocumentSaveValue(AlwaysDirtyMixin):
             "normalize_for_storage": bool(normalize_for_storage),
         }
         payload = _session_request(session, "POST", document_prefix, f"/api/save-value/{quoted}", json_body=body)
+        if not payload.get("success") and _is_route_not_found(payload):
+            payload = _session_save_value(
+                session,
+                collection_name=DEFAULT_DOCUMENT_COLLECTION,
+                document_id=clean_id,
+                query=None,
+                field_path=clean_path,
+                value=body["value"],
+                upsert=False,
+            )
 
         # Do not raise here.  Save Value is often used in demo workflows with
         # selectable fields; a failed write should be visible in the JSON output
