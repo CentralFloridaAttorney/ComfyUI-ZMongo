@@ -7,6 +7,9 @@ from . import gemini_api_nodes
 from . import zmongo_image_nodes
 from . import zmongo_images_nodes
 from . import document_api_nodes
+from . import zmongo_preset_nodes
+from . import zmongo_discovery_nodes
+from . import zmongo_dynamic_preset
 
 
 
@@ -59,6 +62,21 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         "document_api_nodes",
         document_api_nodes.NODE_CLASS_MAPPINGS,
         document_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
+        "zmongo_preset_nodes",
+        zmongo_preset_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_preset_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
+        "zmongo_discovery_nodes",
+        zmongo_discovery_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_discovery_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
+        "zmongo_dynamic_preset",
+        zmongo_dynamic_preset.NODE_CLASS_MAPPINGS,
+        zmongo_dynamic_preset.NODE_DISPLAY_NAME_MAPPINGS,
     ),
 )
 
