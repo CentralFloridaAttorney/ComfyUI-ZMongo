@@ -59,6 +59,16 @@ class ZMongoApiSession:
 
         if self.username:
             headers["X-AGENT-USERNAME"] = self.username
+            headers["ZAI_USER"] = self.username
+            headers["ZAI-USER"] = self.username
+            headers["X-ZAI-User"] = self.username
+            headers["X-Username"] = self.username
+            headers["X-User"] = self.username
+            headers["ZAI_USER"] = self.username
+            headers["ZAI-USER"] = self.username
+            headers["X-ZAI-User"] = self.username
+            headers["X-Username"] = self.username
+            headers["X-User"] = self.username
 
         return headers
 
