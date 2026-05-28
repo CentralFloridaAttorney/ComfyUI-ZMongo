@@ -119,21 +119,10 @@ Demonstrates the complete save-and-verify loop by generating an image, saving it
 Guides you through selecting a collection, listing documents, finding a field path, and saving/retrieving prompt data (like `prompt.positive`).
 * **Workflow File**: `zmongo_get_save_value.json` / `zmongo_get_save_value.jpg`.
 
-### 3. ZMongo Video Demo
-Teaches a complete media loop: save a start image, load it back to generate an image-to-video clip, save the resulting video frames to an `image_sequences` collection, and rebuild an MP4 from the stored frames.
-
-**Click the image below to download/open the workflow:**
-
-[![ZMongo Video Demo Workflow](example_workflows/zmongo_video_demo.jpg)](example_workflows/zmongo_video_demo.json)
-
-* **Workflow File**: [`example_workflows/zmongo_video_demo.json`](example_workflows/zmongo_video_demo.json)
-* **Preview Image**: `example_workflows/zmongo_video_demo.jpg`
-* **Local project path**: `/home/comfyuser/PycharmProjects/ComfyUI-ZMongo/example_workflows/zmongo_video_demo.json`
-
-### 4. Dynamic Preset Features
+### 3. Dynamic Preset Features
 Shows how to use text parsing (e.g., searching for the word "many") to conditionally switch between different saved KSampler presets. 
 * **Workflow File**: `zmongo_preset_features.json` / `zmongo_preset_features.jpg`.
-
+[zmongo_preset_features.json](example_workflows/zmongo_preset_features.json)![zmongo_preset_features.jpg](example_workflows/zmongo_preset_features.jpg)
 ---
 
 ## Troubleshooting
