@@ -8,7 +8,7 @@ from . import zmongo_image_nodes
 from . import zmongo_images_nodes
 from . import document_api_nodes
 from . import zmongo_preset_nodes
-from . import zmongo_discovery_nodes
+from . import zmongo_text_agent_nodes
 from . import zmongo_helper_nodes
 
 
@@ -67,6 +67,11 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         "zmongo_preset_nodes",
         zmongo_preset_nodes.NODE_CLASS_MAPPINGS,
         zmongo_preset_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
+        "zmongo_text_agent_nodes",
+        zmongo_text_agent_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_text_agent_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
     (
         "zmongo_helper_nodes",

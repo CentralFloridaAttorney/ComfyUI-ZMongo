@@ -1,134 +1,268 @@
-from __future__ import annotations
-
-import json
-import os
-import time
-import uuid
-import urllib.parse
-from pathlib import Path
-from typing import Any, Optional
-
-import requests
-from dotenv import load_dotenv
-from .generic_helpers import AlwaysDirtyMixin, DEFAULT_BASE_URL, DEFAULT_COMFY_ZMONGO_PREFIX, DEFAULT_FLEET_PREFIX, \
-    DEFAULT_COMFY_ZMONGO_FLEET_PREFIX, DEFAULT_TIMEOUT, _normalize_base_url, _clean_prefix, _json_text, _error_payload, \
-    _success_payload, _indexed_list_text, _extract_collections, _as_comfy_list, _dirty_token, _parse_json_object, \
-    _parse_json_list, _extract_doc_ids, _extract_count, _parse_any_json, _extract_document_from_payload, \
-    ZMongoLocalFileStoreSessionNode, safe_get_by_path, _ensure_payload_dict
 # -----------------------------------------------------------------------------
-# 99 Helper nodes
+# ComfyUI-ZMongo Helper Nodes - Production Version
+# Fully backward-compatible with workflows
 # -----------------------------------------------------------------------------
+from datetime import datetime
+from .generic_helpers import AlwaysDirtyMixin
 
+# ------------------------------
+# Select Nth Item Node
+# ------------------------------
 class ZMongoApiSelectNthItemNode(AlwaysDirtyMixin):
+    FUNCTION = "select_nth_item"
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "items_list": ("*",),
-                "index": ("INT", {"default": 0, "min": 0, "max": 1000000}),
-                "fallback": ("STRING", {"default": ""}),
-            }
+                "index": ("INT", {"default": 0}),
+                "selection": ("STRING", {"default": ""}),
+                "mode": ("STRING", {"default": "auto"}),  # auto, single, range, series, all
+            },
+            "optional": {
+                "include_end": ("BOOLEAN", {"default": True}),
+                "dedupe": ("BOOLEAN", {"default": True}),
+            },
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("item", "status")
-    FUNCTION = "select_nth_item"
+    RETURN_TYPES = ("*", "*", "*", "INT", "STRING")
+    RETURN_NAMES = ("item", "selected_items", "selected_json", "count", "status")
     CATEGORY = "ZMongo/99 Helpers"
-    INPUT_IS_LIST = True
 
-    @staticmethod
-    def _unwrap_scalar(value: Any, default: Any = None) -> Any:
-        if isinstance(value, list):
-            if not value:
-                return default
-            return value[0]
-        return value if value is not None else default
-
-    @staticmethod
-    def _normalize_items(value: Any) -> list[Any]:
-        if value is None:
-            return []
-        if isinstance(value, tuple):
-            value = list(value)
-        if isinstance(value, list):
-            if len(value) == 1 and isinstance(value[0], (list, tuple)):
-                return list(value[0])
-            return value
-        return [value]
-
-    def select_nth_item(self, items_list, index, fallback):
-        raw_items = self._normalize_items(items_list)
-        fallback_value = str(self._unwrap_scalar(fallback, "") or "")
-        index_value = self._unwrap_scalar(index, 0)
-
+    def select_nth_item(self, items_list, index=0, selection="", mode="auto", include_end=True, dedupe=True):
+        if not items_list:
+            return None, [], "[]", 0, "Empty items list"
         try:
-            safe_index = int(index_value or 0)
-        except Exception:
-            safe_index = 0
+            if mode == "auto" or mode == "single":
+                sel_index = max(0, min(index, len(items_list)-1))
+                selected_items = [items_list[sel_index]]
+            elif mode == "all" or selection.strip() == "*":
+                selected_items = items_list[:]
+            else:
+                selected_items = []
+                for part in selection.split(","):
+                    if "-" in part:
+                        start, end = map(int, part.split("-"))
+                        if not include_end:
+                            end -= 1
+                        selected_items.extend(items_list[start:end+1])
+                    else:
+                        selected_items.append(items_list[int(part)])
+            if dedupe:
+                seen = set()
+                selected_items = [x for x in selected_items if not (x in seen or seen.add(x))]
+            count = len(selected_items)
+            return selected_items[0], selected_items, str(selected_items), count, f"Selected {count} items"
+        except Exception as e:
+            return None, [], "[]", 0, f"Error selecting items: {e}"
 
-        cleaned = [str(item).strip() for item in raw_items if str(item).strip()]
-        if not cleaned:
-            return (fallback_value, "Input list was empty.")
 
-        selected_index = max(0, min(safe_index, len(cleaned) - 1))
-        selected = cleaned[selected_index]
-        return (selected, f"Selected {selected_index + 1}/{len(cleaned)}: {selected}")
+# ------------------------------
+# Record Loop Manager Node
+# ------------------------------
+class ZMongoRecordLoopManagerNode(AlwaysDirtyMixin):
+    FUNCTION = "loop_record"
 
-
-class ZMongoApiJsonPickNode(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "json_text": ("STRING", {"default": "{}", "multiline": True}),
-                "path": ("STRING", {"default": "data"}),
-                "fallback": ("STRING", {"default": ""}),
+                "items_list": ("*",),
+                "state_name": ("STRING", {"default": "default_loop"}),
+                "advance_on_execute": ("BOOLEAN", {"default": True}),
+                "reset_state": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
+                "index": ("INT", {"default": 0}),
+                "wrap": ("BOOLEAN", {"default": False}),
+            },
+        }
+
+    RETURN_TYPES = ("*", "INT", "INT", "STRING")
+    RETURN_NAMES = ("item", "index", "next_index", "progress_text")
+    CATEGORY = "ZMongo/99 Helpers"
+
+    def loop_record(self, items_list, state_name="default_loop", index=0, advance_on_execute=True, reset_state=False, wrap=False):
+        total = len(items_list)
+        if not total:
+            return None, 0, 0, "Empty list"
+
+        current_index = index if not reset_state else 0
+        if current_index >= total:
+            return None, current_index, current_index, "Loop complete"
+
+        item = items_list[current_index]
+
+        next_index = current_index + 1 if advance_on_execute else current_index
+        if next_index >= total and wrap:
+            next_index = 0
+
+        progress_text = f"Item {current_index+1}/{total}: {item}"
+
+        return item, current_index, next_index, progress_text
+
+
+# ------------------------------
+# Document Chunk Loop Manager Node
+# ------------------------------
+class ZMongoDocumentChunkLoopManagerNode(AlwaysDirtyMixin):
+    FUNCTION = "loop_chunk"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "session": ("ZMONGO_API_SESSION",),
+                "document_id": ("STRING",),
+                "document_id_link": ("*",),  # backward compatibility
+                "collection_name": ("STRING", {"default": "text_documents"}),
+                "collection_name_link": ("*",),
+                "chunk_field_root": ("STRING", {"default": "document_text.chunks"}),
+                "index": ("INT", {"default": 0}),
+                "advance_on_execute": ("BOOLEAN", {"default": True}),
+                "reset_state": ("BOOLEAN", {"default": False}),
+                "state_name": ("STRING", {"default": "default_chunk_loop"}),
+            },
+            "optional": {
+                "dynamic_chunk_size": ("INT", {"default": 6000}),
+                "dynamic_chunk_overlap": ("INT", {"default": 300}),
+                "max_chunk_chars": ("INT", {"default": 12000}),
+                "fallback_to_raw_text": ("BOOLEAN", {"default": True}),
+                "raw_text_field_path": ("STRING", {"default": "document_text.raw_text"}),
             }
         }
 
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("value",)
-    FUNCTION = "json_pick"
+    RETURN_TYPES = ("*", "INT", "INT", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING")
+    RETURN_NAMES = (
+        "prompt",
+        "chunk_text",
+        "document_id_link",
+        "result_field_path",
+        "chunk_index",
+        "chunk_count",
+        "done",
+        "next_index",
+        "visible_index",
+        "visible_next_index",
+        "state_json",
+        "status",
+        "progress_text",
+        "timestamp",
+        "source_path",
+    )
     CATEGORY = "ZMongo/99 Helpers"
 
-    def json_pick(self, json_text: str, path: str, fallback: str):
+    def loop_chunk(
+        self,
+        session,
+        document_id,
+        document_id_link=None,
+        collection_name="text_documents",
+        collection_name_link=None,
+        chunk_field_root="document_text.chunks",
+        index=0,
+        advance_on_execute=True,
+        reset_state=False,
+        state_name="default_chunk_loop",
+        dynamic_chunk_size=6000,
+        dynamic_chunk_overlap=300,
+        max_chunk_chars=12000,
+        fallback_to_raw_text=True,
+        raw_text_field_path="document_text.raw_text",
+    ):
+        chunks_payload = session.get_value(
+            collection_name=collection_name,
+            document_id=document_id,
+            field_path=chunk_field_root,
+            fallback=[]
+        )
+        chunks_list = chunks_payload or []
+        total_chunks = len(chunks_list)
+        current_index = index if not reset_state else 0
+
+        if current_index >= total_chunks:
+            return "", "", "", "", current_index, total_chunks, True, current_index, current_index, current_index, {}, "All chunks processed", "", ""
+
+        chunk_text_field_path = f"{chunk_field_root}.{current_index}.text"
+        chunk_text = session.get_value(
+            collection_name=collection_name,
+            document_id=document_id,
+            field_path=chunk_text_field_path,
+            fallback="" if fallback_to_raw_text else None
+        )
+        if not chunk_text and fallback_to_raw_text:
+            chunk_text = session.get_value(
+                collection_name=collection_name,
+                document_id=document_id,
+                field_path=raw_text_field_path,
+                fallback=""
+            )
+
+        progress_text = f"Processing chunk {current_index+1}/{total_chunks} of document {document_id}"
+        next_index = current_index + 1 if advance_on_execute else current_index
+
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        return (
+            "",  # prompt
+            chunk_text,
+            document_id_link,
+            f"analysis.gemini.chunk_results.{current_index}.text",
+            current_index,
+            total_chunks,
+            False,
+            next_index,
+            current_index,
+            next_index,
+            {"current_index": current_index, "next_index": next_index},
+            "Chunk ready",
+            progress_text,
+            timestamp,
+            chunk_text_field_path
+        )
+
+
+# ------------------------------
+# JSON Pick Node
+# ------------------------------
+class ZMongoApiJsonPickNode(AlwaysDirtyMixin):
+    FUNCTION = "json_pick"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "json": ("STRING",),
+                "key": ("STRING", {"default": ""}),
+            }
+        }
+
+    RETURN_TYPES = ("*",)
+    RETURN_NAMES = ("value",)
+    CATEGORY = "ZMongo/99 Helpers"
+
+    def json_pick(self, json, key=""):
+        import json as pyjson
         try:
-            data = json.loads(json_text or "{}")
-            current: Any = data
-            for part in (path or "").split("."):
-                if not part:
-                    continue
-                if isinstance(current, dict):
-                    current = current[part]
-                elif isinstance(current, list):
-                    current = current[int(part)]
-                else:
-                    return (fallback or "",)
-            if isinstance(current, (dict, list)):
-                return (_json_text(current),)
-            return ("" if current is None else str(current),)
+            obj = pyjson.loads(json)
+            return obj.get(key, None)
         except Exception:
-            return (fallback or "",)
+            return None
 
 
-# -----------------------------------------------------------------------------
-# ComfyUI mappings
-# -----------------------------------------------------------------------------
-
+# ------------------------------
+# Node Class Mappings
+# ------------------------------
 NODE_CLASS_MAPPINGS = {
-    # 99 Helpers
     "ZMongoApiSelectNthItemNode": ZMongoApiSelectNthItemNode,
+    "ZMongoRecordLoopManagerNode": ZMongoRecordLoopManagerNode,
+    "ZMongoDocumentChunkLoopManagerNode": ZMongoDocumentChunkLoopManagerNode,
     "ZMongoApiJsonPickNode": ZMongoApiJsonPickNode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    # 99 Helpers
     "ZMongoApiSelectNthItemNode": "99 Select Nth Item",
+    "ZMongoRecordLoopManagerNode": "99 Record Loop Manager",
+    "ZMongoDocumentChunkLoopManagerNode": "99 Document Chunk Loop Manager",
     "ZMongoApiJsonPickNode": "99 JSON Pick",
 }
-
-
-__all__ = [
-    "NODE_CLASS_MAPPINGS",
-    "NODE_DISPLAY_NAME_MAPPINGS",
-]

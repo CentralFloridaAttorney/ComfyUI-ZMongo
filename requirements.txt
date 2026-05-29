@@ -21,3 +21,5 @@ pytest
 quart
 pillow
 python-dotenv
+python-docx
+pymupdf
