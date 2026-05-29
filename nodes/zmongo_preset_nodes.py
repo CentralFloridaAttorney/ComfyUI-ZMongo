@@ -343,6 +343,9 @@ def _reconstruct_preset_payload_from_dot_path_document(document: Any) -> dict[st
     if isinstance(document.get("unresolved_links"), list):
         payload["unresolved_links"] = document.get("unresolved_links")
 
+    if isinstance(document.get("unresolved_link_details"), list):
+        payload["unresolved_link_details"] = document.get("unresolved_link_details")
+
     if document.get("warning"):
         payload["warning"] = document.get("warning")
 
@@ -776,6 +779,9 @@ def _reconstruct_preset_payload_from_api_document(document: Any) -> dict[str, An
     if isinstance(document.get("unresolved_links"), list):
         payload["unresolved_links"] = document.get("unresolved_links")
 
+    if isinstance(document.get("unresolved_link_details"), list):
+        payload["unresolved_link_details"] = document.get("unresolved_link_details")
+
     return payload
 
 
@@ -874,6 +880,19 @@ def _save_preset_api(
             query=query,
             field_path="unresolved_links",
             value=payload.get("unresolved_links"),
+        )
+        if document_id:
+            latest_document_id = document_id
+        if not ok:
+            failures.append(message)
+
+    if isinstance(payload.get("unresolved_link_details"), list):
+        ok, message, document_id, raw_response = _api_save_value(
+            session=session,
+            collection_name=collection,
+            query=query,
+            field_path="unresolved_link_details",
+            value=payload.get("unresolved_link_details"),
         )
         if document_id:
             latest_document_id = document_id
@@ -1406,6 +1425,30 @@ def _extract_dynamic_preset_payload_from_prompt_node(
     return {}
 
 
+def _link_source_node_info(
+    *,
+    prompt: Any,
+    link_value: Any,
+) -> tuple[str, Optional[int], str, Dict[str, Any]]:
+    """
+    Return source node information for a ComfyUI link value.
+
+    ComfyUI prompt inputs represent links as [source_node_id, output_index].
+    This helper keeps link detection centralized so preset saving can distinguish
+    ordinary graph wiring from ZMongo dynamic preset value links.
+    """
+    source_node_id, output_index = _parse_link_value(link_value)
+    if not source_node_id or output_index is None:
+        return "", None, "", {}
+
+    source_node = _prompt_node_by_id(prompt, source_node_id)
+    if not source_node:
+        return source_node_id, output_index, "", {}
+
+    source_class = str(source_node.get("class_type") or "")
+    return source_node_id, output_index, source_class, source_node
+
+
 def _resolve_dynamic_loader_field_from_link(
     *,
     prompt: Any,
@@ -1413,15 +1456,14 @@ def _resolve_dynamic_loader_field_from_link(
     target_input_name: str,
     session: Any = None,
 ) -> Dict[str, Any]:
-    source_node_id, output_index = _parse_link_value(link_value)
-    if not source_node_id or output_index is None:
+    source_node_id, output_index, source_class, source_node = _link_source_node_info(
+        prompt=prompt,
+        link_value=link_value,
+    )
+
+    if not source_node_id or output_index is None or not source_node:
         return {}
 
-    source_node = _prompt_node_by_id(prompt, source_node_id)
-    if not source_node:
-        return {}
-
-    source_class = str(source_node.get("class_type") or "")
     if source_class != DYNAMIC_PRESET_NODE_CLASS:
         return {}
 
@@ -1435,23 +1477,29 @@ def _resolve_dynamic_loader_field_from_link(
     if not isinstance(fields, list):
         return {}
 
+    target_name = str(target_input_name or "").strip()
+
+    # First choice: exact output-index match AND exact field-name match.
+    # This is the only safe index-based resolution because dynamic outputs are
+    # positional but target inputs are named.
     if 0 <= output_index < len(fields) and isinstance(fields[output_index], dict):
         candidate = fields[output_index]
-        candidate_name = str(candidate.get("input_name") or "")
-
-        if candidate_name == target_input_name:
+        candidate_name = str(candidate.get("input_name") or "").strip()
+        if candidate_name == target_name:
             return candidate
 
-        for field in fields:
-            if isinstance(field, dict) and str(field.get("input_name") or "") == target_input_name:
-                return field
-
-        return candidate
-
+    # Second choice: exact field-name match anywhere in the loaded preset.
+    # This survives field-order changes while still avoiding wrong-value saves.
     for field in fields:
-        if isinstance(field, dict) and str(field.get("input_name") or "") == target_input_name:
+        if not isinstance(field, dict):
+            continue
+        field_name = str(field.get("input_name") or "").strip()
+        if field_name == target_name:
             return field
 
+    # Deliberately do not fall back to returning fields[output_index].
+    # Saving an indexed field with a mismatched name silently stores the wrong
+    # preset value and is harder to diagnose than an unresolved-link warning.
     return {}
 
 
@@ -1529,6 +1577,7 @@ def _build_preset_payload(
 
     fields: List[Dict[str, Any]] = []
     unresolved_links: List[str] = []
+    unresolved_link_details: List[Dict[str, Any]] = []
 
     for input_name, current_value in current_inputs.items():
         if input_name not in declarations:
@@ -1545,6 +1594,12 @@ def _build_preset_payload(
         is_link = bool(base_field.get("is_link"))
 
         if is_link:
+            source_node_id, output_index, link_source_class, _source_node = _link_source_node_info(
+                prompt=prompt,
+                link_value=current_value,
+            )
+            is_dynamic_loader_link = link_source_class == DYNAMIC_PRESET_NODE_CLASS
+
             resolved_field = _resolve_dynamic_loader_field_from_link(
                 prompt=prompt,
                 link_value=current_value,
@@ -1559,6 +1614,10 @@ def _build_preset_payload(
                     target_input_name=input_name,
                     link_value=current_value,
                 )
+                merged_field["resolved_source_node_id"] = source_node_id
+                merged_field["resolved_source_output_index"] = output_index
+                merged_field["resolved_source_node_class"] = link_source_class
+                merged_field["resolved_source_input_name"] = str(resolved_field.get("input_name") or "")
 
                 if save_mode in {"widgets_only", "widgets_and_inputs"}:
                     fields.append(merged_field)
@@ -1568,6 +1627,27 @@ def _build_preset_payload(
                 continue
 
             unresolved_links.append(input_name)
+            unresolved_link_details.append(
+                {
+                    "input_name": input_name,
+                    "link_value": current_value,
+                    "source_node_id": source_node_id,
+                    "source_output_index": output_index,
+                    "source_node_class": link_source_class,
+                    "dynamic_loader_link": is_dynamic_loader_link,
+                    "reason": (
+                        "Dynamic preset link could not be resolved to an underlying field value."
+                        if is_dynamic_loader_link
+                        else "Ordinary ComfyUI runtime link; no serializable widget value available."
+                    ),
+                }
+            )
+
+            # A dynamic preset output is a value-provider link.  If resolution
+            # fails, do not store the ComfyUI graph link as the preset value in
+            # the normal save modes; that is the bug this branch prevents.
+            if is_dynamic_loader_link and save_mode in {"widgets_only", "widgets_and_inputs"}:
+                continue
 
             if save_mode == "widgets_only":
                 continue
@@ -1597,10 +1677,11 @@ def _build_preset_payload(
 
     if unresolved_links:
         payload["unresolved_links"] = unresolved_links
+        payload["unresolved_link_details"] = unresolved_link_details
         payload["warning"] = (
-            "Some linked inputs could not be resolved. Links from "
-            "ZMongoDynamicPresetOutputs are resolvable; ordinary runtime "
-            "object links are not saved in widgets_only mode."
+            "Some linked inputs could not be resolved. Dynamic preset output "
+            "links are not saved as raw ComfyUI link arrays in widgets_only or "
+            "widgets_and_inputs mode; they must resolve to underlying preset values."
         )
 
     return payload, ""
@@ -2115,6 +2196,13 @@ class ZMongoPresetDebugInfo:
                             "widget_kind": field.get("widget_kind"),
                             "value": field.get("value"),
                             "resolved_from_link": field.get("resolved_from_link", False),
+                            "resolved_link_target": field.get("resolved_link_target"),
+                            "resolved_source_node_id": field.get("resolved_source_node_id"),
+                            "resolved_source_output_index": field.get("resolved_source_output_index"),
+                            "resolved_source_node_class": field.get("resolved_source_node_class"),
+                            "resolved_source_input_name": field.get("resolved_source_input_name"),
+                            "is_link": field.get("is_link", False),
+                            "link_target": field.get("link_target"),
                         }
                     )
 
@@ -2126,6 +2214,7 @@ class ZMongoPresetDebugInfo:
             "field_count": len(field_names),
             "fields": field_names,
             "unresolved_links": payload.get("unresolved_links", []),
+            "unresolved_link_details": payload.get("unresolved_link_details", []),
             "warning": payload.get("warning", ""),
         }
 

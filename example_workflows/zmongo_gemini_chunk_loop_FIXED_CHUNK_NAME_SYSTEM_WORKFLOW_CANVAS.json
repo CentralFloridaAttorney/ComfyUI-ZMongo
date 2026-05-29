@@ -1,0 +1,1689 @@
+{
+  "id": "f13fe622-dcda-452d-bc99-87d6eb58092b",
+  "revision": 0,
+  "last_node_id": 13,
+  "last_link_id": 17,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "ZMongoApiKeySessionNode",
+      "pos": [
+        -1280,
+        -160
+      ],
+      "size": [
+        360,
+        290
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "base_url",
+          "name": "base_url",
+          "type": "STRING",
+          "widget": {
+            "name": "base_url"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "zai_api_key",
+          "name": "zai_api_key",
+          "type": "STRING",
+          "widget": {
+            "name": "zai_api_key"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "username",
+          "name": "username",
+          "type": "STRING",
+          "widget": {
+            "name": "username"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "comfy_zmongo_prefix",
+          "name": "comfy_zmongo_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "comfy_zmongo_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "fleet_prefix",
+          "name": "fleet_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "fleet_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "comfy_zmongo_fleet_prefix",
+          "name": "comfy_zmongo_fleet_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "comfy_zmongo_fleet_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "timeout_seconds",
+          "name": "timeout_seconds",
+          "type": "INT",
+          "widget": {
+            "name": "timeout_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "verify_tls",
+          "name": "verify_tls",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "verify_tls"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "test_whoami",
+          "name": "test_whoami",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "test_whoami"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "links": [
+            1,
+            3,
+            6,
+            7
+          ]
+        },
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "status",
+          "name": "status",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "00 API Key Session",
+      "properties": {
+        "Node name for S&R": "ZMongoApiKeySessionNode"
+      },
+      "widgets_values": [
+        "https://businessprocessapplications.com",
+        "PASTE_API_KEY_HERE",
+        "PASTE_USERNAME_HERE",
+        "/comfy-zmongo",
+        "/fleet",
+        "/comfy-zmongo-fleet",
+        30,
+        true,
+        true
+      ],
+      "color": "#233",
+      "bgcolor": "#355"
+    },
+    {
+      "id": 2,
+      "type": "ZMongoDocumentFilePathBrowser",
+      "pos": [
+        -1280,
+        240
+      ],
+      "size": [
+        360,
+        620
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "root_mode",
+          "name": "root_mode",
+          "type": "COMBO",
+          "widget": {
+            "name": "root_mode"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "selected_file",
+          "name": "selected_file",
+          "type": "COMBO",
+          "widget": {
+            "name": "selected_file"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "manual_path",
+          "name": "manual_path",
+          "type": "STRING",
+          "widget": {
+            "name": "manual_path"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "custom_root",
+          "name": "custom_root",
+          "type": "STRING",
+          "widget": {
+            "name": "custom_root"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "recursive",
+          "name": "recursive",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "recursive"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "extensions",
+          "name": "extensions",
+          "type": "STRING",
+          "widget": {
+            "name": "extensions"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "search_text",
+          "name": "search_text",
+          "type": "STRING",
+          "widget": {
+            "name": "search_text"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "max_results",
+          "name": "max_results",
+          "type": "INT",
+          "widget": {
+            "name": "max_results"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "max_depth",
+          "name": "max_depth",
+          "type": "INT",
+          "widget": {
+            "name": "max_depth"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "include_hidden",
+          "name": "include_hidden",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "include_hidden"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "type": "STRING",
+          "shape": 7,
+          "widget": {
+            "name": "refresh_token"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "file_path",
+          "name": "file_path",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "file_path_link",
+          "name": "file_path_link",
+          "type": "ZMONGO_FILE_PATH",
+          "links": [
+            2
+          ]
+        },
+        {
+          "localized_name": "filename",
+          "name": "filename",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "filename_link",
+          "name": "filename_link",
+          "type": "ZMONGO_FILENAME",
+          "links": null
+        },
+        {
+          "localized_name": "content_type",
+          "name": "content_type",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "size_bytes",
+          "name": "size_bytes",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "exists",
+          "name": "exists",
+          "type": "BOOLEAN",
+          "links": null
+        },
+        {
+          "localized_name": "browser_root",
+          "name": "browser_root",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "refresh",
+          "name": "refresh",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "file_paths",
+          "name": "file_paths",
+          "type": "*",
+          "links": null,
+          "shape": 6
+        },
+        {
+          "localized_name": "filenames",
+          "name": "filenames",
+          "type": "*",
+          "links": null,
+          "shape": 6
+        },
+        {
+          "localized_name": "indexed_file_paths",
+          "name": "indexed_file_paths",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "discovered_count",
+          "name": "discovered_count",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "status",
+          "name": "status",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "selectable_items",
+          "name": "selectable_items",
+          "type": "*",
+          "links": null,
+          "shape": 6
+        },
+        {
+          "localized_name": "indexed_items",
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "item_count",
+          "name": "item_count",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "title": "01 Choose Local Document File",
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentFilePathBrowser"
+      },
+      "widgets_values": [
+        "Documents",
+        "",
+        "",
+        "",
+        true,
+        ".pdf,.docx,.txt,.md,.csv,.json,.log,.rtf",
+        "",
+        500,
+        6,
+        false,
+        ""
+      ],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 3,
+      "type": "ZMongoDocumentIngestTextFile",
+      "pos": [
+        -780,
+        160
+      ],
+      "size": [
+        430,
+        640
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 1
+        },
+        {
+          "localized_name": "file_path_link",
+          "name": "file_path_link",
+          "type": "*",
+          "shape": 7,
+          "link": 2
+        },
+        {
+          "localized_name": "file_path",
+          "name": "file_path",
+          "type": "STRING",
+          "widget": {
+            "name": "file_path"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "document_name",
+          "name": "document_name",
+          "type": "STRING",
+          "widget": {
+            "name": "document_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "collection_name",
+          "name": "collection_name",
+          "type": "STRING",
+          "widget": {
+            "name": "collection_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "field_root",
+          "name": "field_root",
+          "type": "STRING",
+          "widget": {
+            "name": "field_root"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "chunk_text",
+          "name": "chunk_text",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "chunk_text"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "chunk_size",
+          "name": "chunk_size",
+          "type": "INT",
+          "widget": {
+            "name": "chunk_size"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "chunk_overlap",
+          "name": "chunk_overlap",
+          "type": "INT",
+          "widget": {
+            "name": "chunk_overlap"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "overwrite",
+          "name": "overwrite",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "overwrite"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "metadata_json",
+          "name": "metadata_json",
+          "type": "STRING",
+          "widget": {
+            "name": "metadata_json"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "tags_json",
+          "name": "tags_json",
+          "type": "STRING",
+          "widget": {
+            "name": "tags_json"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "type": "STRING",
+          "shape": 7,
+          "widget": {
+            "name": "refresh_token"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "links": [
+            11
+          ]
+        },
+        {
+          "localized_name": "document_id",
+          "name": "document_id",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "document_id_link",
+          "name": "document_id_link",
+          "type": "ZMONGO_DOCUMENT_ID",
+          "links": [
+            4
+          ]
+        },
+        {
+          "localized_name": "document_name",
+          "name": "document_name",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "filename_link",
+          "name": "filename_link",
+          "type": "ZMONGO_FILENAME",
+          "links": null
+        },
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "text_length",
+          "name": "text_length",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "chunk_count",
+          "name": "chunk_count",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": null
+        },
+        {
+          "localized_name": "refresh",
+          "name": "refresh",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "document_ids",
+          "name": "document_ids",
+          "type": "*",
+          "links": null,
+          "shape": 6
+        },
+        {
+          "localized_name": "text_items",
+          "name": "text_items",
+          "type": "*",
+          "links": null,
+          "shape": 6
+        },
+        {
+          "localized_name": "selectable_items",
+          "name": "selectable_items",
+          "type": "*",
+          "links": null,
+          "shape": 6
+        },
+        {
+          "localized_name": "indexed_items",
+          "name": "indexed_items",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "item_count",
+          "name": "item_count",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "title": "02 Ingest/Reuse Document With Chunks FIRST",
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentIngestTextFile"
+      },
+      "widgets_values": [
+        "",
+        "",
+        "text_documents",
+        "document_text",
+        true,
+        3000,
+        300,
+        false,
+        "{}",
+        "[]",
+        ""
+      ],
+      "color": "#233",
+      "bgcolor": "#355"
+    },
+    {
+      "id": 4,
+      "type": "ZMongoDocumentChunkLoopManagerNode",
+      "pos": [
+        -220,
+        120
+      ],
+      "size": [
+        500,
+        620
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 3
+        },
+        {
+          "localized_name": "collection_name",
+          "name": "collection_name",
+          "type": "STRING",
+          "widget": {
+            "name": "collection_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "document_id",
+          "name": "document_id",
+          "type": "STRING",
+          "widget": {
+            "name": "document_id"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "chunk_field_root",
+          "name": "chunk_field_root",
+          "type": "STRING",
+          "widget": {
+            "name": "chunk_field_root"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "index",
+          "name": "index",
+          "type": "INT",
+          "widget": {
+            "name": "index"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "fallback_text",
+          "name": "fallback_text",
+          "type": "STRING",
+          "widget": {
+            "name": "fallback_text"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "user_instruction",
+          "name": "user_instruction",
+          "type": "STRING",
+          "widget": {
+            "name": "user_instruction"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "result_field_root",
+          "name": "result_field_root",
+          "type": "STRING",
+          "widget": {
+            "name": "result_field_root"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "wrap",
+          "name": "wrap",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "wrap"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "advance_on_execute",
+          "name": "advance_on_execute",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "advance_on_execute"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "state_name",
+          "name": "state_name",
+          "type": "STRING",
+          "widget": {
+            "name": "state_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "reset_state",
+          "name": "reset_state",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "reset_state"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "fallback_to_raw_text",
+          "name": "fallback_to_raw_text",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "fallback_to_raw_text"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "raw_text_field_path",
+          "name": "raw_text_field_path",
+          "type": "STRING",
+          "widget": {
+            "name": "raw_text_field_path"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "dynamic_chunk_size",
+          "name": "dynamic_chunk_size",
+          "type": "INT",
+          "widget": {
+            "name": "dynamic_chunk_size"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "dynamic_chunk_overlap",
+          "name": "dynamic_chunk_overlap",
+          "type": "INT",
+          "widget": {
+            "name": "dynamic_chunk_overlap"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "max_chunk_chars",
+          "name": "max_chunk_chars",
+          "type": "INT",
+          "widget": {
+            "name": "max_chunk_chars"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "document_id_link",
+          "name": "document_id_link",
+          "type": "*",
+          "shape": 7,
+          "link": 4
+        },
+        {
+          "localized_name": "collection_name_link",
+          "name": "collection_name_link",
+          "type": "*",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "type": "STRING",
+          "shape": 7,
+          "widget": {
+            "name": "refresh_token"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            5
+          ]
+        },
+        {
+          "localized_name": "chunk_text",
+          "name": "chunk_text",
+          "type": "STRING",
+          "links": [
+            14
+          ]
+        },
+        {
+          "localized_name": "document_id_link",
+          "name": "document_id_link",
+          "type": "STRING",
+          "links": [
+            8
+          ]
+        },
+        {
+          "localized_name": "result_field_path",
+          "name": "result_field_path",
+          "type": "STRING",
+          "links": [
+            9
+          ]
+        },
+        {
+          "localized_name": "chunk_index",
+          "name": "chunk_index",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "chunk_count",
+          "name": "chunk_count",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "done",
+          "name": "done",
+          "type": "BOOLEAN",
+          "links": null
+        },
+        {
+          "localized_name": "next_index",
+          "name": "next_index",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "visible_index",
+          "name": "visible_index",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "visible_next_index",
+          "name": "visible_next_index",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "state_json",
+          "name": "state_json",
+          "type": "STRING",
+          "links": [
+            13
+          ]
+        },
+        {
+          "localized_name": "status",
+          "name": "status",
+          "type": "STRING",
+          "links": [
+            17
+          ]
+        },
+        {
+          "localized_name": "progress_text",
+          "name": "progress_text",
+          "type": "STRING",
+          "links": [
+            12
+          ]
+        },
+        {
+          "localized_name": "timestamp",
+          "name": "timestamp",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "source_path",
+          "name": "source_path",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "03 Chunk Loop Manager - document_text.chunks.<index>.text",
+      "properties": {
+        "Node name for S&R": "ZMongoDocumentChunkLoopManagerNode"
+      },
+      "widgets_values": [
+        "text_documents",
+        "",
+        "document_text.chunks",
+        0,
+        "",
+        "Analyze this document chunk. Identify legally important facts, issues, rules, reasoning, citations, names, dates, and procedural posture. Do not invent facts. If the chunk is incomplete, state what appears partial.",
+        "analysis.gemini.chunk_results",
+        false,
+        true,
+        "gemini_chunk_loop_uploaded_document_chunks_list",
+        false,
+        true,
+        "gemini_chunk_loop_flattened_chunks_list",
+        true,
+        true,
+        12000,
+        "local_iso"
+      ],
+      "color": "#352",
+      "bgcolor": "#463"
+    },
+    {
+      "id": 5,
+      "type": "GeminiChatNode",
+      "pos": [
+        390,
+        210
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 6
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "link": 5
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "STRING",
+          "widget": {
+            "name": "model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "max_output_tokens",
+          "name": "max_output_tokens",
+          "type": "INT",
+          "widget": {
+            "name": "max_output_tokens"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "temperature",
+          "name": "temperature",
+          "type": "FLOAT",
+          "widget": {
+            "name": "temperature"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "system_instruction",
+          "name": "system_instruction",
+          "type": "STRING",
+          "shape": 7,
+          "widget": {
+            "name": "system_instruction"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "gemini_prefix",
+          "name": "gemini_prefix",
+          "type": "STRING",
+          "shape": 7,
+          "widget": {
+            "name": "gemini_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "type": "STRING",
+          "shape": 7,
+          "widget": {
+            "name": "refresh_token"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "links": [
+            15
+          ]
+        },
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "links": [
+            10
+          ]
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": null
+        }
+      ],
+      "title": "04 Gemini Analyze Current Chunk",
+      "properties": {
+        "Node name for S&R": "GeminiChatNode"
+      },
+      "widgets_values": [
+        "gemini-2.5-flash",
+        8000,
+        0.2,
+        "You are a careful legal/document analysis assistant. Analyze only the supplied chunk. Preserve citations and quote short key phrases when useful. Do not infer beyond the supplied chunk.",
+        "/gemini",
+        ""
+      ],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 6,
+      "type": "ZMongoApiSaveValueNode",
+      "pos": [
+        950,
+        190
+      ],
+      "size": [
+        470,
+        450
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 7
+        },
+        {
+          "localized_name": "collection_name",
+          "name": "collection_name",
+          "type": "STRING",
+          "widget": {
+            "name": "collection_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "query_json",
+          "name": "query_json",
+          "type": "STRING",
+          "widget": {
+            "name": "query_json"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "document_id",
+          "name": "document_id",
+          "type": "STRING",
+          "link": 8
+        },
+        {
+          "localized_name": "field_path",
+          "name": "field_path",
+          "type": "STRING",
+          "link": 9
+        },
+        {
+          "localized_name": "value_json",
+          "name": "value_json",
+          "type": "STRING",
+          "link": 10
+        },
+        {
+          "localized_name": "parse_value_json",
+          "name": "parse_value_json",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "parse_value_json"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "upsert_if_missing",
+          "name": "upsert_if_missing",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "upsert_if_missing"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "parse_json_strings",
+          "name": "parse_json_strings",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "parse_json_strings"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "normalize_for_storage",
+          "name": "normalize_for_storage",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "normalize_for_storage"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "links": [
+            16
+          ]
+        },
+        {
+          "localized_name": "refresh",
+          "name": "refresh",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": null
+        }
+      ],
+      "title": "05 Save Gemini Chunk Result",
+      "properties": {
+        "Node name for S&R": "ZMongoApiSaveValueNode"
+      },
+      "widgets_values": [
+        "text_documents",
+        "{}",
+        "",
+        "",
+        "",
+        false,
+        true,
+        false,
+        false
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 7,
+      "type": "PreviewAny",
+      "pos": [
+        -320,
+        810
+      ],
+      "size": [
+        450,
+        180
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Ingest JSON Preview",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 8,
+      "type": "PreviewAny",
+      "pos": [
+        330,
+        650
+      ],
+      "size": [
+        430,
+        180
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Chunk Progress Preview",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 9,
+      "type": "PreviewAny",
+      "pos": [
+        330,
+        850
+      ],
+      "size": [
+        430,
+        180
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Chunk State JSON Preview",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 10,
+      "type": "PreviewAny",
+      "pos": [
+        330,
+        -20
+      ],
+      "size": [
+        430,
+        190
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Current Chunk Text Preview",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 11,
+      "type": "PreviewAny",
+      "pos": [
+        880,
+        -60
+      ],
+      "size": [
+        430,
+        190
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Gemini JSON Preview",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 12,
+      "type": "PreviewAny",
+      "pos": [
+        1510,
+        220
+      ],
+      "size": [
+        430,
+        190
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Save Result Preview",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 13,
+      "type": "PreviewAny",
+      "pos": [
+        880,
+        690
+      ],
+      "size": [
+        430,
+        190
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Chunk Status Preview",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      3,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      2,
+      2,
+      1,
+      3,
+      1,
+      "ZMONGO_FILE_PATH"
+    ],
+    [
+      3,
+      1,
+      0,
+      4,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      4,
+      3,
+      2,
+      4,
+      17,
+      "*"
+    ],
+    [
+      5,
+      4,
+      0,
+      5,
+      1,
+      "STRING"
+    ],
+    [
+      6,
+      1,
+      0,
+      5,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      7,
+      1,
+      0,
+      6,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      8,
+      4,
+      2,
+      6,
+      3,
+      "STRING"
+    ],
+    [
+      9,
+      4,
+      3,
+      6,
+      4,
+      "STRING"
+    ],
+    [
+      10,
+      5,
+      1,
+      6,
+      5,
+      "STRING"
+    ],
+    [
+      11,
+      3,
+      0,
+      7,
+      0,
+      "STRING"
+    ],
+    [
+      12,
+      4,
+      12,
+      8,
+      0,
+      "STRING"
+    ],
+    [
+      13,
+      4,
+      10,
+      9,
+      0,
+      "STRING"
+    ],
+    [
+      14,
+      4,
+      1,
+      10,
+      0,
+      "STRING"
+    ],
+    [
+      15,
+      5,
+      0,
+      11,
+      0,
+      "STRING"
+    ],
+    [
+      16,
+      6,
+      0,
+      12,
+      0,
+      "STRING"
+    ],
+    [
+      17,
+      4,
+      11,
+      13,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "1. Select file and ingest document into chunks",
+      "bounding": [
+        -1320,
+        80,
+        1010,
+        820
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "2. Emit one stored chunk per run",
+      "bounding": [
+        -260,
+        60,
+        570,
+        980
+      ],
+      "color": "#8A8",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "3. Gemini analyzes the current chunk and saves result",
+      "bounding": [
+        360,
+        140,
+        1600,
+        540
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.82,
+      "offset": [
+        640,
+        260
+      ]
+    },
+    "workflow_note": "Uses fixed chunk-name system: reads document_text.chunks.<index>.text and saves Gemini response to analysis.gemini.chunk_results.<index>.text. Reset true on first import; set false after first run."
+  },
+  "version": 0.4
+}

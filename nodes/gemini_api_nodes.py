@@ -13,7 +13,6 @@ from .generic_helpers import AlwaysDirtyMixin, DEFAULT_GEMINI_PREFIX, _session_a
 # Gemini route nodes
 # -----------------------------------------------------------------------------
 
-# TODO: Make endpoints in the backend to handle image and text for gemini use
 
 class GeminiApiKeyStatusNode(AlwaysDirtyMixin):
     @classmethod

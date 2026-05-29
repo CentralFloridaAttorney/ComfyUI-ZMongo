@@ -32,6 +32,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 
+DEFAULT_LOCAL_MAX_VALUE_BYTES = int(os.getenv("ZMONGO_LOCAL_MAX_VALUE_BYTES", str(256 * 1024)))
+DEFAULT_LOCAL_MAX_DOCUMENT_BYTES = int(os.getenv("ZMONGO_LOCAL_MAX_DOCUMENT_BYTES", str(1024 * 1024)))
+DEFAULT_LOCAL_MAX_IMAGE_BYTES = int(os.getenv("ZMONGO_LOCAL_MAX_IMAGE_BYTES", str(10 * 1024 * 1024)))
+
+
 class DataProcessor:
     @staticmethod
     def to_json_compatible(data: Any, _seen: Optional[set] = None) -> Any:
@@ -250,6 +255,43 @@ class SafeResult:
 class LocalFileStore:
     DOCUMENT_SUFFIX = ".document.json"
     STORAGE_BACKEND = "local_file_store"
+    max_value_bytes = DEFAULT_LOCAL_MAX_VALUE_BYTES
+    max_document_bytes = DEFAULT_LOCAL_MAX_DOCUMENT_BYTES
+    max_image_bytes = DEFAULT_LOCAL_MAX_IMAGE_BYTES
+
+    @staticmethod
+    def _json_size_bytes(value: Any) -> int:
+        return len(json.dumps(DataProcessor.to_json_compatible(value), ensure_ascii=False, default=str).encode("utf-8"))
+
+    def _limit_data(self, kind: str, size_bytes: int, max_bytes: int, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        data = {
+            "storage_backend": self.STORAGE_BACKEND,
+            "kind": kind,
+            "size_bytes": int(size_bytes),
+            "max_bytes": int(max_bytes),
+            "recommended_backend": "https://businessprocessapplications.com",
+            "recommended_pipeline": "Use hosted ZMongo for large documents/files; backend ZEmbedder.py handles chunking and embeddings.",
+        }
+        if extra:
+            data.update(extra)
+        return data
+
+    def _limit_result(self, kind: str, size_bytes: int, max_bytes: int, extra: Optional[Dict[str, Any]] = None) -> SafeResult:
+        return SafeResult.fail(
+            error={"error_type": "LocalStorageItemTooLarge", **self._limit_data(kind, size_bytes, max_bytes, extra)},
+            data=self._limit_data(kind, size_bytes, max_bytes, extra),
+            status_code=413,
+            message=f"Local File Store {kind} is too large: {size_bytes} bytes exceeds {max_bytes} bytes.",
+        )
+
+    def _limit_info(self) -> Dict[str, Any]:
+        return {
+            "local_max_value_bytes": int(self.max_value_bytes),
+            "local_max_document_bytes": int(self.max_document_bytes),
+            "local_max_image_bytes": int(self.max_image_bytes),
+            "large_document_backend": "https://businessprocessapplications.com",
+            "large_document_chunker": "ZEmbedder.py",
+        }
 
     def __init__(self, root_dir: Optional[Union[str, Path]] = None) -> None:
         if root_dir is None:
@@ -355,6 +397,7 @@ class LocalFileStore:
             "updated_at": self._now(),
             "root_dir": str(self.root_dir),
             "description": "ComfyUI-ZMongo Local File Store",
+            "limits": self._limit_info(),
         }
         self._write_json(self.manifest_path, manifest)
 
@@ -463,6 +506,7 @@ class LocalFileStore:
                         "storage_backend": self.STORAGE_BACKEND,
                         "root_dir": str(self.root_dir),
                         "manifest": str(self.manifest_path),
+                        **self._limit_info(),
                     }
                 )
         except Exception as exc:
@@ -564,6 +608,9 @@ class LocalFileStore:
                     )
 
                 safe_doc = DataProcessor.to_json_compatible(document)
+                safe_doc_size = self._json_size_bytes(safe_doc)
+                if safe_doc_size > self.max_document_bytes:
+                    return self._limit_result("document", safe_doc_size, self.max_document_bytes, {"collection": coll})
                 target_id = document_id or safe_doc.get("_id")
 
                 existing_path = self._find_document_path(coll, document_id=target_id) if target_id else None
@@ -721,6 +768,13 @@ class LocalFileStore:
 
                 parsed_value = self._json_loads_maybe(value) if parse_json_strings else value
                 parsed_value = DataProcessor.to_json_compatible(parsed_value)
+                parsed_value_size = self._json_size_bytes(parsed_value)
+                if parsed_value_size > self.max_value_bytes:
+                    return self._limit_result("value", parsed_value_size, self.max_value_bytes, {
+                        "collection": coll,
+                        "document_id": document_id,
+                        "field_path": field_path,
+                    })
 
                 path = self._find_document_path(
                     coll,
@@ -772,6 +826,14 @@ class LocalFileStore:
                 doc["updated_at"] = self._now()
                 doc["collection"] = coll
                 doc["storage_backend"] = self.STORAGE_BACKEND
+
+                doc_size = self._json_size_bytes(doc)
+                if doc_size > self.max_document_bytes:
+                    return self._limit_result("document", doc_size, self.max_document_bytes, {
+                        "collection": coll,
+                        "document_id": doc.get("_id"),
+                        "field_path": field_path,
+                    })
 
                 self._write_json(path, doc)
                 self._touch_manifest()
@@ -899,6 +961,8 @@ class LocalFileStore:
             with self._lock:
                 coll = self._safe_collection_name(collection)
                 image_bytes = self._coerce_image_bytes(image)
+                if len(image_bytes) > self.max_image_bytes:
+                    return self._limit_result("image", len(image_bytes), self.max_image_bytes, {"collection": coll, "filename": filename})
                 safe_filename = self._safe_name(filename, "comfy_image.png")
 
                 path = self._find_document_path(
@@ -1143,6 +1207,7 @@ class LocalFileStore:
                         "files": file_count,
                         "total_bytes": total_bytes,
                         "total_mb": round(total_bytes / (1024 * 1024), 4),
+                        **self._limit_info(),
                     }
                 )
         except Exception as exc:

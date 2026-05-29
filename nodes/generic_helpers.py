@@ -65,6 +65,8 @@ DEFAULT_COMFY_ZMONGO_FLEET_PREFIX = os.getenv("COMFY_ZMONGO_FLEET_PREFIX", "/com
 DEFAULT_DOCUMENT_PREFIX = os.getenv("ZMONGO_DOCUMENT_API_PREFIX", DEFAULT_COMFY_ZMONGO_PREFIX).strip().rstrip(
     "/") or DEFAULT_COMFY_ZMONGO_PREFIX
 DEFAULT_MAX_UPLOAD_BYTES = int(os.getenv("ZMONGO_MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
+DEFAULT_LOCAL_MAX_VALUE_BYTES = int(os.getenv("ZMONGO_LOCAL_MAX_VALUE_BYTES", str(256 * 1024)))
+DEFAULT_LOCAL_MAX_DOCUMENT_BYTES = int(os.getenv("ZMONGO_LOCAL_MAX_DOCUMENT_BYTES", str(1024 * 1024)))
 
 DOCUMENT_FILE_EXTENSIONS = tuple(
     ext.strip().lower()
@@ -1318,6 +1320,29 @@ _local_payload_error = lambda message, data=None, status_code=400, error_type="L
     message, data=data, status_code=status_code, error_type=error_type)
 
 
+def _local_json_size_bytes(value: Any) -> int:
+    return len(json.dumps(value, ensure_ascii=False, default=str).encode("utf-8"))
+
+
+def _local_limit_payload(kind: str, size_bytes: int, max_bytes: int, extra: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    data = {
+        "storage_backend": "local_file_store",
+        "kind": kind,
+        "size_bytes": int(size_bytes),
+        "max_bytes": int(max_bytes),
+        "recommended_backend": "https://businessprocessapplications.com",
+        "recommended_pipeline": "Use hosted ZMongo for large documents/files; backend ZEmbedder.py handles chunking and embeddings.",
+    }
+    if extra:
+        data.update(extra)
+    return _local_payload_error(
+        f"Local File Store {kind} is too large: {size_bytes} bytes exceeds {max_bytes} bytes.",
+        data=data,
+        status_code=413,
+        error_type="LocalStorageItemTooLarge",
+    )
+
+
 class LocalZMongoSession:
     """
     Local file-backed ZMongo-compatible session.
@@ -1338,6 +1363,16 @@ class LocalZMongoSession:
     comfy_zmongo_prefix = "/local-file-store"
     fleet_prefix = "/local-disabled"
     comfy_zmongo_fleet_prefix = "/local-disabled"
+    max_value_bytes = DEFAULT_LOCAL_MAX_VALUE_BYTES
+    max_document_bytes = DEFAULT_LOCAL_MAX_DOCUMENT_BYTES
+
+    def _limit_info(self) -> dict[str, Any]:
+        return {
+            "local_max_value_bytes": int(self.max_value_bytes),
+            "local_max_document_bytes": int(self.max_document_bytes),
+            "large_document_backend": "https://businessprocessapplications.com",
+            "large_document_chunker": "ZEmbedder.py",
+        }
 
     def __init__(self, root_dir: Optional[str | Path] = None) -> None:
         plugin_root = Path(__file__).resolve().parent
@@ -1419,7 +1454,8 @@ class LocalZMongoSession:
             "storage_backend": "local_file_store",
             "root_dir": str(self.root_dir),
             "manifest": str(self.manifest_path),
-            "message": "This stores JSON and images on this machine only. No hosted backend, API key, R2, dashboard, sync, metering, or backup.",
+            "message": "This stores small JSON items on this machine only. Large document storage, chunking, embeddings, R2, dashboard, sync, metering, and backup require hosted ZMongo.",
+            **self._limit_info(),
         })
 
     def whoami(self) -> dict[str, Any]:
@@ -1592,7 +1628,11 @@ class LocalZMongoSession:
 
     def create_doc(self, *, collection: str, document: dict[str, Any]) -> dict[str, Any]:
         clean = _local_safe_name(collection, "documents")
-        saved = self._save_doc(clean, document or {})
+        candidate = dict(document or {})
+        candidate_size = _local_json_size_bytes(candidate)
+        if candidate_size > self.max_document_bytes:
+            return _local_limit_payload("document", candidate_size, self.max_document_bytes, {"collection": clean})
+        saved = self._save_doc(clean, candidate)
         doc_id = str(saved["_id"])
         return _local_payload_ok("Created local document.", {
             "document": saved,
@@ -1602,6 +1642,7 @@ class LocalZMongoSession:
             "collection": clean,
             "collection_name": clean,
             "storage_backend": "local_file_store",
+            **self._limit_info(),
         })
 
     def update_doc(
@@ -1650,6 +1691,12 @@ class LocalZMongoSession:
                         _local_set_by_path(doc, key, item)
         else:
             _local_set_by_path(doc, field_path, value)
+        doc_size = _local_json_size_bytes(doc)
+        if doc_size > self.max_document_bytes:
+            return _local_limit_payload("document", doc_size, self.max_document_bytes, {
+                "collection": clean,
+                "document_id": clean_id,
+            })
         saved = self._save_doc(clean, doc)
         doc_id = str(saved["_id"])
         return _local_payload_ok("Updated local document.", {
@@ -1734,7 +1781,21 @@ class LocalZMongoSession:
                 value = json.loads(value)
             except Exception:
                 pass
+        value_size = _local_json_size_bytes(value)
+        if value_size > self.max_value_bytes:
+            return _local_limit_payload("value", value_size, self.max_value_bytes, {
+                "collection": clean,
+                "document_id": clean_id,
+                "field_path": clean_field,
+            })
         _local_set_by_path(doc, clean_field, value)
+        doc_size = _local_json_size_bytes(doc)
+        if doc_size > self.max_document_bytes:
+            return _local_limit_payload("document", doc_size, self.max_document_bytes, {
+                "collection": clean,
+                "document_id": clean_id,
+                "field_path": clean_field,
+            })
         saved = self._save_doc(clean, doc)
         doc_id = str(saved["_id"])
         return _local_payload_ok("Saved local value.", {
@@ -1749,6 +1810,7 @@ class LocalZMongoSession:
             "document": saved,
             "document_path": str(self._doc_path(clean, doc_id).relative_to(self.root_dir)),
             "storage_backend": "local_file_store",
+            **self._limit_info(),
         })
 
     def fetch_image_field(
