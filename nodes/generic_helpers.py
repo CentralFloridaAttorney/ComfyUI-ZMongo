@@ -1749,20 +1749,23 @@ class LocalZMongoSession:
             "storage_backend": "local_file_store",
         })
 
-    def fetch_image_field(self, *, collection: str, document_id: str, field_path: str, master_key_hex: str = "") -> \
-    tuple[bytes, str]:
-
-        try:
-            from .zmongo_images_nodes import _decode_image_bytes_from_value, _image_field_candidates
-        except Exception:
-            from .zmongo_image_nodes import _decode_image_bytes_from_value, _image_field_candidates
-
+    def fetch_image_field(
+            self,
+            *,
+            collection: str,
+            document_id: str,
+            field_path: str,
+            master_key_hex: str = "",
+    ) -> tuple[bytes, str]:
         clean = _local_safe_name(collection, "images")
         clean_id = _local_clean_scalar(document_id)
         doc = self._load_doc(clean, clean_id)
+
         if not doc:
             raise ValueError(f"Local document not found: {clean}/{clean_id}")
-        errors = []
+
+        errors: list[str] = []
+
         for candidate in _image_field_candidates(field_path, "image_data"):
             try:
                 value = _local_get_by_path(doc, candidate)
@@ -1770,6 +1773,7 @@ class LocalZMongoSession:
                 return data, f"local_file_store:{clean}/{clean_id}:{candidate}"
             except Exception as exc:
                 errors.append(f"{candidate}: {exc}")
+
         raise ValueError("No decodable local image field found. " + " | ".join(errors))
 
     def fetch_absolute_or_relative_bytes(self, url: str) -> bytes:
