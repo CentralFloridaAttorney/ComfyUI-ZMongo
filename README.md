@@ -75,7 +75,7 @@ ComfyUI-ZMongo provides a workflow-data layer for ComfyUI with hosted API suppor
 From the ComfyUI custom nodes directory:
 
 ```bash
-cd /home/comfyuser/comfy_build/ComfyUI/custom_nodes
+cd /home/comfyui/comfy_build/ComfyUI/custom_nodes
 git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
 cd ComfyUI-ZMongo
 pip install -r requirements.txt
@@ -86,7 +86,7 @@ Restart ComfyUI after installation.
 For development from the project directory:
 
 ```bash
-cd /home/comfyuser/PycharmProjects/ComfyUI-ZMongo
+cd /home/comfyui/PycharmProjects/ComfyUI-ZMongo
 ```
 
 ---
