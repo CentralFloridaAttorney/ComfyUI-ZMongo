@@ -12,6 +12,16 @@ The project supports two practical storage modes:
 
 Both modes use the same workflow pattern: collections, document IDs, flattened dot-path fields, image fields, metadata fields, saved values, and reloadable workflow assets.
 
+
+### 🔐 ZMongo API Setup
+
+
+
+Create your account, generate an API key, and connect ComfyUI-ZMongo to hosted workflow storage.
+
+
+[🌐 **Open Business Process Applications** →](https://businessprocessapplications.com)
+
 ---
 
 ## Quick Links: Official Workflows
@@ -491,7 +501,7 @@ ComfyUI-ZMongo/local_store/
   collections/
     images/
       local_....document.json
-    workflow_presets/
+    workflow_presehttps://businessprocessapplications.com.ts/
       local_....document.json
 ```
 
