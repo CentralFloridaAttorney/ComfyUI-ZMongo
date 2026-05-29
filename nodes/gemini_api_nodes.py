@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import base64
 from typing import Any
 
 from .generic_helpers import AlwaysDirtyMixin, DEFAULT_GEMINI_PREFIX, _session_api_request, _as_bool, _json_text, \
     _parse_json_object, _extract_text_from_gemini_payload, _dirty_token, _error_payload, _extract_models_from_payload, \
-    _session_get_doc, _extract_document, _safe_get_by_path, _success_payload, _session_save_value
+    _session_get_doc, _extract_document, _safe_get_by_path, _success_payload, _session_save_value, \
+    _comfy_image_to_png_bytes, _extract_tensor_recursively
 
 
 # -----------------------------------------------------------------------------
 # Gemini route nodes
 # -----------------------------------------------------------------------------
 
+# TODO: Make endpoints in the backend to handle image and text for gemini use
 
 class GeminiApiKeyStatusNode(AlwaysDirtyMixin):
     @classmethod
@@ -152,6 +155,254 @@ class GeminiChatNode(AlwaysDirtyMixin):
         payload = _session_api_request(session, "POST", "/api/chat", json_body=body, gemini_prefix=gemini_prefix)
         return (_json_text(payload), _extract_text_from_gemini_payload(payload), bool(payload.get("success")))
 
+
+class GeminiImageTextNode(AlwaysDirtyMixin):
+    """
+    Send a ComfyUI IMAGE tensor plus text prompt to Gemini and return text.
+
+    Preferred backend route:
+        POST <base_url><gemini_prefix>/api/vision
+
+    Compact request body:
+        {
+            "prompt": "...",
+            "model": "gemini-2.5-flash",
+            "max_output_tokens": 1024,
+            "temperature": 0.4,
+            "image": {
+                "mime_type": "image/jpeg",
+                "data": "<base64>"
+            }
+        }
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "session": ("ZMONGO_API_SESSION",),
+                "image": ("IMAGE",),
+                "prompt": ("STRING", {"default": "Describe this image.", "multiline": True}),
+                "model": ("STRING", {"default": "gemini-2.5-flash"}),
+                "max_output_tokens": ("INT", {"default": 1024, "min": 1, "max": 65536}),
+                "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 2.0, "step": 0.05}),
+                "max_image_side": ("INT", {"default": 1024, "min": 256, "max": 4096}),
+                "jpeg_quality": ("INT", {"default": 85, "min": 40, "max": 95}),
+            },
+            "optional": {
+                "system_instruction": ("STRING", {"default": "", "multiline": True}),
+                "gemini_prefix": ("STRING", {"default": DEFAULT_GEMINI_PREFIX}),
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "BOOLEAN", "STRING")
+    RETURN_NAMES = ("json", "text", "success", "refresh")
+    FUNCTION = "image_text"
+    CATEGORY = "ZMongo/05 Gemini"
+
+    @staticmethod
+    def _first_image_tensor(image: Any) -> Any:
+        tensor = _extract_tensor_recursively(image)
+        if tensor is None:
+            raise ValueError("No valid ComfyUI IMAGE tensor was provided.")
+
+        if not hasattr(tensor, "ndim"):
+            raise TypeError(f"Expected tensor-like IMAGE input, got {type(tensor).__name__}.")
+
+        if tensor.ndim == 4:
+            if tensor.shape[0] < 1:
+                raise ValueError("IMAGE batch is empty.")
+            return tensor[0]
+
+        if tensor.ndim == 3:
+            return tensor
+
+        raise ValueError(f"Expected IMAGE tensor with 3 or 4 dimensions, got shape {tuple(tensor.shape)}.")
+
+    @staticmethod
+    def _tensor_to_compact_jpeg_base64(image: Any, max_image_side: int, jpeg_quality: int) -> tuple[str, int, tuple[int, int]]:
+        import base64
+        import io
+
+        import numpy as np
+        from PIL import Image
+
+        tensor = GeminiImageTextNode._first_image_tensor(image).detach().cpu().clamp(0.0, 1.0)
+        array = (tensor.numpy() * 255.0).round().astype(np.uint8)
+
+        pil_image = Image.fromarray(array, mode="RGB")
+        max_side = max(256, int(max_image_side or 1024))
+
+        if max(pil_image.size) > max_side:
+            pil_image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+
+        buffer = io.BytesIO()
+        pil_image.save(
+            buffer,
+            format="JPEG",
+            quality=max(40, min(int(jpeg_quality or 85), 95)),
+            optimize=True,
+        )
+        jpeg_bytes = buffer.getvalue()
+        return base64.b64encode(jpeg_bytes).decode("ascii"), len(jpeg_bytes), pil_image.size
+
+    @staticmethod
+    def _should_try_next_route(payload: dict[str, Any]) -> bool:
+        status_code = int(payload.get("status_code") or 0)
+        if status_code in {404, 405, 502, 503, 504}:
+            return True
+
+        message = str(payload.get("message") or "").lower()
+        raw_text = str(payload.get("raw_text") or "").lower()
+
+        return (
+            "not found" in message
+            or "method not allowed" in message
+            or "bad gateway" in message
+            or "bad gateway" in raw_text
+            or "gateway timeout" in message
+            or "gateway timeout" in raw_text
+        )
+
+    def image_text(
+        self,
+        session,
+        image,
+        prompt: str,
+        model: str,
+        max_output_tokens: int,
+        temperature: float,
+        max_image_side: int,
+        jpeg_quality: int,
+        system_instruction: str = "",
+        gemini_prefix: str = DEFAULT_GEMINI_PREFIX,
+        refresh_token: str = "",
+    ):
+        refresh = _dirty_token("gemini_image_text", refresh_token)
+
+        if session is None:
+            payload = _error_payload("No API session provided. Connect a ZMongo API Key Session node first.")
+            return (_json_text(payload), "", False, refresh)
+
+        try:
+            image_base64, image_bytes, image_size = self._tensor_to_compact_jpeg_base64(
+                image=image,
+                max_image_side=max_image_side,
+                jpeg_quality=jpeg_quality,
+            )
+
+            base_body: dict[str, Any] = {
+                "prompt": prompt or "",
+                "model": (model or "gemini-2.5-flash").strip(),
+                "max_output_tokens": int(max_output_tokens),
+                "temperature": float(temperature),
+                "image": {
+                    "mime_type": "image/jpeg",
+                    "data": image_base64,
+                },
+            }
+
+            if (system_instruction or "").strip():
+                base_body["system_instruction"] = system_instruction.strip()
+
+            # Try compact canonical route shapes. Do not duplicate image data
+            # inside one request body.
+            route_attempts: list[tuple[str, dict[str, Any]]] = [
+                ("/api/vision", base_body),
+                ("/api/image-text", base_body),
+                ("/api/chat-with-image", base_body),
+                (
+                    "/api/multimodal",
+                    {
+                        **base_body,
+                        "parts": [
+                            {"text": prompt or ""},
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/jpeg",
+                                    "data": image_base64,
+                                }
+                            },
+                        ],
+                    },
+                ),
+            ]
+
+            attempts: list[dict[str, Any]] = []
+
+            for api_path, body in route_attempts:
+                payload = _session_api_request(
+                    session,
+                    "POST",
+                    api_path,
+                    json_body=body,
+                    gemini_prefix=gemini_prefix,
+                )
+
+                attempts.append(
+                    {
+                        "api_path": api_path,
+                        "success": bool(payload.get("success")),
+                        "status_code": payload.get("status_code"),
+                        "message": payload.get("message"),
+                    }
+                )
+
+                if payload.get("success"):
+                    text = _extract_text_from_gemini_payload(payload)
+                    merged = _success_payload(
+                        "Gemini image/text response generated.",
+                        {
+                            "api_path": api_path,
+                            "model": body.get("model"),
+                            "mime_type": "image/jpeg",
+                            "image_bytes": image_bytes,
+                            "image_size": image_size,
+                            "attempts": attempts,
+                            "gemini_payload": payload,
+                            "refresh": refresh,
+                        },
+                        status_code=int(payload.get("status_code") or 200),
+                    )
+                    return (_json_text(merged), text, True, refresh)
+
+                if not self._should_try_next_route(payload):
+                    payload["data"] = payload.get("data") or {}
+                    if isinstance(payload["data"], dict):
+                        payload["data"]["attempts"] = attempts
+                        payload["data"]["image_bytes"] = image_bytes
+                        payload["data"]["image_size"] = image_size
+                        payload["data"]["refresh"] = refresh
+                    return (
+                        _json_text(payload),
+                        _extract_text_from_gemini_payload(payload),
+                        False,
+                        refresh,
+                    )
+
+            final_payload = _error_payload(
+                "Gemini image/text backend route failed or was not found.",
+                data={
+                    "attempts": attempts,
+                    "expected_primary_route": f"{gemini_prefix.rstrip('/')}/api/vision",
+                    "image_bytes": image_bytes,
+                    "image_size": image_size,
+                    "fix_backend": "Add or repair POST /gemini/api/vision. Check the Quart/Hypercorn log for the exception behind nginx 502.",
+                    "refresh": refresh,
+                },
+                status_code=502,
+                error_type="GeminiVisionRouteFailed",
+            )
+            return (_json_text(final_payload), "", False, refresh)
+
+        except Exception as exc:
+            payload = _error_payload(
+                f"Gemini image/text node failed: {exc}",
+                data={"refresh": refresh},
+                error_type=exc.__class__.__name__,
+            )
+            return (_json_text(payload), "", False, refresh)
 
 class GeminiJsonNode(AlwaysDirtyMixin):
     @classmethod
@@ -468,6 +719,7 @@ NODE_CLASS_MAPPINGS = {
     "GeminiDeleteApiKeyNode": GeminiDeleteApiKeyNode,
     "GeminiTestApiKeyNode": GeminiTestApiKeyNode,
     "GeminiChatNode": GeminiChatNode,
+    "GeminiImageTextNode": GeminiImageTextNode,
     "GeminiJsonNode": GeminiJsonNode,
     "GeminiListModelsNode": GeminiListModelsNode,
     "GeminiCountTokensNode": GeminiCountTokensNode,
@@ -481,6 +733,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "GeminiDeleteApiKeyNode": "05 Delete Gemini API Key",
     "GeminiTestApiKeyNode": "05 Test Gemini API Key",
     "GeminiChatNode": "05 Gemini Chat",
+    "GeminiImageTextNode": "05 Gemini Image + Text",
     "GeminiJsonNode": "05 Gemini JSON",
     "GeminiListModelsNode": "05 Gemini List Models",
     "GeminiCountTokensNode": "05 Gemini Count Tokens",
