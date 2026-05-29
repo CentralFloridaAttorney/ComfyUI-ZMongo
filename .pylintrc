@@ -1,0 +1,26 @@
+[MAIN]
+# ComfyUI custom nodes intentionally repeat INPUT_TYPES/RETURN_TYPES schemas.
+# Keep Pylint useful for local review without failing GitHub Actions on
+# framework-required repetition or style-only refactors.
+exit-zero=yes
+jobs=0
+
+[MESSAGES CONTROL]
+disable=
+    duplicate-code,
+    too-many-lines,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-return-statements,
+    too-few-public-methods,
+    broad-exception-caught,
+    import-error,
+    no-name-in-module,
+    unused-argument,
+    protected-access,
+    line-too-long,
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    invalid-name

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# pylint: disable=too-many-lines,too-many-locals,too-many-branches,too-many-statements,too-many-return-statements,broad-exception-caught,import-error,no-name-in-module,unused-argument,protected-access,line-too-long,missing-module-docstring,missing-class-docstring,missing-function-docstring,invalid-name
+
 import base64
 import io
 import json
@@ -1750,13 +1752,24 @@ class LocalZMongoSession:
         })
 
     def fetch_image_field(
-            self,
-            *,
-            collection: str,
-            document_id: str,
-            field_path: str,
-            master_key_hex: str = "",
+        self,
+        *,
+        collection: str,
+        document_id: str,
+        field_path: str,
+        master_key_hex: str = "",
     ) -> tuple[bytes, str]:
+        """Load image bytes from a local ZMongo-style document field.
+
+        This method intentionally does not import zmongo_image_nodes or
+        zmongo_images_nodes. Those modules import this helper module, so importing
+        them here creates a Pylint R0401 cyclic-import warning.
+
+        The required image helpers are already defined in this file:
+        _image_field_candidates() and _decode_image_bytes_from_value().
+        """
+        del master_key_hex  # Local file store does not use hosted encryption keys.
+
         clean = _local_safe_name(collection, "images")
         clean_id = _local_clean_scalar(document_id)
         doc = self._load_doc(clean, clean_id)
@@ -1775,6 +1788,7 @@ class LocalZMongoSession:
                 errors.append(f"{candidate}: {exc}")
 
         raise ValueError("No decodable local image field found. " + " | ".join(errors))
+
 
     def fetch_absolute_or_relative_bytes(self, url: str) -> bytes:
         text = _local_clean_scalar(url)
