@@ -89,6 +89,57 @@ ZMONGO_FILENAME = "ZMONGO_FILENAME"
 ZMONGO_TEXT = "ZMONGO_TEXT"
 ZMONGO_STATUS = "ZMONGO_STATUS"
 
+
+# -----------------------------------------------------------------------------
+# Generic helpers for ZMongo API and session access
+# -----------------------------------------------------------------------------
+
+import json
+from typing import Any
+
+# Safely ensure any payload is a dict
+def _ensure_payload_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    return {"success": False, "message": str(value), "data": value}
+
+# Extract the main document from a response payload
+def _extract_document_from_response(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    data = payload.get("data")
+    if isinstance(data, dict):
+        if "document" in data and isinstance(data["document"], dict):
+            return data["document"]
+        if "documents" in data and isinstance(data["documents"], list) and data["documents"]:
+            first_doc = data["documents"][0]
+            if isinstance(first_doc, dict):
+                return first_doc
+    return {}
+
+# Fallback GET document via session API request
+def _session_get_doc(session: Any, collection_name: str, document_id: str, cache: bool = True) -> dict[str, Any]:
+    """Fetch a single document using the session object."""
+    if hasattr(session, "get_doc") and callable(session.get_doc):
+        try:
+            payload = session.get_doc(collection=collection_name, document_id=document_id, cache=cache)
+            return _ensure_payload_dict(payload)
+        except Exception:
+            pass
+    return {}
+
+# Fallback generic API request helper
+def _session_api_request(session: Any, method: str, path: str, json_body: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Perform a raw API request through a session object."""
+    if hasattr(session, "api_request") and callable(session.api_request):
+        try:
+            payload = session.api_request(method, path, json=json_body)
+            return _ensure_payload_dict(payload)
+        except Exception:
+            pass
+    return {"success": False, "message": "API request failed", "data": None}
+
+
 def _clean_field_path(value: str, default: str = "image_data") -> str:
     cleaned = (value or "").strip().strip(".")
     return cleaned or default
@@ -1302,8 +1353,6 @@ _list_document_files = list_document_files
 _read_file_as_base64 = read_file_as_base64
 _resolve_document_file_path = resolve_document_file_path
 _session_request = session_request
-_session_api_request = session_api_request
-_session_get_doc = session_get_doc
 _session_save_value = session_save_value
 _comfy_image_to_png_bytes = comfy_image_to_png_bytes
 _build_binary_envelope = build_binary_envelope

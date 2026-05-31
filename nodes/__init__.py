@@ -10,6 +10,7 @@ from . import document_api_nodes
 from . import zmongo_preset_nodes
 from . import zmongo_text_agent_nodes
 from . import zmongo_helper_nodes
+from . import motd_node
 
 
 
@@ -77,6 +78,11 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         "zmongo_helper_nodes",
         zmongo_helper_nodes.NODE_CLASS_MAPPINGS,
         zmongo_helper_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
+        "motd_node",
+        motd_node.NODE_CLASS_MAPPINGS,
+        motd_node.NODE_DISPLAY_NAME_MAPPINGS,
     ),
 )
 
