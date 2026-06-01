@@ -8,7 +8,7 @@ from .generic_helpers import AlwaysDirtyMixin
 from server import PromptServer
 
 class ZMongoMotdDisplayNode(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/99 Utility Nodes"
+    CATEGORY = "ZMongo"
     FUNCTION = "display_motd"
 
     @classmethod

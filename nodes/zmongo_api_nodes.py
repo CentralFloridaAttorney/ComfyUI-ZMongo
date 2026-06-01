@@ -1,558 +1,164 @@
 from __future__ import annotations
+from __future__ import annotations
 
-import json
-import os
-import urllib.parse
-from typing import Any, Optional
-
-import requests
 from .generic_helpers import AlwaysDirtyMixin, DEFAULT_BASE_URL, DEFAULT_COMFY_ZMONGO_PREFIX, DEFAULT_FLEET_PREFIX, \
     DEFAULT_COMFY_ZMONGO_FLEET_PREFIX, DEFAULT_TIMEOUT, _normalize_base_url, _clean_prefix, _json_text, _error_payload, \
     _success_payload, _indexed_list_text, _extract_collections, _as_comfy_list, _dirty_token, _parse_json_object, \
     _parse_json_list, _extract_doc_ids, _extract_count, _parse_any_json, _extract_document_from_payload, \
     ZMongoLocalFileStoreSessionNode, safe_get_by_path, _ensure_payload_dict
 
+import json
+from typing import Any
+import requests
+from .generic_helpers import AlwaysDirtyMixin, DEFAULT_BASE_URL, _json_text, _error_payload, _success_payload, ZMongoLocalFileStoreSessionNode
 
 # -----------------------------------------------------------------------------
 # HTTP client
 # -----------------------------------------------------------------------------
+#
+# class ZMongoApiSession:
+#     def __init__(self, *, base_url: str = DEFAULT_BASE_URL, zai_api_key: str = "", verify_tls: bool = True) -> None:
+#         self.base_url = base_url
+#         self.zai_api_key = zai_api_key.strip()
+#         self.verify_tls = verify_tls
+#         self.session = requests.Session()
+#
+#     def close(self) -> None:
+#         self.session.close()
+#
+#     def _headers(self) -> dict[str, str]:
+#         headers = {
+#             "Accept": "application/json",
+#             "Content-Type": "application/json",
+#             "Authorization": f"Bearer {self.zai_api_key}",
+#         }
+#         return headers
+#
+#     def whoami(self) -> dict[str, Any]:
+#         response = self.session.get(f"{self.base_url}/api/whoami", headers=self._headers(), verify=self.verify_tls)
+#         try:
+#             return response.json()
+#         except Exception:
+#             return {"success": False, "message": response.text}
+#
+# # -----------------------------------------------------------------------------
+# # 00 Auth Nodes (Simplified API Key only)
+# # -----------------------------------------------------------------------------
+#
+# class ZMongoApiKeyOnlySessionNode(AlwaysDirtyMixin):
+#     CATEGORY = "ZMongo/00 Auth"
+#     FUNCTION = "connect"
+#     DISPLAY_ONLY = True
+#
+#     @classmethod
+#     def INPUT_TYPES(cls):
+#         return {"required": {"api_key": ("STRING", {"description": "Your ZMongo API key"})}}
+#
+#     RETURN_TYPES = ("ZMONGO_API_SESSION", "STRING", "STRING")
+#     RETURN_NAMES = ("session", "json", "status")
+#
+#     def connect(self, api_key: str):
+#         try:
+#             session = ZMongoApiSession(base_url="https://businessprocessapplications.com/comfy-zmongo", zai_api_key=api_key)
+#             payload = session.whoami()
+#             status = payload.get("message", "API session created successfully.")
+#             return session, _json_text(payload), status
+#         except Exception as e:
+#             payload = _error_payload(str(e))
+#             return None, _json_text(payload), f"API session failed: {e}"
+#
+# class ZMongoApiCloseSessionNode(AlwaysDirtyMixin):
+#     CATEGORY = "ZMongo/00 Auth"
+#     FUNCTION = "close_session"
+#
+#     @classmethod
+#     def INPUT_TYPES(cls):
+#         return {"required": {"session": ("ZMONGO_API_SESSION",)}}
+#
+#     RETURN_TYPES = ("STRING",)
+#     RETURN_NAMES = ("json",)
+#
+#     def close_session(self, session):
+#         if session is None:
+#             return (_json_text(_error_payload("No session provided.")),)
+#         try:
+#             session.close()
+#             return (_json_text(_success_payload("Session closed.")),)
+#         except Exception as exc:
+#             return (_json_text(_error_payload(str(exc))),)
 
-class ZMongoApiSession:
-    def __init__(
-        self,
-        *,
-        base_url: str = DEFAULT_BASE_URL,
-        zai_api_key: str = "",
-        username: str = "",
-        comfy_zmongo_prefix: str = DEFAULT_COMFY_ZMONGO_PREFIX,
-        fleet_prefix: str = DEFAULT_FLEET_PREFIX,
-        comfy_zmongo_fleet_prefix: str = DEFAULT_COMFY_ZMONGO_FLEET_PREFIX,
-        timeout: int = DEFAULT_TIMEOUT,
-        verify_tls: bool = True,
-    ) -> None:
-        self.base_url = _normalize_base_url(base_url)
-        self.zai_api_key = (zai_api_key or os.getenv("ZAI_API_KEY", "")).strip()
-        self.username = (username or os.getenv("ZTAROT_USERNAME", "")).strip()
-        self.comfy_zmongo_prefix = _clean_prefix(comfy_zmongo_prefix, DEFAULT_COMFY_ZMONGO_PREFIX)
-        self.fleet_prefix = _clean_prefix(fleet_prefix, DEFAULT_FLEET_PREFIX)
-        self.comfy_zmongo_fleet_prefix = _clean_prefix(comfy_zmongo_fleet_prefix, DEFAULT_COMFY_ZMONGO_FLEET_PREFIX)
-        self.timeout = max(1, int(timeout or DEFAULT_TIMEOUT))
-        self.verify_tls = bool(verify_tls)
-        self.session = requests.Session()
 
-    def close(self) -> None:
-        self.session.close()
-
-    def _headers(self, *, json_content: bool = True) -> dict[str, str]:
-        headers = {
-            "Accept": "application/json",
-            "User-Agent": "comfyui-zmongo-api-nodes/1.0",
-            "Origin": self.base_url,
-        }
-
-        if json_content:
-            headers["Content-Type"] = "application/json"
-
-        if self.zai_api_key:
-            headers["ZAI_API_KEY"] = self.zai_api_key
-            headers["Authorization"] = f"Bearer {self.zai_api_key}"
-
-        if self.username:
-            headers["X-AGENT-USERNAME"] = self.username
-            headers["ZAI_USER"] = self.username
-            headers["ZAI-USER"] = self.username
-            headers["X-ZAI-User"] = self.username
-            headers["X-Username"] = self.username
-            headers["X-User"] = self.username
-            headers["ZAI_USER"] = self.username
-            headers["ZAI-USER"] = self.username
-            headers["X-ZAI-User"] = self.username
-            headers["X-Username"] = self.username
-            headers["X-User"] = self.username
-
-        return headers
-
-    def _normalize_response(self, response: requests.Response) -> dict[str, Any]:
-        content_type = (response.headers.get("Content-Type") or "").lower()
-
-        try:
-            if "application/json" in content_type:
-                payload = response.json()
-            else:
-                payload = {
-                    "success": response.ok,
-                    "message": response.reason or ("OK" if response.ok else "Request failed"),
-                    "data": {},
-                    "error": None if response.ok else {"msg": "Non-JSON response"},
-                    "raw_text": response.text,
-                }
-        except Exception:
-            payload = {
-                "success": False,
-                "message": "Response was not valid JSON.",
-                "data": {},
-                "error": {"msg": "Response was not valid JSON."},
-                "raw_text": response.text,
-            }
-
-        payload = _ensure_payload_dict(payload)
-        payload["status_code"] = response.status_code
-
-        if payload.get("message") == "" and response.ok:
-            payload["message"] = "OK"
-
-        return payload
-
-    def request(
-        self,
-        method: str,
-        prefix: str,
-        path: str,
-        *,
-        json_body: Optional[dict[str, Any]] = None,
-        params: Optional[dict[str, Any]] = None,
-    ) -> dict[str, Any]:
-        normalized_path = path if path.startswith("/") else f"/{path}"
-        url = f"{self.base_url}{prefix}{normalized_path}"
-
-        try:
-            response = self.session.request(
-                method=method.upper(),
-                url=url,
-                headers=self._headers(json_content=json_body is not None),
-                json=json_body,
-                params=params,
-                timeout=self.timeout,
-                verify=self.verify_tls,
-                allow_redirects=True,
-            )
-            return self._normalize_response(response)
-        except requests.RequestException as exc:
-            return _ensure_payload_dict(
-                {
-                    "success": False,
-                    "message": f"Request failed: {exc}",
-                    "data": {},
-                    "error": {"msg": str(exc), "type": exc.__class__.__name__},
-                    "status_code": 0,
-                }
-            )
-
-    def request_bytes(
-        self,
-        method: str,
-        prefix: str,
-        path: str,
-        *,
-        params: Optional[dict[str, Any]] = None,
-        accept: str = "image/*,*/*",
-        extra_headers: Optional[dict[str, str]] = None,
-    ) -> tuple[bytes, int, str]:
-        normalized_path = path if path.startswith("/") else f"/{path}"
-        url = f"{self.base_url}{prefix}{normalized_path}"
-        headers = self._headers(json_content=False)
-        headers["Accept"] = accept
-        if extra_headers:
-            headers.update({k: v for k, v in extra_headers.items() if v})
-
-        response = self.session.request(
-            method=method.upper(),
-            url=url,
-            headers=headers,
-            params=params,
-            timeout=self.timeout,
-            verify=self.verify_tls,
-            allow_redirects=True,
-        )
-        response.raise_for_status()
-        return response.content, response.status_code, response.headers.get("Content-Type", "")
-
-    def fetch_absolute_or_relative_bytes(self, url: str) -> bytes:
-        target = url.strip()
-        if target.startswith("/"):
-            target = f"{self.base_url}{target}"
-
-        response = self.session.get(
-            target,
-            headers=self._headers(json_content=False),
-            timeout=self.timeout,
-            verify=self.verify_tls,
-            allow_redirects=True,
-        )
-        response.raise_for_status()
-        return response.content
-
-    # ------------------------------------------------------------------
-    # Canonical Comfy-ZMongo routes
-    # ------------------------------------------------------------------
-
-    def health(self) -> dict[str, Any]:
-        return self.request("GET", self.comfy_zmongo_prefix, "/api/health")
-
-    def whoami(self) -> dict[str, Any]:
-        return self.request("GET", self.comfy_zmongo_prefix, "/api/whoami")
-
-    def list_collections(self) -> dict[str, Any]:
-        return self.request("GET", self.comfy_zmongo_prefix, "/api/collections")
-
-    def create_collection(self, collection: str) -> dict[str, Any]:
-        return self.request(
-            "POST",
-            self.comfy_zmongo_prefix,
-            "/api/collection/create",
-            json_body={"name": collection},
-        )
-
-    def delete_collection(self, collection: str) -> dict[str, Any]:
-        return self.request(
-            "POST",
-            self.comfy_zmongo_prefix,
-            "/api/collection/delete",
-            json_body={"name": collection},
-        )
-
-    def list_docs(
-        self,
-        *,
-        collection: str,
-        limit: int = 50,
-        skip: int = 0,
-        query: Optional[dict[str, Any]] = None,
-    ) -> dict[str, Any]:
-        quoted = urllib.parse.quote(collection, safe="")
-        params: dict[str, Any] = {
-            "limit": max(1, min(int(limit or 50), 500)),
-            "skip": max(0, int(skip or 0)),
-        }
-        if query:
-            params["query_json"] = json.dumps(query, ensure_ascii=False, default=str)
-
-        return self.request("GET", self.comfy_zmongo_prefix, f"/api/docs/{quoted}", params=params)
-
-    def get_doc(self, *, collection: str, document_id: str, cache: bool = False) -> dict[str, Any]:
-        quoted_coll = urllib.parse.quote(collection, safe="")
-        quoted_doc = urllib.parse.quote(document_id, safe="")
-        return self.request(
-            "GET",
-            self.comfy_zmongo_prefix,
-            f"/api/doc/{quoted_coll}/{quoted_doc}",
-            params={"cache": "true" if cache else "false"},
-        )
-
-    def query_docs(
-        self,
-        *,
-        collection: str,
-        query: Optional[dict[str, Any]] = None,
-        document_id: str = "",
-        many: bool = True,
-        limit: int = 50,
-        skip: int = 0,
-        projection: Optional[dict[str, Any]] = None,
-        sort: Optional[list[Any]] = None,
-        cache: bool = False,
-    ) -> dict[str, Any]:
-        body: dict[str, Any] = {
-            "collection": collection,
-            "query": query or {},
-            "many": bool(many),
-            "limit": max(1, min(int(limit or 50), 500)),
-            "skip": max(0, int(skip or 0)),
-            "cache": bool(cache),
-        }
-
-        if document_id:
-            body["document_id"] = document_id
-        if projection:
-            body["projection"] = projection
-        if sort:
-            body["sort"] = sort
-
-        return self.request("POST", self.comfy_zmongo_prefix, "/api/query", json_body=body)
-
-    def count_docs(
-        self,
-        *,
-        collection: str,
-        query: Optional[dict[str, Any]] = None,
-        document_id: str = "",
-        cache: bool = False,
-    ) -> dict[str, Any]:
-        body: dict[str, Any] = {"collection": collection, "query": query or {}, "cache": bool(cache)}
-        if document_id:
-            body["document_id"] = document_id
-        return self.request("POST", self.comfy_zmongo_prefix, "/api/count", json_body=body)
-
-    def create_doc(self, *, collection: str, document: dict[str, Any]) -> dict[str, Any]:
-        return self.request(
-            "POST",
-            self.comfy_zmongo_prefix,
-            "/api/doc/create",
-            json_body={"collection": collection, "document": document},
-        )
-
-    def update_doc(
-        self,
-        *,
-        collection: str,
-        query: Optional[dict[str, Any]] = None,
-        document_id: str = "",
-        update: Optional[dict[str, Any]] = None,
-        field_path: str = "",
-        value: Any = None,
-        upsert: bool = False,
-    ) -> dict[str, Any]:
-        body: dict[str, Any] = {"collection": collection, "query": query or {}, "upsert": bool(upsert)}
-
-        if document_id:
-            body["document_id"] = document_id
-
-        if update is not None:
-            body["update"] = update
-        else:
-            body["field_path"] = field_path
-            body["value"] = value
-
-        return self.request("POST", self.comfy_zmongo_prefix, "/api/doc/update", json_body=body)
-
-    def delete_doc(self, *, collection: str, query: Optional[dict[str, Any]] = None, document_id: str = "") -> dict[str, Any]:
-        body: dict[str, Any] = {"collection": collection, "query": query or {}}
-        if document_id:
-            body["document_id"] = document_id
-        return self.request("POST", self.comfy_zmongo_prefix, "/api/doc/delete", json_body=body)
-
-    def save_value(
-        self,
-        *,
-        collection: str,
-        query: Optional[dict[str, Any]] = None,
-        document_id: str = "",
-        field_path: str = "",
-        value: Any = None,
-        upsert_if_missing: bool = True,
-        parse_json_strings: bool = True,
-        normalize_for_storage: bool = False,
-    ) -> dict[str, Any]:
-        body: dict[str, Any] = {
-            "collection": collection,
-            "query": query or {},
-            "field_path": field_path,
-            "value": value,
-            "upsert_if_missing": bool(upsert_if_missing),
-            "parse_json_strings": bool(parse_json_strings),
-            "normalize_for_storage": bool(normalize_for_storage),
-        }
-        if document_id:
-            body["document_id"] = document_id
-        return self.request("POST", self.comfy_zmongo_prefix, "/api/save-value", json_body=body)
-
-    def fetch_image_field(
-        self,
-        *,
-        collection: str,
-        document_id: str,
-        field_path: str,
-        master_key_hex: str = "",
-    ) -> tuple[bytes, str]:
-        """
-        Fetch an image through the actual server routes.
-
-        ComfyZMongoRoutes registers:
-            GET <comfy_zmongo_prefix>/api/image/<coll>/<doc_id>?field=<field_path>
-
-        ManagerRoutes registers browser/dashboard compatibility routes:
-            GET /user/manager/api/image-field/view/<coll>/<doc_id>?field_path=<field_path>
-
-        The Comfy route is tried first because this file is the ComfyUI node
-        client. The manager route is only a compatibility fallback.
-        """
-        from .zmongo_image_nodes import _route_image_field_path
-
-        quoted_coll = urllib.parse.quote(collection, safe="")
-        quoted_doc = urllib.parse.quote(document_id, safe="")
-        clean_field = _route_image_field_path(field_path, "image_data")
-
-        extra_headers = {"X-Master-Key": (master_key_hex or os.getenv("ZAI_MASTER_KEY") or os.getenv("ZMONGO_KEY") or "").strip()}
-
-        attempts: list[tuple[str, str, dict[str, Any]]] = [
-            (
-                self.comfy_zmongo_prefix,
-                f"/api/image/{quoted_coll}/{quoted_doc}",
-                {"field": clean_field},
-            ),
-            (
-                "/user/manager",
-                f"/api/image-field/view/{quoted_coll}/{quoted_doc}",
-                {"field_path": clean_field},
-            ),
-        ]
-
-        errors: list[str] = []
-        for prefix, path, params in attempts:
-            try:
-                data, _, content_type = self.request_bytes("GET", prefix, path, params=params, extra_headers=extra_headers)
-                if data:
-                    return data, f"route:{prefix}{path}; params:{params}; content_type:{content_type}"
-                errors.append(f"{prefix}{path}: empty response body")
-            except Exception as exc:
-                errors.append(f"{prefix}{path}: {exc}")
-
-        raise ValueError("Image route fetch failed: " + " | ".join(errors))
-
-    # ------------------------------------------------------------------
-    # Fleet routes
-    # ------------------------------------------------------------------
-
-    def fleet_status(self) -> dict[str, Any]:
-        return self.request("GET", self.fleet_prefix, "/status")
-
-    def fleet_agents(self) -> dict[str, Any]:
-        return self.request("GET", self.fleet_prefix, "/agents")
-
-    def fleet_dispatch(
-        self,
-        *,
-        intent: str,
-        payload: dict[str, Any],
-        dispatch_id: str = "",
-        timeout: float = 60.0,
-        cost_usd: str = "",
-    ) -> dict[str, Any]:
-        body: dict[str, Any] = {"intent": intent, "payload": payload, "timeout": timeout}
-        if dispatch_id:
-            body["dispatch_id"] = dispatch_id
-        if cost_usd:
-            body["cost_usd"] = cost_usd
-        return self.request("POST", self.fleet_prefix, "/dispatch", json_body=body)
-
-    def fleet_send_chat(self, *, message: str, dispatch_id: str = "", timeout: float = 60.0, cost_usd: str = "") -> dict[str, Any]:
-        body: dict[str, Any] = {"message": message, "timeout": timeout}
-        if dispatch_id:
-            body["dispatch_id"] = dispatch_id
-        if cost_usd:
-            body["cost_usd"] = cost_usd
-        return self.request("POST", self.fleet_prefix, "/send-chat", json_body=body)
-
-    # ------------------------------------------------------------------
-    # Comfy-ZMongo fleet inspection / dispatch routes
-    # ------------------------------------------------------------------
-
-    def comfy_fleet_ping(self) -> dict[str, Any]:
-        return self.request("GET", self.comfy_zmongo_fleet_prefix, "/ping")
-
-    def comfy_fleet_connections(self) -> dict[str, Any]:
-        return self.request("GET", self.comfy_zmongo_fleet_prefix, "/connections")
-
-    def comfy_fleet_connection(self, connection_id: str) -> dict[str, Any]:
-        quoted = urllib.parse.quote(connection_id, safe="")
-        return self.request("GET", self.comfy_zmongo_fleet_prefix, f"/connections/{quoted}")
-
-    def comfy_fleet_stats(self) -> dict[str, Any]:
-        return self.request("GET", self.comfy_zmongo_fleet_prefix, "/stats")
-
-    def comfy_fleet_dispatch(
-        self,
-        *,
-        connection_id: str = "",
-        message_type: str = "dispatch",
-        payload: Optional[dict[str, Any]] = None,
-    ) -> dict[str, Any]:
-        body: dict[str, Any] = {"type": message_type or "dispatch", "payload": payload or {}}
-        if connection_id:
-            body["connection_id"] = connection_id
-        return self.request("POST", self.comfy_zmongo_fleet_prefix, "/dispatch", json_body=body)
 
 
 # -----------------------------------------------------------------------------
 # 00 Auth nodes
 # -----------------------------------------------------------------------------
 
-class ZMongoApiKeySessionNode(AlwaysDirtyMixin):
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "base_url": ("STRING", {"default": DEFAULT_BASE_URL}),
-                "zai_api_key": ("STRING", {"default": "", "multiline": False}),
-                "username": ("STRING", {"default": ""}),
-                "comfy_zmongo_prefix": ("STRING", {"default": DEFAULT_COMFY_ZMONGO_PREFIX}),
-                "fleet_prefix": ("STRING", {"default": DEFAULT_FLEET_PREFIX}),
-                "comfy_zmongo_fleet_prefix": ("STRING", {"default": DEFAULT_COMFY_ZMONGO_FLEET_PREFIX}),
-                "timeout_seconds": ("INT", {"default": DEFAULT_TIMEOUT, "min": 1, "max": 300}),
-                "verify_tls": ("BOOLEAN", {"default": True}),
-                "test_whoami": ("BOOLEAN", {"default": True}),
-            }
-        }
-
-    RETURN_TYPES = ("ZMONGO_API_SESSION", "STRING", "STRING")
-    RETURN_NAMES = ("session", "json", "status")
-    FUNCTION = "connect"
-    CATEGORY = "ZMongo/00 Auth"
-
-    def connect(
-        self,
-        base_url: str,
-        zai_api_key: str,
-        username: str,
-        comfy_zmongo_prefix: str,
-        fleet_prefix: str,
-        comfy_zmongo_fleet_prefix: str,
-        timeout_seconds: int,
-        verify_tls: bool,
-        test_whoami: bool,
-    ):
-        try:
-            session = ZMongoApiSession(
-                base_url=base_url,
-                zai_api_key=zai_api_key,
-                username=username,
-                comfy_zmongo_prefix=comfy_zmongo_prefix,
-                fleet_prefix=fleet_prefix,
-                comfy_zmongo_fleet_prefix=comfy_zmongo_fleet_prefix,
-                timeout=timeout_seconds,
-                verify_tls=verify_tls,
-            )
-
-            if test_whoami:
-                payload = session.whoami()
-                status = payload.get("message") or "API session created."
-                return (session, _json_text(payload), status)
-
-            payload = _success_payload(
-                "API session created.",
-                {
-                    "base_url": session.base_url,
-                    "username": session.username,
-                    "comfy_zmongo_prefix": session.comfy_zmongo_prefix,
-                    "fleet_prefix": session.fleet_prefix,
-                    "comfy_zmongo_fleet_prefix": session.comfy_zmongo_fleet_prefix,
-                },
-            )
-            return (session, _json_text(payload), "API session created.")
-        except Exception as exc:
-            payload = _error_payload(str(exc))
-            return (None, _json_text(payload), f"API session failed: {exc}")
-
-
-class ZMongoApiCloseSessionNode(AlwaysDirtyMixin):
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {"required": {"session": ("ZMONGO_API_SESSION",)}}
-
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("json",)
-    FUNCTION = "close_session"
-    CATEGORY = "ZMongo/00 Auth"
-
-    def close_session(self, session):
-        if session is None:
-            return (_json_text(_error_payload("No session provided.")),)
-
-        try:
-            session.close()
-            return (_json_text(_success_payload("Session closed.")),)
-        except Exception as exc:
-            return (_json_text(_error_payload(str(exc))),)
+# class ZMongoApiKeySessionNode(AlwaysDirtyMixin):
+#     @classmethod
+#     def INPUT_TYPES(cls):
+#         return {
+#             "required": {
+#                 "base_url": ("STRING", {"default": DEFAULT_BASE_URL}),
+#                 "zai_api_key": ("STRING", {"default": "", "multiline": False}),
+#                 "username": ("STRING", {"default": ""}),
+#                 "comfy_zmongo_prefix": ("STRING", {"default": DEFAULT_COMFY_ZMONGO_PREFIX}),
+#                 "fleet_prefix": ("STRING", {"default": DEFAULT_FLEET_PREFIX}),
+#                 "comfy_zmongo_fleet_prefix": ("STRING", {"default": DEFAULT_COMFY_ZMONGO_FLEET_PREFIX}),
+#                 "timeout_seconds": ("INT", {"default": DEFAULT_TIMEOUT, "min": 1, "max": 300}),
+#                 "verify_tls": ("BOOLEAN", {"default": True}),
+#                 "test_whoami": ("BOOLEAN", {"default": True}),
+#             }
+#         }
+#
+#     RETURN_TYPES = ("ZMONGO_API_SESSION", "STRING", "STRING")
+#     RETURN_NAMES = ("session", "json", "status")
+#     FUNCTION = "connect"
+#     CATEGORY = "ZMongo/00 Auth"
+#
+#     def connect(
+#         self,
+#         base_url: str,
+#         zai_api_key: str,
+#         username: str,
+#         comfy_zmongo_prefix: str,
+#         fleet_prefix: str,
+#         comfy_zmongo_fleet_prefix: str,
+#         timeout_seconds: int,
+#         verify_tls: bool,
+#         test_whoami: bool,
+#     ):
+#         try:
+#             session = ZMongoApiSession(
+#                 base_url=base_url,
+#                 zai_api_key=zai_api_key,
+#                 username=username,
+#                 comfy_zmongo_prefix=comfy_zmongo_prefix,
+#                 fleet_prefix=fleet_prefix,
+#                 comfy_zmongo_fleet_prefix=comfy_zmongo_fleet_prefix,
+#                 timeout=timeout_seconds,
+#                 verify_tls=verify_tls,
+#             )
+#
+#             if test_whoami:
+#                 payload = session.whoami()
+#                 status = payload.get("message") or "API session created."
+#                 return (session, _json_text(payload), status)
+#
+#             payload = _success_payload(
+#                 "API session created.",
+#                 {
+#                     "base_url": session.base_url,
+#                     "username": session.username,
+#                     "comfy_zmongo_prefix": session.comfy_zmongo_prefix,
+#                     "fleet_prefix": session.fleet_prefix,
+#                     "comfy_zmongo_fleet_prefix": session.comfy_zmongo_fleet_prefix,
+#                 },
+#             )
+#             return (session, _json_text(payload), "API session created.")
+#         except Exception as exc:
+#             payload = _error_payload(str(exc))
+#             return (None, _json_text(payload), f"API session failed: {exc}")
 
 
 # -----------------------------------------------------------------------------
@@ -1533,10 +1139,10 @@ class ZMongoApiFleetDispatchNode(AlwaysDirtyMixin):
 # -----------------------------------------------------------------------------
 
 NODE_CLASS_MAPPINGS = {
-    # 00 Auth
-    "ZMongoLocalFileStoreSessionNode": ZMongoLocalFileStoreSessionNode,
-    "ZMongoApiKeySessionNode": ZMongoApiKeySessionNode,
-    "ZMongoApiCloseSessionNode": ZMongoApiCloseSessionNode,
+    # # 00 Auth
+    # "ZMongoLocalFileStoreSessionNode": ZMongoLocalFileStoreSessionNode,
+    # "ZMongoApiKeyOnlySessionNode": ZMongoApiKeyOnlySessionNode,
+    # "ZMongoApiCloseSessionNode": ZMongoApiCloseSessionNode,
 
     # 01 Service
     "ZMongoApiHealthNode": ZMongoApiHealthNode,
@@ -1560,10 +1166,10 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    # 00 Auth
-    "ZMongoLocalFileStoreSessionNode": "00 Local File Store Session",
-    "ZMongoApiKeySessionNode": "00 API Key Session",
-    "ZMongoApiCloseSessionNode": "00 Close API Session",
+    # # 00 Auth
+    # "ZMongoLocalFileStoreSessionNode": "00 Local File Store Session",
+    # "ZMongoApiKeyOnlySessionNode": "00 API Key Session (Simplified)",
+    # "ZMongoApiCloseSessionNode": "00 Close API Session",
 
     # 01 Service
     "ZMongoApiHealthNode": "01 Health",

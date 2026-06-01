@@ -3,10 +3,81 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from .generic_helpers import AlwaysDirtyMixin, DEFAULT_GEMINI_PREFIX, _session_api_request, _as_bool, _json_text, \
+from .generic_helpers import AlwaysDirtyMixin, DEFAULT_GEMINI_PREFIX, _as_bool, _json_text, \
     _parse_json_object, _extract_text_from_gemini_payload, _dirty_token, _error_payload, _extract_models_from_payload, \
     _session_get_doc, _extract_document, _safe_get_by_path, _success_payload, _session_save_value, \
     _comfy_image_to_png_bytes, _extract_tensor_recursively
+
+
+# -----------------------------------------------------------------------------
+# Request helpers
+# -----------------------------------------------------------------------------
+
+
+def _clean_gemini_prefix(gemini_prefix: str = DEFAULT_GEMINI_PREFIX) -> str:
+    clean_prefix = (gemini_prefix or DEFAULT_GEMINI_PREFIX).strip().rstrip("/")
+    if not clean_prefix.startswith("/"):
+        clean_prefix = f"/{clean_prefix}"
+    return clean_prefix or DEFAULT_GEMINI_PREFIX
+
+
+def _gemini_request(
+    session: Any,
+    method: str,
+    path: str,
+    *,
+    json_body: dict[str, Any] | None = None,
+    gemini_prefix: str = DEFAULT_GEMINI_PREFIX,
+) -> dict[str, Any]:
+    """
+    Prefix-aware Gemini request helper.
+
+    The current generic _session_api_request helper only accepts:
+        (session, method, path, json_body=None)
+
+    Therefore Gemini-prefixed calls must go through the session object's
+    request(method, prefix, path, json_body=...) method instead.
+    """
+    if session is None:
+        return _error_payload("No API session provided.")
+
+    request = getattr(session, "request", None)
+    if not callable(request):
+        return _error_payload(
+            "Session does not expose request(method, prefix, path, json_body=...). "
+            "Use the ZMongo API Key Session node, not a legacy session object."
+        )
+
+    clean_prefix = _clean_gemini_prefix(gemini_prefix)
+    clean_path = path if str(path or "").startswith("/") else f"/{path}"
+
+    try:
+        return request(
+            method,
+            clean_prefix,
+            clean_path,
+            json_body=json_body,
+        )
+    except TypeError as exc:
+        return _error_payload(
+            f"Gemini request failed because the session object has an incompatible request signature: {exc}",
+            data={
+                "method": method,
+                "prefix": clean_prefix,
+                "path": clean_path,
+            },
+            error_type=exc.__class__.__name__,
+        )
+    except Exception as exc:
+        return _error_payload(
+            f"Gemini request failed: {exc}",
+            data={
+                "method": method,
+                "prefix": clean_prefix,
+                "path": clean_path,
+            },
+            error_type=exc.__class__.__name__,
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -31,7 +102,7 @@ class GeminiApiKeyStatusNode(AlwaysDirtyMixin):
     CATEGORY = "ZMongo/05 Gemini"
 
     def key_status(self, session, gemini_prefix: str = DEFAULT_GEMINI_PREFIX, refresh_token: str = ""):
-        payload = _session_api_request(session, "GET", "/api/key/status", gemini_prefix=gemini_prefix)
+        payload = _gemini_request(session, "GET", "/api/key/status", gemini_prefix=gemini_prefix)
         data = payload.get("data", {}) if isinstance(payload, dict) else {}
         has_key = _as_bool(data.get("has_key") if isinstance(data, dict) else False)
         masked = str(data.get("masked_key") or data.get("key_preview") or "") if isinstance(data, dict) else ""
@@ -56,7 +127,7 @@ class GeminiSaveApiKeyNode(AlwaysDirtyMixin):
 
     def save_key(self, session, gemini_api_key: str, gemini_prefix: str = DEFAULT_GEMINI_PREFIX):
         body = {"gemini_api_key": (gemini_api_key or "").strip()}
-        payload = _session_api_request(session, "POST", "/api/key/save", json_body=body, gemini_prefix=gemini_prefix)
+        payload = _gemini_request(session, "POST", "/api/key/save", json_body=body, gemini_prefix=gemini_prefix)
         data = payload.get("data", {}) if isinstance(payload, dict) else {}
         masked = str(data.get("masked_key") or data.get("key_preview") or "") if isinstance(data, dict) else ""
         return (_json_text(payload), bool(payload.get("success")), masked)
@@ -77,7 +148,7 @@ class GeminiDeleteApiKeyNode(AlwaysDirtyMixin):
 
     def delete_key(self, session, gemini_prefix: str = DEFAULT_GEMINI_PREFIX):
         token = _dirty_token("gemini_delete_key")
-        payload = _session_api_request(session, "POST", "/api/key/delete", json_body={}, gemini_prefix=gemini_prefix)
+        payload = _gemini_request(session, "POST", "/api/key/delete", json_body={}, gemini_prefix=gemini_prefix)
         return (_json_text(payload), bool(payload.get("success")), token)
 
 
@@ -99,7 +170,7 @@ class GeminiTestApiKeyNode(AlwaysDirtyMixin):
     CATEGORY = "ZMongo/05 Gemini"
 
     def test_key(self, session, gemini_prefix: str = DEFAULT_GEMINI_PREFIX, model: str = "gemini-2.5-flash", refresh_token: str = ""):
-        payload = _session_api_request(
+        payload = _gemini_request(
             session,
             "POST",
             "/api/key/test",
@@ -151,7 +222,7 @@ class GeminiChatNode(AlwaysDirtyMixin):
         }
         if (system_instruction or "").strip():
             body["system_instruction"] = system_instruction
-        payload = _session_api_request(session, "POST", "/api/chat", json_body=body, gemini_prefix=gemini_prefix)
+        payload = _gemini_request(session, "POST", "/api/chat", json_body=body, gemini_prefix=gemini_prefix)
         return (_json_text(payload), _extract_text_from_gemini_payload(payload), bool(payload.get("success")))
 
 
@@ -308,6 +379,7 @@ class GeminiImageTextNode(AlwaysDirtyMixin):
             # Try compact canonical route shapes. Do not duplicate image data
             # inside one request body.
             route_attempts: list[tuple[str, dict[str, Any]]] = [
+                ("/api/chat", base_body),
                 ("/api/vision", base_body),
                 ("/api/image-text", base_body),
                 ("/api/chat-with-image", base_body),
@@ -331,7 +403,7 @@ class GeminiImageTextNode(AlwaysDirtyMixin):
             attempts: list[dict[str, Any]] = []
 
             for api_path, body in route_attempts:
-                payload = _session_api_request(
+                payload = _gemini_request(
                     session,
                     "POST",
                     api_path,
@@ -451,7 +523,7 @@ class GeminiJsonNode(AlwaysDirtyMixin):
             }
             if (system_instruction or "").strip():
                 body["system_instruction"] = system_instruction
-            payload = _session_api_request(session, "POST", "/api/json", json_body=body, gemini_prefix=gemini_prefix)
+            payload = _gemini_request(session, "POST", "/api/json", json_body=body, gemini_prefix=gemini_prefix)
             data = payload.get("data", {}) if isinstance(payload, dict) else {}
             parsed = data.get("parsed") or data.get("json") or data.get("object") if isinstance(data, dict) else None
             result_text = _json_text(parsed) if parsed is not None else _extract_text_from_gemini_payload(payload)
@@ -479,7 +551,7 @@ class GeminiListModelsNode(AlwaysDirtyMixin):
     CATEGORY = "ZMongo/05 Gemini"
 
     def list_models(self, session, gemini_prefix: str = DEFAULT_GEMINI_PREFIX, refresh_token: str = ""):
-        payload = _session_api_request(session, "GET", "/api/models", gemini_prefix=gemini_prefix)
+        payload = _gemini_request(session, "GET", "/api/models", gemini_prefix=gemini_prefix)
         models = _extract_models_from_payload(payload)
         indexed = _json_text([f"{index}: {value}" for index, value in enumerate(models)])
         return (_json_text(payload), models, indexed)
@@ -506,7 +578,7 @@ class GeminiCountTokensNode(AlwaysDirtyMixin):
     CATEGORY = "ZMongo/05 Gemini"
 
     def count_tokens(self, session, prompt: str, model: str = "gemini-2.5-flash", gemini_prefix: str = DEFAULT_GEMINI_PREFIX, refresh_token: str = ""):
-        payload = _session_api_request(
+        payload = _gemini_request(
             session,
             "POST",
             "/api/count-tokens",
@@ -595,7 +667,7 @@ class GeminiPromptFromZMongoDocNode(AlwaysDirtyMixin):
             if (system_instruction or "").strip():
                 body["system_instruction"] = system_instruction
 
-            gemini_payload = _session_api_request(session, "POST", "/api/chat", json_body=body, gemini_prefix=gemini_prefix)
+            gemini_payload = _gemini_request(session, "POST", "/api/chat", json_body=body, gemini_prefix=gemini_prefix)
             merged_payload = _success_payload(
                 "Gemini prompt from ZMongo document completed." if gemini_payload.get("success") else "Gemini prompt from ZMongo document failed.",
                 {
@@ -678,7 +750,7 @@ class GeminiChatAndSaveToZMongoNode(AlwaysDirtyMixin):
             if (system_instruction or "").strip():
                 body["system_instruction"] = system_instruction
 
-            gemini_payload = _session_api_request(session, "POST", "/api/chat", json_body=body, gemini_prefix=gemini_prefix)
+            gemini_payload = _gemini_request(session, "POST", "/api/chat", json_body=body, gemini_prefix=gemini_prefix)
             gemini_text = _extract_text_from_gemini_payload(gemini_payload)
             if not gemini_payload.get("success"):
                 return (_json_text(gemini_payload), gemini_text, token, False)
