@@ -1,7 +1,6 @@
 # ComfyUI-ZMongo
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **ComfyUI-ZMongo** is a ComfyUI custom node package for saving, loading, browsing, masking, and reusing workflow data through a ZMongo-style storage model.
 
