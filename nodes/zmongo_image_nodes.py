@@ -31,6 +31,282 @@ from .generic_helpers import (
 
 
 
+
+def _safe_result_to_dict(result: Any) -> dict[str, Any]:
+    if isinstance(result, dict):
+        return result
+
+    if hasattr(result, "to_dict") and callable(result.to_dict):
+        try:
+            value = result.to_dict()
+            return value if isinstance(value, dict) else {}
+        except Exception:
+            pass
+
+    if hasattr(result, "to_json") and callable(result.to_json):
+        try:
+            value = json.loads(result.to_json())
+            return value if isinstance(value, dict) else {}
+        except Exception:
+            pass
+
+    return {
+        "success": False,
+        "message": f"Unsupported result type: {type(result).__name__}",
+        "data": {},
+        "error": {"type": type(result).__name__, "msg": "Could not normalize result."},
+        "status_code": 0,
+    }
+
+
+def _is_local_file_store_session(session: Any) -> bool:
+    if session is None:
+        return False
+
+    class_name = session.__class__.__name__.lower()
+    if "local" in class_name and "store" in class_name:
+        return True
+
+    for attr in ("storage_backend", "STORAGE_BACKEND", "backend", "backend_name"):
+        value = str(getattr(session, attr, "") or "").strip().lower()
+        if value == "local_file_store":
+            return True
+
+    for attr in ("store", "local_store", "file_store", "_store", "_local_store"):
+        target = getattr(session, attr, None)
+        if target is not None:
+            target_name = target.__class__.__name__.lower()
+            if "local" in target_name and "store" in target_name:
+                return True
+            if str(getattr(target, "STORAGE_BACKEND", "") or "").strip().lower() == "local_file_store":
+                return True
+
+    return False
+
+
+def _iter_local_store_targets(session: Any):
+    if session is None:
+        return
+
+    yield session
+
+    for attr in (
+        "store",
+        "local_store",
+        "file_store",
+        "backend",
+        "client",
+        "db",
+        "_store",
+        "_local_store",
+        "_file_store",
+        "_backend",
+    ):
+        target = getattr(session, attr, None)
+        if target is not None:
+            yield target
+
+
+def _session_root_dir_candidates(session: Any) -> list[Any]:
+    out: list[Any] = []
+
+    for target in _iter_local_store_targets(session) or []:
+        for attr in (
+            "root_dir",
+            "local_store_root",
+            "store_root",
+            "root",
+            "path",
+            "base_dir",
+            "base_path",
+        ):
+            value = getattr(target, attr, None)
+            if value:
+                out.append(value)
+
+    return out
+
+
+def _fallback_local_store(session: Any = None):
+    try:
+        from .local_file_store import LocalFileStore
+    except Exception:
+        from local_file_store import LocalFileStore  # type: ignore
+
+    for root in _session_root_dir_candidates(session):
+        try:
+            return LocalFileStore(root_dir=root)
+        except Exception:
+            pass
+
+    return LocalFileStore()
+
+
+def _call_local_save_image(
+    *,
+    session: Any,
+    collection_name: str,
+    image_bytes: bytes,
+    filename: str,
+    document_id: str,
+    query: dict[str, Any],
+    field_path: str,
+    metadata: dict[str, Any],
+    upsert: bool,
+) -> dict[str, Any]:
+    last_error: Exception | None = None
+
+    for target in _iter_local_store_targets(session) or []:
+        save_image = getattr(target, "save_image", None)
+        if not callable(save_image):
+            continue
+
+        try:
+            result = save_image(
+                collection_name,
+                image_bytes,
+                filename=filename,
+                document_id=document_id or None,
+                query=query or None,
+                field_path=field_path,
+                metadata=metadata,
+                upsert=upsert,
+            )
+            return _safe_result_to_dict(result)
+        except TypeError:
+            try:
+                result = save_image(
+                    collection=collection_name,
+                    image=image_bytes,
+                    filename=filename,
+                    document_id=document_id or None,
+                    query=query or None,
+                    field_path=field_path,
+                    metadata=metadata,
+                    upsert=upsert,
+                )
+                return _safe_result_to_dict(result)
+            except Exception as exc:
+                last_error = exc
+        except Exception as exc:
+            last_error = exc
+
+    try:
+        store = _fallback_local_store(session)
+        result = store.save_image(
+            collection_name,
+            image_bytes,
+            filename=filename,
+            document_id=document_id or None,
+            query=query or None,
+            field_path=field_path,
+            metadata=metadata,
+            upsert=upsert,
+        )
+        payload = _safe_result_to_dict(result)
+        payload.setdefault("data", {})
+        if isinstance(payload["data"], dict):
+            payload["data"]["fallback_local_store_used"] = True
+            payload["data"]["fallback_local_store_root"] = str(getattr(store, "root_dir", ""))
+        return payload
+    except Exception as exc:
+        return {
+            "success": False,
+            "message": f"Local File Store save_image failed: {exc}",
+            "data": {
+                "storage_backend": "local_file_store",
+                "collection": collection_name,
+                "document_id": document_id,
+                "field_path": field_path,
+                "last_target_error": str(last_error) if last_error else "",
+            },
+            "error": {"type": exc.__class__.__name__, "msg": str(exc)},
+            "status_code": 500,
+        }
+
+
+def _call_local_load_image(
+    *,
+    session: Any,
+    collection_name: str,
+    document_id: str,
+    query: dict[str, Any] | None,
+    field_path: str,
+) -> bytes:
+    last_error: Exception | None = None
+
+    for target in _iter_local_store_targets(session) or []:
+        load_image = getattr(target, "load_image", None)
+        if not callable(load_image):
+            continue
+
+        try:
+            result = load_image(
+                collection_name,
+                document_id=document_id or None,
+                query=query or None,
+                field_path=field_path,
+                as_base64=False,
+            )
+            payload = _safe_result_to_dict(result)
+            data = payload.get("data") if isinstance(payload, dict) else {}
+            if isinstance(data, dict):
+                value = data.get("bytes")
+                if isinstance(value, (bytes, bytearray, memoryview)):
+                    return bytes(value)
+                if isinstance(value, str):
+                    return base64.b64decode(value)
+                if isinstance(data.get("base64"), str):
+                    return base64.b64decode(data["base64"])
+        except Exception as exc:
+            last_error = exc
+
+    try:
+        store = _fallback_local_store(session)
+        result = store.load_image(
+            collection_name,
+            document_id=document_id or None,
+            query=query or None,
+            field_path=field_path,
+            as_base64=False,
+        )
+        payload = _safe_result_to_dict(result)
+        data = payload.get("data") if isinstance(payload, dict) else {}
+        if isinstance(data, dict):
+            value = data.get("bytes")
+            if isinstance(value, (bytes, bytearray, memoryview)):
+                return bytes(value)
+            if isinstance(value, str):
+                return base64.b64decode(value)
+            if isinstance(data.get("base64"), str):
+                return base64.b64decode(data["base64"])
+        raise ValueError(payload.get("message") or "load_image returned no bytes.")
+    except Exception as exc:
+        if last_error:
+            raise ValueError(f"local load_image failed: {exc}; previous target error: {last_error}") from exc
+        raise
+
+
+def _decode_image_value_with_local_file_support(
+    *,
+    session: Any,
+    image_value: Any,
+    collection_name: str,
+    document_id: str,
+    field_path: str,
+) -> bytes:
+    if isinstance(image_value, dict) and image_value.get("local_path"):
+        return _call_local_load_image(
+            session=session,
+            collection_name=collection_name,
+            document_id=document_id,
+            query={"_id": document_id} if document_id else None,
+            field_path=field_path,
+        )
+
+    return _decode_image_bytes_from_value(image_value)
+
+
 # -----------------------------------------------------------------------------
 # 04 Image nodes
 # -----------------------------------------------------------------------------
@@ -323,7 +599,13 @@ class ZMongoDisplayImageNode(AlwaysDirtyMixin):
             for candidate_field_path in _image_field_candidates(requested_field_path, "image_data"):
                 try:
                     image_value = safe_get_by_path(document, candidate_field_path)
-                    image_bytes = _decode_image_bytes_from_value(image_value)
+                    image_bytes = _decode_image_value_with_local_file_support(
+                        session=session,
+                        image_value=image_value,
+                        collection_name=cleaned_collection,
+                        document_id=cleaned_document_id,
+                        field_path=candidate_field_path,
+                    )
                     comfy_image, pil_image = self._open_image_bytes(image_bytes)
                     payload = _success_payload(
                         "Image loaded from document JSON.",
@@ -501,7 +783,13 @@ class ZMongoApiBrowseCollectionImagesNode(AlwaysDirtyMixin):
         for candidate_field_path in _image_field_candidates(field_path, "image_data"):
             try:
                 image_value = safe_get_by_path(document, candidate_field_path)
-                image_bytes = _decode_image_bytes_from_value(image_value)
+                image_bytes = _decode_image_value_with_local_file_support(
+                    session=session,
+                    image_value=image_value,
+                    collection_name=collection_name,
+                    document_id=document_id,
+                    field_path=candidate_field_path,
+                )
                 image = Image.open(io.BytesIO(image_bytes))
                 image.load()
                 return image, f"document_json:{candidate_field_path}"
@@ -667,16 +955,17 @@ class ZMongoApiBrowseCollectionImagesNode(AlwaysDirtyMixin):
 
 class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
     """
-    Easy image saver for API-key ComfyUI-ZMongo workflows.
+    Easy image saver for API and Local File Store workflows.
 
-    Rule:
-    - If document_id cleans to a non-empty value, update that exact document only.
-    - Create a new document only when document_id is empty after cleanup.
+    Local File Store fix:
+    - Local sessions store PNG bytes with save_image()/LocalFileStore.save_image().
+    - This keeps only a local_path image record in JSON and avoids base64 value-size limits.
+    - If the wrapper does not expose save_image(), this node locates the underlying
+      store or instantiates .local_file_store.LocalFileStore as a compatibility fallback.
 
-    This fixes connected document IDs that arrive as strings like:
-        (69f420e535aff093fc71e58f)
-        ('69f420e535aff093fc71e58f',)
-        [69f420e535aff093fc71e58f]
+    Hosted API behavior remains unchanged:
+    - Existing document: save_value() with a ZMongo bytes envelope.
+    - New document: create_doc() with a ZMongo bytes envelope.
     """
 
     @classmethod
@@ -703,29 +992,15 @@ class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
 
     @staticmethod
     def _unwrap_connected_value(value: Any) -> str:
-        """
-        Normalize scalar values coming from ComfyUI connections.
-
-        Handles:
-        - ["abc"] -> "abc"
-        - ("abc",) -> "abc"
-        - "(abc)" -> "abc"
-        - "('abc',)" -> "abc"
-        - '["abc"]' -> "abc"
-        - trailing tuple/list punctuation
-        """
         if isinstance(value, (list, tuple)):
-            if not value:
-                return ""
-            value = value[0]
+            value = value[0] if value else ""
 
         if value is None:
             return ""
 
         text = str(value).strip()
 
-        # Peel repeated single-item wrappers, but avoid stripping meaningful chars inside ObjectId.
-        for _ in range(4):
+        for _ in range(6):
             before = text
 
             if text.startswith("[") and text.endswith("]"):
@@ -739,6 +1014,9 @@ class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
 
             if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
                 text = text[1:-1].strip()
+
+            if ": " in text and text.split(": ", 1)[0].strip().isdigit():
+                text = text.split(": ", 1)[1].strip()
 
             if text == before:
                 break
@@ -810,7 +1088,7 @@ class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
                 if value:
                     return ZMongoApiEasySaveImageNode._unwrap_connected_value(value)
 
-            for nested_key in ("result", "document"):
+            for nested_key in ("result", "document", "image_data"):
                 nested = data.get(nested_key)
                 if isinstance(nested, dict):
                     for key in ("document_id", "inserted_id", "_id", "id"):
@@ -818,6 +1096,88 @@ class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
                         if value:
                             return ZMongoApiEasySaveImageNode._unwrap_connected_value(value)
         return ""
+
+    def _save_local_image(
+        self,
+        *,
+        session: Any,
+        image_bytes: bytes,
+        cleaned_collection: str,
+        cleaned_field_path: str,
+        cleaned_filename: str,
+        cleaned_document_id: str,
+        cleaned_doc_key: str,
+        metadata: dict[str, Any],
+        refresh: str,
+    ):
+        query_used = {"_id": cleaned_document_id} if cleaned_document_id else {}
+        upsert = not bool(cleaned_document_id)
+
+        local_payload = _call_local_save_image(
+            session=session,
+            collection_name=cleaned_collection,
+            image_bytes=image_bytes,
+            filename=cleaned_filename,
+            document_id=cleaned_document_id,
+            query=query_used,
+            field_path=cleaned_field_path,
+            metadata={
+                **(metadata or {}),
+                **({"doc_key": cleaned_doc_key} if cleaned_doc_key else {}),
+                "source": "comfyui_local_file_store",
+            },
+            upsert=upsert,
+        )
+
+        success = bool(local_payload.get("success")) if isinstance(local_payload, dict) else False
+        data = local_payload.get("data", {}) if isinstance(local_payload, dict) else {}
+        data = data if isinstance(data, dict) else {}
+
+        saved_document_id = (
+            self._unwrap_connected_value(data.get("document_id"))
+            or cleaned_document_id
+            or self._extract_inserted_id(local_payload)
+        )
+
+        created_new = not bool(cleaned_document_id)
+
+        result_payload = {
+            "success": success,
+            "message": (
+                f"Saved image to Local File Store {cleaned_collection}/{saved_document_id}."
+                if success
+                else f"Failed to save image to Local File Store {cleaned_collection}/{cleaned_document_id or '[new]'}."
+            ),
+            "data": {
+                "operation": "local_file_store_save_image",
+                "storage_backend": "local_file_store",
+                "collection_name": cleaned_collection,
+                "document_id": saved_document_id,
+                "query_used": query_used,
+                "field_path": cleaned_field_path,
+                "filename": cleaned_filename,
+                "size_bytes": len(image_bytes),
+                "created_new_document": created_new,
+                "refresh": refresh,
+                "api_response": local_payload,
+                "note": (
+                    "Local images are saved through LocalFileStore.save_image(), "
+                    "which writes PNG bytes to disk and stores only a local_path record in JSON."
+                ),
+            },
+            "error": None if success else (
+                local_payload.get("error") if isinstance(local_payload, dict) else "Local save failed."
+            ),
+            "status_code": local_payload.get("status_code", 0) if isinstance(local_payload, dict) else 0,
+        }
+
+        return (
+            _json_text(result_payload),
+            saved_document_id,
+            cleaned_field_path,
+            refresh,
+            created_new,
+        )
 
     def save_image(
         self,
@@ -845,17 +1205,33 @@ class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
         try:
             metadata = self._parse_metadata(metadata_json)
             image_bytes = self._image_to_png_bytes(image)
+
+            # ------------------------------------------------------------
+            # Critical local-store path:
+            # Do NOT route local images through save_value(). That base64
+            # JSON path triggers value-size limits. Use save_image() or a
+            # LocalFileStore compatibility fallback instead.
+            # ------------------------------------------------------------
+            if _is_local_file_store_session(session):
+                return self._save_local_image(
+                    session=session,
+                    image_bytes=image_bytes,
+                    cleaned_collection=cleaned_collection,
+                    cleaned_field_path=cleaned_field_path,
+                    cleaned_filename=cleaned_filename,
+                    cleaned_document_id=cleaned_document_id,
+                    cleaned_doc_key=cleaned_doc_key,
+                    metadata=metadata,
+                    refresh=refresh,
+                )
+
             image_envelope = self._build_image_envelope(
                 image_bytes=image_bytes,
                 filename=cleaned_filename,
                 metadata=metadata,
             )
 
-            # Existing document path: never upsert/create here.
-            # IMPORTANT: send an explicit _id query. Some backend save-value
-            # route versions do not convert document_id into query when
-            # upsert_if_missing=False, which causes:
-            #   "No query provided and upsert is False"
+            # Existing hosted/API document path: never upsert/create here.
             if cleaned_document_id:
                 payload = session.save_value(
                     collection=cleaned_collection,
@@ -900,7 +1276,7 @@ class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
                 }
                 return (_json_text(result_payload), cleaned_document_id, cleaned_field_path, refresh, False)
 
-            # New document path: only when document_id is empty after cleanup.
+            # New hosted/API document path.
             document: dict[str, Any] = {
                 cleaned_field_path: image_envelope,
                 "source": "comfyui",
@@ -954,17 +1330,19 @@ class ZMongoApiEasySaveImageNode(AlwaysDirtyMixin):
                     "created_new_document": False,
                     "refresh": refresh,
                     "checks": [
-                        "Confirm the API session is connected.",
+                        "Confirm the API/local session is connected.",
                         "Confirm collection_name is correct.",
                         "Confirm the image input is connected.",
                         "Confirm metadata_json is valid JSON.",
-                        "If document_id is connected, confirm it is not an empty string after cleanup.",
+                        "If using local storage, confirm local_file_store.py is installed and pycache was cleared.",
                     ],
                 },
                 "error": {"type": exc.__class__.__name__, "msg": str(exc)},
                 "status_code": 0,
             }
             return (_json_text(payload), cleaned_document_id, cleaned_field_path, refresh, False)
+
+
 
 class ZMongoApiDocumentImageDebugNode(AlwaysDirtyMixin):
     @classmethod

@@ -1498,17 +1498,17 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ZMongoTextAgentSessionNode": "06 Text Agent Session",
-    "ZMongoSavePromptMemoryNode": "06 Save Prompt Memory",
-    "ZMongoLoadMemoryCapsuleNode": "06 Load Memory Capsule",
-    "ZMongoBuildContextPackNode": "06 Build Context Pack",
-    "ZMongoPromptCriticNode": "06 Prompt Critic",
-    "ZMongoPromptEvolverNode": "06 Prompt Evolver",
-    "ZMongoBestVariantSelectorNode": "06 Best Variant Selector",
-    "ZMongoPromptProvenanceLedgerNode": "06 Save Prompt Provenance Ledger",
-    "ZMongoFindSimilarSuccessfulPromptsNode": "06 Find Similar Successful Prompts",
-    "ZMongoCaptionPackGeneratorNode": "06 Caption Pack Generator",
-    "ZMongoWorkflowDocumentationAgentNode": "06 Workflow Documentation Agent",
+    "ZMongoTextAgentSessionNode": "08 Text Agent Session",
+    "ZMongoSavePromptMemoryNode": "08 Save Prompt Memory",
+    "ZMongoLoadMemoryCapsuleNode": "08 Load Memory Capsule",
+    "ZMongoBuildContextPackNode": "08 Build Context Pack",
+    "ZMongoPromptCriticNode": "08 Prompt Critic",
+    "ZMongoPromptEvolverNode": "08 Prompt Evolver",
+    "ZMongoBestVariantSelectorNode": "08 Best Variant Selector",
+    "ZMongoPromptProvenanceLedgerNode": "08 Save Prompt Provenance Ledger",
+    "ZMongoFindSimilarSuccessfulPromptsNode": "08 Find Similar Successful Prompts",
+    "ZMongoCaptionPackGeneratorNode": "08 Caption Pack Generator",
+    "ZMongoWorkflowDocumentationAgentNode": "08 Workflow Documentation Agent",
 }
 
 __all__ = [

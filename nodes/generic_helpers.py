@@ -11,6 +11,7 @@ import re
 import time
 import urllib.parse
 import uuid
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -94,16 +95,12 @@ ZMONGO_STATUS = "ZMONGO_STATUS"
 # Generic helpers for ZMongo API and session access
 # -----------------------------------------------------------------------------
 
-import json
-from typing import Any
-
-# Safely ensure any payload is a dict
 def _ensure_payload_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {"success": False, "message": str(value), "data": value}
 
-# Extract the main document from a response payload
+
 def _extract_document_from_response(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
@@ -117,9 +114,8 @@ def _extract_document_from_response(payload: Any) -> dict[str, Any]:
                 return first_doc
     return {}
 
-# Fallback GET document via session API request
+
 def _session_get_doc(session: Any, collection_name: str, document_id: str, cache: bool = True) -> dict[str, Any]:
-    """Fetch a single document using the session object."""
     if hasattr(session, "get_doc") and callable(session.get_doc):
         try:
             payload = session.get_doc(collection=collection_name, document_id=document_id, cache=cache)
@@ -128,9 +124,9 @@ def _session_get_doc(session: Any, collection_name: str, document_id: str, cache
             pass
     return {}
 
-# Fallback generic API request helper
-def _session_api_request(session: Any, method: str, path: str, json_body: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Perform a raw API request through a session object."""
+
+def _session_api_request(session: Any, method: str, path: str, json_body: dict[str, Any] | None = None) -> dict[
+    str, Any]:
     if hasattr(session, "api_request") and callable(session.api_request):
         try:
             payload = session.api_request(method, path, json=json_body)
@@ -151,14 +147,6 @@ def _legacy_data_path(field_path: str) -> str:
 
 
 def _strip_known_image_leaf(field_path: str, default: str = "image_data") -> str:
-    """Return the public image field, not an internal envelope member.
-
-    ZMongo byte envelopes are normally stored as:
-        image_data = {"__type__": "bytes", "encoding": "base64", "data": "..."}
-
-    A user may accidentally type image_data.data after inspecting the JSON, but
-    the backend route must receive image_data so it can decode the envelope.
-    """
     cleaned = _clean_field_path(field_path, default)
     known_leafs = ("data", "base64", "b64", "bytes", "image", "content", "payload", "url")
     parts = [part for part in cleaned.split(".") if part]
@@ -170,26 +158,10 @@ def _strip_known_image_leaf(field_path: str, default: str = "image_data") -> str
 
 
 def _route_image_field_path(field_path: str, default: str = "image_data") -> str:
-    """Field path to send to server image routes.
-
-    Never send image_data.data as the preferred route field.  The .data member
-    is part of the ZMongo binary envelope and should be decoded by the route,
-    not treated as the public image field.
-    """
     return _strip_known_image_leaf(field_path, default)
 
 
 def _image_field_candidates(field_path: str, default: str = "image_data") -> list[str]:
-    """
-    Return the old working read candidates in priority order.
-
-    The save node and display node must agree on the same public field path.
-    For ZMongo byte envelopes, the image is stored at the field itself:
-        image_data = {"__type__": "bytes", "encoding": "base64", "data": "..."}
-
-    The legacy '<field>.data' path is only a fallback for older documents or
-    direct base64 members. Do not use it as the preferred public route field.
-    """
     exact = _clean_field_path(field_path, default)
     public_field = _strip_known_image_leaf(exact, default)
     legacy = _legacy_data_path(public_field)
@@ -205,8 +177,6 @@ def _empty_comfy_image(width: int = 1, height: int = 1) -> torch.Tensor:
 
 
 def _raise_display_image_error(message: str) -> None:
-    # PreviewImage makes a zero tensor look like a legitimate black image.
-    # Raising keeps route/field errors visible in ComfyUI instead of hiding them.
     raise RuntimeError(message)
 
 
@@ -305,9 +275,9 @@ def _document_key_summary(document: Any) -> dict[str, Any]:
     field_types = {str(key): type(value).__name__ for key, value in document.items()}
     likely_refs: dict[str, Any] = {}
     for key in (
-        "_id", "file_id", "image_id", "asset_id", "gridfs_id", "blob_id",
-        "filename", "path", "filepath", "file_path", "url", "view_url",
-        "download_url", "preview_url", "r2_key", "object_key", "collection",
+            "_id", "file_id", "image_id", "asset_id", "gridfs_id", "blob_id",
+            "filename", "path", "filepath", "file_path", "url", "view_url",
+            "download_url", "preview_url", "r2_key", "object_key", "collection",
     ):
         if key in document:
             likely_refs[key] = document.get(key)
@@ -329,12 +299,6 @@ def _string_value_from_path(document: dict[str, Any], path: str) -> str:
 
 
 def _image_reference_candidates(document: dict[str, Any]) -> list[dict[str, str]]:
-    """Return image/file-id references found in metadata-only documents.
-
-    Some workflows save an image document as metadata or a pointer to the
-    encrypted vault file, not as an inline image_data envelope.  This lets the
-    display node follow those pointers before failing.
-    """
     if not isinstance(document, dict):
         return []
 
@@ -349,17 +313,15 @@ def _image_reference_candidates(document: dict[str, Any]) -> list[dict[str, str]
     for path in pointer_paths:
         value = _string_value_from_path(document, path)
         if value:
-            candidates.append({"collection": "zai_fleet_files", "document_id": value, "field_path": "image_data", "source": path})
+            candidates.append(
+                {"collection": "zai_fleet_files", "document_id": value, "field_path": "image_data", "source": path})
 
-    # If the selected document is itself a GridFS/zai_fleet_files metadata
-    # record, its _id is the image id even if the selected collection was
-    # named images by an older workflow.
     looks_like_file_doc = any(key in document for key in ("filename", "length", "chunkSize", "uploadDate"))
     object_id = _string_value_from_path(document, "_id")
     if looks_like_file_doc and object_id:
-        candidates.append({"collection": "zai_fleet_files", "document_id": object_id, "field_path": "image_data", "source": "metadata._id"})
+        candidates.append({"collection": "zai_fleet_files", "document_id": object_id, "field_path": "image_data",
+                           "source": "metadata._id"})
 
-    # Absolute/relative URLs can be loaded directly by the node.
     for path in ("url", "view_url", "download_url", "preview_url", "payload.url", "metadata.url"):
         value = _string_value_from_path(document, path)
         if value.startswith(("http://", "https://", "/")):
@@ -1373,7 +1335,8 @@ def _local_json_size_bytes(value: Any) -> int:
     return len(json.dumps(value, ensure_ascii=False, default=str).encode("utf-8"))
 
 
-def _local_limit_payload(kind: str, size_bytes: int, max_bytes: int, extra: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def _local_limit_payload(kind: str, size_bytes: int, max_bytes: int, extra: Optional[dict[str, Any]] = None) -> dict[
+    str, Any]:
     data = {
         "storage_backend": "local_file_store",
         "kind": kind,
@@ -1392,900 +1355,8 @@ def _local_limit_payload(kind: str, size_bytes: int, max_bytes: int, extra: Opti
     )
 
 
-class LocalZMongoSession:
-    """
-    Local file-backed ZMongo-compatible session.
-
-    Stores documents as JSON files under:
-        ComfyUI/custom_nodes/ComfyUI-ZMongo/local_store/collections/<collection>/<id>.document.json
-
-    This exposes the same node-facing methods as ZMongoApiSession:
-        health, whoami, list_collections, create_collection, delete_collection,
-        list_docs, get_doc, query_docs, count_docs, create_doc, update_doc,
-        delete_doc, save_value, fetch_image_field, fetch_absolute_or_relative_bytes.
-    """
-
-    storage_backend = "local_file_store"
-    base_url = "local://comfyui-zmongo"
-    username = "local_user"
-    zai_api_key = ""
-    comfy_zmongo_prefix = "/local-file-store"
-    fleet_prefix = "/local-disabled"
-    comfy_zmongo_fleet_prefix = "/local-disabled"
-    max_value_bytes = DEFAULT_LOCAL_MAX_VALUE_BYTES
-    max_document_bytes = DEFAULT_LOCAL_MAX_DOCUMENT_BYTES
-
-    def _limit_info(self) -> dict[str, Any]:
-        return {
-            "local_max_value_bytes": int(self.max_value_bytes),
-            "local_max_document_bytes": int(self.max_document_bytes),
-            "large_document_backend": "https://businessprocessapplications.com",
-            "large_document_chunker": "ZEmbedder.py",
-        }
-
-    def __init__(self, root_dir: Optional[str | Path] = None) -> None:
-        plugin_root = Path(__file__).resolve().parent
-        self.root_dir = Path(root_dir).expanduser().resolve() if root_dir else (plugin_root / "local_store").resolve()
-        self.collections_dir = self.root_dir / "collections"
-        self.manifest_path = self.root_dir / "manifest.json"
-        self.root_dir.mkdir(parents=True, exist_ok=True)
-        self.collections_dir.mkdir(parents=True, exist_ok=True)
-        self._ensure_manifest()
-
-    def close(self) -> None:
-        return None
-
-    def _ensure_manifest(self) -> None:
-        if self.manifest_path.exists():
-            return
-        self._write_json(self.manifest_path, {
-            "storage_backend": "local_file_store",
-            "created_at": _local_now_iso(),
-            "updated_at": _local_now_iso(),
-            "root_dir": str(self.root_dir),
-            "collections_dir": str(self.collections_dir),
-            "message": "Local File Store mode. Files are stored on this machine only.",
-        })
-
-    @staticmethod
-    def _read_json(path: Path, default: Any = None) -> Any:
-        if not path.exists():
-            return default
-        with path.open("r", encoding="utf-8") as handle:
-            return json.load(handle)
-
-    @staticmethod
-    def _write_json(path: Path, value: Any) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        with tmp.open("w", encoding="utf-8") as handle:
-            json.dump(value, handle, indent=2, ensure_ascii=False, default=str)
-        tmp.replace(path)
-
-    def _collection_dir(self, collection: str) -> Path:
-        path = self.collections_dir / _local_safe_name(collection, "documents")
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-
-    def _doc_path(self, collection: str, document_id: str) -> Path:
-        return self._collection_dir(collection) / f"{_local_safe_name(document_id, 'document')}.document.json"
-
-    def _iter_doc_paths(self, collection: str) -> list[Path]:
-        return sorted(self._collection_dir(collection).glob("*.document.json"))
-
-    def _load_doc_path(self, path: Path) -> dict[str, Any]:
-        data = self._read_json(path, default={})
-        return data if isinstance(data, dict) else {}
-
-    def _load_doc(self, collection: str, document_id: str) -> dict[str, Any]:
-        path = self._doc_path(collection, document_id)
-        if not path.exists():
-            return {}
-        return self._load_doc_path(path)
-
-    def _save_doc(self, collection: str, document: dict[str, Any]) -> dict[str, Any]:
-        clean_collection = _local_safe_name(collection, "documents")
-        doc = dict(document or {})
-        doc_id = _local_clean_scalar(doc.get("_id") or doc.get("document_id") or doc.get("id")) or _local_new_id()
-        now = _local_now_iso()
-        doc["_id"] = doc_id
-        doc["collection"] = clean_collection
-        doc.setdefault("created_at", now)
-        doc["updated_at"] = now
-        doc["storage_backend"] = "local_file_store"
-        self._write_json(self._doc_path(clean_collection, doc_id), doc)
-        return doc
-
-    def health(self) -> dict[str, Any]:
-        return _local_payload_ok("Local File Store is available.", {
-            "ok": True,
-            "mode": "Local File Store",
-            "storage_backend": "local_file_store",
-            "root_dir": str(self.root_dir),
-            "manifest": str(self.manifest_path),
-            "message": "This stores small JSON items on this machine only. Large document storage, chunking, embeddings, R2, dashboard, sync, metering, and backup require hosted ZMongo.",
-            **self._limit_info(),
-        })
-
-    def whoami(self) -> dict[str, Any]:
-        return _local_payload_ok("Local File Store session.", {
-            "username": "local_user",
-            "db_name": "local_file_store",
-            "silo_db_name": "local_file_store",
-            "api_key_present": False,
-            "hosted_backend": False,
-            "storage_backend": "local_file_store",
-            "root_dir": str(self.root_dir),
-        })
-
-    def list_collections(self) -> dict[str, Any]:
-        collections = sorted(p.name for p in self.collections_dir.iterdir() if p.is_dir())
-        return _local_payload_ok("Listed local collections.", {
-            "collections": collections,
-            "collection_names": collections,
-            "count": len(collections),
-            "storage_backend": "local_file_store",
-        })
-
-    def create_collection(self, collection: str) -> dict[str, Any]:
-        clean = _local_safe_name(collection, "documents")
-        path = self._collection_dir(clean)
-        return _local_payload_ok("Created local collection.", {
-            "collection": clean,
-            "collection_name": clean,
-            "path": str(path),
-            "storage_backend": "local_file_store",
-        })
-
-    def delete_collection(self, collection: str) -> dict[str, Any]:
-        clean = _local_safe_name(collection, "")
-        if not clean:
-            return _local_payload_error("collection is required.", status_code=400)
-        path = self.collections_dir / clean
-        if not path.exists():
-            return _local_payload_error("Local collection does not exist.", {"collection": clean, "path": str(path)},
-                                        status_code=404)
-        import shutil
-        shutil.rmtree(path)
-        return _local_payload_ok("Deleted local collection.", {
-            "collection": clean,
-            "collection_name": clean,
-            "path": str(path),
-            "storage_backend": "local_file_store",
-        })
-
-    def list_docs(self, *, collection: str, limit: int = 50, skip: int = 0, query: Optional[dict[str, Any]] = None) -> \
-    dict[str, Any]:
-        clean = _local_safe_name(collection, "documents")
-        safe_limit = max(1, min(int(limit or 50), 500))
-        safe_skip = max(0, int(skip or 0))
-        docs = []
-        for path in self._iter_doc_paths(clean):
-            doc = self._load_doc_path(path)
-            if _local_matches_query(doc, query or {}):
-                docs.append(doc)
-        page = docs[safe_skip:safe_skip + safe_limit]
-        ids = [str(doc.get("_id")) for doc in page if doc.get("_id")]
-        return _local_payload_ok("Listed local documents.", {
-            "collection": clean,
-            "collection_name": clean,
-            "query": query or {},
-            "limit": safe_limit,
-            "skip": safe_skip,
-            "count": len(page),
-            "total": len(docs),
-            "documents": page,
-            "results": page,
-            "document_ids": ids,
-            "ids": ids,
-            "storage_backend": "local_file_store",
-        })
-
-    def get_doc(self, *, collection: str, document_id: str, cache: bool = False) -> dict[str, Any]:
-        clean = _local_safe_name(collection, "documents")
-        clean_id = _local_clean_scalar(document_id)
-        doc = self._load_doc(clean, clean_id)
-        if not doc:
-            return _local_payload_error("Local document not found.", {
-                "collection": clean,
-                "collection_name": clean,
-                "document_id": clean_id,
-                "path": str(self._doc_path(clean, clean_id)),
-                "storage_backend": "local_file_store",
-            }, status_code=404)
-        return _local_payload_ok("Loaded local document.", {
-            "document": doc,
-            "document_id": clean_id,
-            "collection": clean,
-            "collection_name": clean,
-            "cache_hit": False,
-            "storage_backend": "local_file_store",
-        })
-
-    def query_docs(
-            self,
-            *,
-            collection: str,
-            query: Optional[dict[str, Any]] = None,
-            document_id: str = "",
-            many: bool = True,
-            limit: int = 50,
-            skip: int = 0,
-            projection: Optional[dict[str, Any]] = None,
-            sort: Optional[list[Any]] = None,
-            cache: bool = False,
-    ) -> dict[str, Any]:
-        clean = _local_safe_name(collection, "documents")
-        clean_id = _local_clean_scalar(document_id)
-        if clean_id:
-            payload = self.get_doc(collection=clean, document_id=clean_id, cache=cache)
-            if not payload.get("success"):
-                return payload
-            doc = payload["data"]["document"]
-            return _local_payload_ok("Queried one local document.", {
-                "collection": clean,
-                "collection_name": clean,
-                "document": doc,
-                "documents": [doc],
-                "results": [doc],
-                "document_id": clean_id,
-                "count": 1,
-                "total": 1,
-                "storage_backend": "local_file_store",
-            })
-        listed = self.list_docs(collection=clean, query=query or {}, limit=limit, skip=skip)
-        docs = listed.get("data", {}).get("documents", [])
-        if sort:
-            for item in reversed(sort):
-                try:
-                    key = item[0]
-                    direction = int(item[1])
-                    docs.sort(key=lambda d: str(_local_get_by_path(d, str(key), "")), reverse=direction < 0)
-                except Exception:
-                    pass
-        if not many:
-            docs = docs[:1]
-        data = dict(listed.get("data", {}))
-        data["documents"] = docs
-        data["results"] = docs
-        data["count"] = len(docs)
-        if docs:
-            data["document"] = docs[0]
-        return _local_payload_ok("Queried local documents.", data)
-
-    def count_docs(self, *, collection: str, query: Optional[dict[str, Any]] = None, document_id: str = "",
-                   cache: bool = False) -> dict[str, Any]:
-        clean = _local_safe_name(collection, "documents")
-        clean_id = _local_clean_scalar(document_id)
-        if clean_id:
-            count = 1 if self._load_doc(clean, clean_id) else 0
-        else:
-            count = 0
-            for path in self._iter_doc_paths(clean):
-                if _local_matches_query(self._load_doc_path(path), query or {}):
-                    count += 1
-        return _local_payload_ok("Counted local documents.", {
-            "collection": clean,
-            "collection_name": clean,
-            "query": query or {},
-            "document_id": clean_id,
-            "count": count,
-            "document_count": count,
-            "total": count,
-            "storage_backend": "local_file_store",
-        })
-
-    def create_doc(self, *, collection: str, document: dict[str, Any]) -> dict[str, Any]:
-        clean = _local_safe_name(collection, "documents")
-        candidate = dict(document or {})
-        candidate_size = _local_json_size_bytes(candidate)
-        if candidate_size > self.max_document_bytes:
-            return _local_limit_payload("document", candidate_size, self.max_document_bytes, {"collection": clean})
-        saved = self._save_doc(clean, candidate)
-        doc_id = str(saved["_id"])
-        return _local_payload_ok("Created local document.", {
-            "document": saved,
-            "document_id": doc_id,
-            "inserted_id": doc_id,
-            "_id": doc_id,
-            "collection": clean,
-            "collection_name": clean,
-            "storage_backend": "local_file_store",
-            **self._limit_info(),
-        })
-
-    def update_doc(
-            self,
-            *,
-            collection: str,
-            query: Optional[dict[str, Any]] = None,
-            document_id: str = "",
-            update: Optional[dict[str, Any]] = None,
-            field_path: str = "",
-            value: Any = None,
-            upsert: bool = False,
-    ) -> dict[str, Any]:
-        clean = _local_safe_name(collection, "documents")
-        clean_id = _local_clean_scalar(document_id)
-        doc = self._load_doc(clean, clean_id) if clean_id else {}
-        if not doc and query:
-            docs = self.query_docs(collection=clean, query=query, many=False, limit=1).get("data", {}).get("documents",
-                                                                                                           [])
-            if docs:
-                doc = docs[0]
-                clean_id = str(doc.get("_id") or "")
-        if not doc and not upsert:
-            return _local_payload_error("Local update target not found.", {
-                "collection": clean,
-                "query": query or {},
-                "document_id": clean_id,
-                "upsert": bool(upsert),
-                "storage_backend": "local_file_store",
-            }, status_code=404)
-        if not doc:
-            doc = {}
-            if clean_id:
-                doc["_id"] = clean_id
-            if query:
-                for key, item in query.items():
-                    if isinstance(key, str) and not key.startswith("$") and not isinstance(item, dict):
-                        _local_set_by_path(doc, key, item)
-        if update is not None:
-            if "$set" in update and isinstance(update["$set"], dict):
-                for key, item in update["$set"].items():
-                    _local_set_by_path(doc, key, item)
-            else:
-                for key, item in update.items():
-                    if not str(key).startswith("$"):
-                        _local_set_by_path(doc, key, item)
-        else:
-            _local_set_by_path(doc, field_path, value)
-        doc_size = _local_json_size_bytes(doc)
-        if doc_size > self.max_document_bytes:
-            return _local_limit_payload("document", doc_size, self.max_document_bytes, {
-                "collection": clean,
-                "document_id": clean_id,
-            })
-        saved = self._save_doc(clean, doc)
-        doc_id = str(saved["_id"])
-        return _local_payload_ok("Updated local document.", {
-            "document": saved,
-            "document_id": doc_id,
-            "matched_count": 1,
-            "modified_count": 1,
-            "collection": clean,
-            "collection_name": clean,
-            "storage_backend": "local_file_store",
-        })
-
-    def delete_doc(self, *, collection: str, query: Optional[dict[str, Any]] = None, document_id: str = "") -> dict[
-        str, Any]:
-        clean = _local_safe_name(collection, "documents")
-        clean_id = _local_clean_scalar(document_id)
-        deleted = []
-        if clean_id:
-            path = self._doc_path(clean, clean_id)
-            if path.exists():
-                path.unlink()
-                deleted.append(clean_id)
-        elif query:
-            for path in self._iter_doc_paths(clean):
-                doc = self._load_doc_path(path)
-                if _local_matches_query(doc, query):
-                    deleted.append(str(doc.get("_id") or path.stem.replace(".document", "")))
-                    path.unlink()
-        else:
-            return _local_payload_error("delete_doc requires document_id or query.", status_code=400)
-        return _local_payload_ok("Deleted local document(s).", {
-            "collection": clean,
-            "collection_name": clean,
-            "document_id": clean_id,
-            "deleted_ids": deleted,
-            "deleted_count": len(deleted),
-            "storage_backend": "local_file_store",
-        })
-
-    def save_value(
-            self,
-            *,
-            collection: str,
-            query: Optional[dict[str, Any]] = None,
-            document_id: str = "",
-            field_path: str = "",
-            value: Any = None,
-            upsert_if_missing: bool = True,
-            parse_json_strings: bool = True,
-            normalize_for_storage: bool = False,
-    ) -> dict[str, Any]:
-        clean = _local_safe_name(collection, "documents")
-        clean_id = _local_clean_scalar(document_id)
-        clean_field = _local_clean_scalar(field_path)
-        if not clean_field:
-            return _local_payload_error("field_path is required.", status_code=400)
-        doc = self._load_doc(clean, clean_id) if clean_id else {}
-        if not doc and query:
-            docs = self.query_docs(collection=clean, query=query, many=False, limit=1).get("data", {}).get("documents",
-                                                                                                           [])
-            if docs:
-                doc = docs[0]
-                clean_id = str(doc.get("_id") or "")
-        if not doc:
-            if not upsert_if_missing:
-                return _local_payload_error("query or document_id is required.", {
-                    "collection": clean,
-                    "query": query or {},
-                    "document_id": clean_id,
-                    "field_path": clean_field,
-                    "upsert_if_missing": bool(upsert_if_missing),
-                }, status_code=400)
-            doc = {}
-            if clean_id:
-                doc["_id"] = clean_id
-            if query:
-                for key, item in query.items():
-                    if isinstance(key, str) and not key.startswith("$") and not isinstance(item, dict):
-                        _local_set_by_path(doc, key, item)
-        if parse_json_strings and isinstance(value, str) and value.strip():
-            try:
-                value = json.loads(value)
-            except Exception:
-                pass
-        value_size = _local_json_size_bytes(value)
-        if value_size > self.max_value_bytes:
-            return _local_limit_payload("value", value_size, self.max_value_bytes, {
-                "collection": clean,
-                "document_id": clean_id,
-                "field_path": clean_field,
-            })
-        _local_set_by_path(doc, clean_field, value)
-        doc_size = _local_json_size_bytes(doc)
-        if doc_size > self.max_document_bytes:
-            return _local_limit_payload("document", doc_size, self.max_document_bytes, {
-                "collection": clean,
-                "document_id": clean_id,
-                "field_path": clean_field,
-            })
-        saved = self._save_doc(clean, doc)
-        doc_id = str(saved["_id"])
-        return _local_payload_ok("Saved local value.", {
-            "operation": "updated_existing",
-            "document_id": doc_id,
-            "inserted_id": doc_id,
-            "_id": doc_id,
-            "collection": clean,
-            "collection_name": clean,
-            "field_path": clean_field,
-            "saved_value": value,
-            "document": saved,
-            "document_path": str(self._doc_path(clean, doc_id).relative_to(self.root_dir)),
-            "storage_backend": "local_file_store",
-            **self._limit_info(),
-        })
-
-    def fetch_image_field(
-        self,
-        *,
-        collection: str,
-        document_id: str,
-        field_path: str,
-        master_key_hex: str = "",
-    ) -> tuple[bytes, str]:
-        """Load image bytes from a local ZMongo-style document field.
-
-        This method intentionally does not import zmongo_image_nodes or
-        zmongo_images_nodes. Those modules import this helper module, so importing
-        them here creates a Pylint R0401 cyclic-import warning.
-
-        The required image helpers are already defined in this file:
-        _image_field_candidates() and _decode_image_bytes_from_value().
-        """
-        del master_key_hex  # Local file store does not use hosted encryption keys.
-
-        clean = _local_safe_name(collection, "images")
-        clean_id = _local_clean_scalar(document_id)
-        doc = self._load_doc(clean, clean_id)
-
-        if not doc:
-            raise ValueError(f"Local document not found: {clean}/{clean_id}")
-
-        errors: list[str] = []
-
-        for candidate in _image_field_candidates(field_path, "image_data"):
-            try:
-                value = _local_get_by_path(doc, candidate)
-                data = _decode_image_bytes_from_value(value)
-                return data, f"local_file_store:{clean}/{clean_id}:{candidate}"
-            except Exception as exc:
-                errors.append(f"{candidate}: {exc}")
-
-        raise ValueError("No decodable local image field found. " + " | ".join(errors))
-
-
-    def fetch_absolute_or_relative_bytes(self, url: str) -> bytes:
-        text = _local_clean_scalar(url)
-        if text.startswith("local://"):
-            text = text.replace("local://", "", 1)
-        path = Path(text)
-        if not path.is_absolute():
-            path = self.root_dir / text.lstrip("/\\")
-        path = path.resolve()
-        if not path.exists():
-            raise FileNotFoundError(f"Local file not found: {path}")
-        return path.read_bytes()
-
-    def request(self, method: str, prefix: str, path: str, *, json_body: Optional[dict[str, Any]] = None,
-                params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-        """Route a node-style request into the local file store.
-
-        This intentionally supports both route families used by ComfyUI-ZMongo:
-
-        1. Generic ZMongo routes:
-           /api/doc/<collection>/<id>, /api/query, /api/save-value, etc.
-
-        2. Document API node routes:
-           /health, /api/list, /api/get/<id>, /api/text/<id>,
-           /api/field-paths/<id>, /api/save-value/<id>, etc.
-
-        The document nodes default to the "documents" collection unless the
-        request body explicitly provides collection/collection_name.
-        """
-        method = (method or "GET").upper()
-        path = path if path.startswith("/") else f"/{path}"
-        body = json_body or {}
-        params = params or {}
-
-        def body_collection(default: str = "documents") -> str:
-            return body.get("collection") or body.get("collection_name") or default
-
-        def tail_after(marker: str) -> str:
-            return urllib.parse.unquote(path.rsplit(marker, 1)[1].strip("/"))
-
-        def payload_text_from_document(doc: dict[str, Any]) -> str:
-            text_value = doc.get("text")
-            if text_value is not None:
-                return str(text_value or "")
-
-            file_data = doc.get("file_data")
-            content_type = str(doc.get("content_type") or "")
-            if isinstance(file_data, str) and (
-                content_type.startswith("text/")
-                or str(doc.get("filename") or "").lower().endswith((".txt", ".md", ".csv", ".json", ".rtf"))
-            ):
-                try:
-                    return base64.b64decode(file_data.encode("ascii"), validate=False).decode("utf-8", errors="replace")
-                except Exception:
-                    return ""
-            return ""
-
-        try:
-            # -----------------------------------------------------------------
-            # Shared health/account routes
-            # -----------------------------------------------------------------
-            if method == "GET" and (path.endswith("/health") or path.endswith("/api/health")):
-                return self.health()
-            if method == "GET" and path.endswith("/api/whoami"):
-                return self.whoami()
-            if method == "GET" and path.endswith("/api/collections"):
-                return self.list_collections()
-
-            # -----------------------------------------------------------------
-            # Generic ZMongo collection/document routes
-            # -----------------------------------------------------------------
-            if method == "POST" and path.endswith("/api/collection/create"):
-                return self.create_collection(
-                    body.get("name") or body.get("collection") or body.get("collection_name") or "")
-            if method == "POST" and path.endswith("/api/collection/delete"):
-                return self.delete_collection(
-                    body.get("name") or body.get("collection") or body.get("collection_name") or "")
-            if method == "POST" and path.endswith("/api/doc/create"):
-                return self.create_doc(collection=body_collection(), document=body.get("document") or {})
-            if method == "POST" and path.endswith("/api/query"):
-                return self.query_docs(
-                    collection=body_collection(),
-                    query=body.get("query") or {},
-                    document_id=body.get("document_id") or "",
-                    many=body.get("many", True),
-                    limit=body.get("limit", 50),
-                    skip=body.get("skip", 0),
-                    projection=body.get("projection") or {},
-                    sort=body.get("sort") or [],
-                    cache=body.get("cache", False),
-                )
-            if method == "POST" and path.endswith("/api/count"):
-                return self.count_docs(
-                    collection=body_collection(),
-                    query=body.get("query") or {},
-                    document_id=body.get("document_id") or "",
-                    cache=body.get("cache", False),
-                )
-            if method == "POST" and path.endswith("/api/doc/update"):
-                return self.update_doc(
-                    collection=body_collection(),
-                    query=body.get("query") or {},
-                    document_id=body.get("document_id") or "",
-                    update=body.get("update"),
-                    field_path=body.get("field_path") or "",
-                    value=body.get("value"),
-                    upsert=body.get("upsert", False),
-                )
-            if method == "POST" and path.endswith("/api/doc/delete"):
-                return self.delete_doc(
-                    collection=body_collection(),
-                    query=body.get("query") or {},
-                    document_id=body.get("document_id") or "",
-                )
-            if method == "POST" and path.endswith("/api/save-value"):
-                return self.save_value(
-                    collection=body_collection(),
-                    query=body.get("query") or {},
-                    document_id=body.get("document_id") or "",
-                    field_path=body.get("field_path") or "",
-                    value=body.get("value"),
-                    upsert_if_missing=body.get("upsert_if_missing", True),
-                    parse_json_strings=body.get("parse_json_strings", True),
-                    normalize_for_storage=body.get("normalize_for_storage", False),
-                )
-            if method == "GET" and "/api/docs/" in path:
-                collection = tail_after("/api/docs/")
-                query = {}
-                if params.get("query_json"):
-                    try:
-                        query = json.loads(params.get("query_json") or "{}")
-                    except Exception:
-                        query = {}
-                return self.list_docs(collection=collection, query=query, limit=int(params.get("limit", 50)),
-                                      skip=int(params.get("skip", 0)))
-            if method == "GET" and "/api/doc/" in path:
-                tail = tail_after("/api/doc/")
-                parts = tail.split("/", 1)
-                if len(parts) == 2:
-                    return self.get_doc(collection=parts[0],
-                                        document_id=parts[1],
-                                        cache=str(params.get("cache", "false")).lower() == "true")
-
-            # -----------------------------------------------------------------
-            # Document API node routes. These are the routes used by
-            # document_api_nodes.py and are backed locally by the "documents"
-            # collection.
-            # -----------------------------------------------------------------
-            if method == "POST" and path.endswith("/api/upload"):
-                filename = _local_clean_scalar(body.get("filename")) or "uploaded_document"
-                file_data = body.get("file_data") or ""
-                text_value = body.get("text") or ""
-                metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
-                document = body.get("document") if isinstance(body.get("document"), dict) else {}
-                document.update({
-                    "filename": filename,
-                    "content_type": body.get("content_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream",
-                    "file_data": file_data,
-                    "size_bytes": len(base64.b64decode(file_data.encode("ascii"), validate=False)) if isinstance(file_data, str) and file_data else 0,
-                    "text": text_value,
-                    "case_id": body.get("case_id"),
-                    "metadata": metadata,
-                })
-                return self.create_doc(collection=body_collection(), document=document)
-
-            if method == "POST" and path.endswith("/api/create"):
-                filename = _local_clean_scalar(body.get("filename")) or "manual_document.txt"
-                metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
-                document = body.get("document") if isinstance(body.get("document"), dict) else {}
-                document.update({
-                    "filename": filename,
-                    "content_type": body.get("content_type") or mimetypes.guess_type(filename)[0] or "text/plain",
-                    "text": body.get("text") or "",
-                    "case_id": body.get("case_id"),
-                    "metadata": metadata,
-                    "text_length": len(str(body.get("text") or "")),
-                })
-                payload = self.create_doc(collection=body_collection(), document=document)
-                if payload.get("success"):
-                    data = payload.setdefault("data", {})
-                    data["filename"] = filename
-                    data["text_length"] = len(str(body.get("text") or ""))
-                return payload
-
-            if method == "POST" and path.endswith("/api/list"):
-                return self.query_docs(
-                    collection=body_collection(),
-                    query=body.get("query") or {},
-                    many=True,
-                    limit=body.get("limit", 50),
-                    skip=body.get("skip", 0),
-                    sort=body.get("sort") or [],
-                    cache=False,
-                )
-
-            if method == "GET" and "/api/get/" in path:
-                document_id = tail_after("/api/get/")
-                return self.get_doc(collection=body_collection(), document_id=document_id,
-                                    cache=str(params.get("cache", "false")).lower() == "true")
-
-            if method == "GET" and "/api/text/" in path:
-                document_id = tail_after("/api/text/")
-                payload = self.get_doc(collection=body_collection(), document_id=document_id, cache=False)
-                if not payload.get("success"):
-                    return payload
-                doc = payload.get("data", {}).get("document", {})
-                text_value = payload_text_from_document(doc if isinstance(doc, dict) else {})
-                return _local_payload_ok("Loaded local document text.", {
-                    "document_id": document_id,
-                    "text": text_value,
-                    "text_length": len(text_value),
-                    "storage_backend": "local_file_store",
-                })
-
-            if method == "GET" and "/api/field-paths/" in path:
-                document_id = tail_after("/api/field-paths/")
-                collection = params.get("collection") or params.get("collection_name") or body_collection()
-                payload = self.get_doc(collection=str(collection), document_id=document_id, cache=False)
-                if not payload.get("success"):
-                    return payload
-                doc = payload.get("data", {}).get("document", {})
-                paths = dedupe_strings(flatten_document_paths(doc if isinstance(doc, dict) else {}))
-                return _local_payload_ok("Listed local document field paths.", {
-                    "collection": collection,
-                    "collection_name": collection,
-                    "document_id": document_id,
-                    "field_paths": paths,
-                    "paths": paths,
-                    "count": len(paths),
-                    "storage_backend": "local_file_store",
-                })
-
-            if method == "POST" and "/api/save-text/" in path:
-                document_id = tail_after("/api/save-text/")
-                text_value = str(body.get("text") or "")
-                return self.update_doc(
-                    collection=body_collection(),
-                    document_id=document_id,
-                    field_path="text",
-                    value=text_value,
-                    upsert=False,
-                )
-
-            if method == "POST" and "/api/save-value/" in path:
-                document_id = tail_after("/api/save-value/")
-                return self.save_value(
-                    collection=body_collection(),
-                    document_id=document_id,
-                    field_path=body.get("field_path") or "",
-                    value=body.get("value"),
-                    upsert_if_missing=False,
-                    parse_json_strings=body.get("parse_json_strings", True),
-                    normalize_for_storage=body.get("normalize_for_storage", False),
-                )
-
-            if method == "POST" and "/api/metadata/" in path:
-                document_id = tail_after("/api/metadata/")
-                update_values: dict[str, Any] = {}
-                if isinstance(body.get("metadata"), dict):
-                    update_values["metadata"] = body.get("metadata")
-                for key in ("case_id", "status", "title", "description", "tags"):
-                    if key in body and body.get(key) not in (None, ""):
-                        update_values[key] = body.get(key)
-                return self.update_doc(
-                    collection=body_collection(),
-                    document_id=document_id,
-                    update={"$set": update_values},
-                    upsert=False,
-                )
-
-            if method == "POST" and "/api/extract-text/" in path:
-                document_id = tail_after("/api/extract-text/")
-                text_payload = self.request("GET", prefix, f"/api/text/{document_id}")
-                if not text_payload.get("success"):
-                    return text_payload
-                if body.get("save", True):
-                    text_value = str(text_payload.get("data", {}).get("text") or "")
-                    self.update_doc(collection=body_collection(), document_id=document_id,
-                                    field_path="text", value=text_value, upsert=False)
-                return text_payload
-
-            if method == "POST" and "/api/ocr/queue/" in path:
-                document_id = tail_after("/api/ocr/queue/")
-                payload = self.update_doc(
-                    collection=body_collection(),
-                    document_id=document_id,
-                    update={"$set": {"ocr": {
-                        "status": "queued",
-                        "priority": int(body.get("priority") or 50),
-                        "source": body.get("source") or "comfyui_zmongo_document_node",
-                        "queued_at": _local_now_iso(),
-                    }}},
-                    upsert=False,
-                )
-                if payload.get("success"):
-                    payload["data"]["status"] = "queued"
-                return payload
-
-            if method == "GET" and "/api/ocr/status/" in path:
-                document_id = tail_after("/api/ocr/status/")
-                payload = self.get_doc(collection=body_collection(), document_id=document_id, cache=False)
-                if not payload.get("success"):
-                    return payload
-                doc = payload.get("data", {}).get("document", {})
-                ocr = doc.get("ocr", {}) if isinstance(doc, dict) and isinstance(doc.get("ocr"), dict) else {}
-                text_value = payload_text_from_document(doc if isinstance(doc, dict) else {})
-                return _local_payload_ok("Loaded local OCR status.", {
-                    "document_id": document_id,
-                    "status": ocr.get("status") or ("complete" if text_value else "not_queued"),
-                    "has_text": bool(text_value),
-                    "last_error": ocr.get("last_error") or "",
-                    "ocr": ocr,
-                    "storage_backend": "local_file_store",
-                })
-
-            if method == "POST" and "/api/delete/" in path:
-                document_id = tail_after("/api/delete/")
-                return self.delete_doc(collection=body_collection(), document_id=document_id)
-
-            return _local_payload_error("Local request route is not implemented.", {
-                "method": method,
-                "prefix": prefix,
-                "path": path,
-                "json_body": body,
-                "params": params,
-                "storage_backend": "local_file_store",
-            }, status_code=404)
-        except Exception as exc:
-            return _local_payload_error(f"Local request failed: {exc}", {
-                "method": method,
-                "prefix": prefix,
-                "path": path,
-                "json_body": body,
-                "params": params,
-                "storage_backend": "local_file_store",
-            }, status_code=0, error_type=exc.__class__.__name__)
-
-
-class ZMongoLocalFileStoreSessionNode(AlwaysDirtyMixin):
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "local_store_root": ("STRING", {"default": "", "multiline": False}),
-                "test_health": ("BOOLEAN", {"default": True}),
-            }
-        }
-
-    RETURN_TYPES = ("ZMONGO_API_SESSION", "STRING", "STRING")
-    RETURN_NAMES = ("session", "json", "status")
-    FUNCTION = "connect"
-    CATEGORY = "ZMongo/00 Auth"
-
-    def connect(self, local_store_root: str = "", test_health: bool = True):
-        try:
-            root_text = _local_clean_scalar(local_store_root)
-            root_dir = Path(root_text).expanduser().resolve() if root_text else None
-            session = LocalZMongoSession(root_dir=root_dir)
-            payload = session.health() if test_health else _local_payload_ok("Local File Store session created.", {
-                "storage_backend": "local_file_store",
-                "root_dir": str(session.root_dir),
-                "mode": "Local File Store",
-            })
-            return (session, _json_text(payload), payload.get("message", "Local File Store session created."))
-        except Exception as exc:
-            payload = _local_payload_error(f"Local File Store session failed: {exc}", {
-                "local_store_root": local_store_root,
-                "error_type": exc.__class__.__name__,
-            }, status_code=0, error_type=exc.__class__.__name__)
-            return (None, _json_text(payload), payload["message"])
-
-
-NODE_CLASS_MAPPINGS = {
-    "ZMongoLocalFileStoreSessionNode": ZMongoLocalFileStoreSessionNode,
-}
-
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "ZMongoLocalFileStoreSessionNode": "00 Local File Store Session",
-}
-
 __all__ = [
     "AlwaysDirtyMixin",
-    "LocalZMongoSession",
-    "ZMongoLocalFileStoreSessionNode",
-    "NODE_CLASS_MAPPINGS",
-    "NODE_DISPLAY_NAME_MAPPINGS",
     "DOCUMENT_FILE_EXTENSIONS",
     "IMMUTABLE_DOCUMENT_FIELD_PATHS",
     "SELECTABLE_RETURN_TYPES",

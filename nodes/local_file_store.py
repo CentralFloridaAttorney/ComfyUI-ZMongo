@@ -32,13 +32,42 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 
-DEFAULT_LOCAL_MAX_VALUE_BYTES = int(os.getenv("ZMONGO_LOCAL_MAX_VALUE_BYTES", str(9 * 10 * 10 * 256 * 1024)))
-DEFAULT_LOCAL_MAX_DOCUMENT_BYTES = int(os.getenv("ZMONGO_LOCAL_MAX_DOCUMENT_BYTES", str(9 *10 * 10 * 1024 * 1024)))
-DEFAULT_LOCAL_MAX_IMAGE_BYTES = int(os.getenv("ZMONGO_LOCAL_MAX_IMAGE_BYTES", str(9 * 10 * 10 * 10 * 1024 * 1024)))
+LOCAL_MIB = 1024 * 1024
+MIN_LOCAL_IMAGE_BYTES = 3 * LOCAL_MIB
 
-print(DEFAULT_LOCAL_MAX_IMAGE_BYTES)
-print(DEFAULT_LOCAL_MAX_DOCUMENT_BYTES)
-print(DEFAULT_LOCAL_MAX_VALUE_BYTES)
+
+def _env_int_at_least(name: str, default: int, minimum: int) -> int:
+    """
+    Read a byte limit from the environment, but never allow a stale/small
+    environment value to push the Local File Store below ComfyUI image needs.
+    """
+    raw = os.getenv(name)
+    try:
+        value = int(raw) if raw not in (None, "") else int(default)
+    except Exception:
+        value = int(default)
+    return max(value, int(minimum))
+
+
+# Local File Store intentionally remains lightweight, but normal ComfyUI PNGs
+# must work. Base64/JSON storage expands payloads, so value/document limits must
+# be much higher than the raw image limit. These are hard floors; environment
+# variables may increase them but may not reduce them below these values.
+DEFAULT_LOCAL_MAX_VALUE_BYTES = _env_int_at_least(
+    "ZMONGO_LOCAL_MAX_VALUE_BYTES",
+    32 * LOCAL_MIB,
+    16 * LOCAL_MIB,
+)
+DEFAULT_LOCAL_MAX_DOCUMENT_BYTES = _env_int_at_least(
+    "ZMONGO_LOCAL_MAX_DOCUMENT_BYTES",
+    64 * LOCAL_MIB,
+    32 * LOCAL_MIB,
+)
+DEFAULT_LOCAL_MAX_IMAGE_BYTES = _env_int_at_least(
+    "ZMONGO_LOCAL_MAX_IMAGE_BYTES",
+    16 * LOCAL_MIB,
+    MIN_LOCAL_IMAGE_BYTES,
+)
 
 class DataProcessor:
     @staticmethod

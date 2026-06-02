@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Tuple
 
-from . import zmongo_api_nodes
+from . import zmongo_docs_collections_nodes
 from . import gemini_api_nodes
 from . import zmongo_image_nodes
 from . import zmongo_images_nodes
@@ -11,7 +11,7 @@ from . import zmongo_preset_nodes
 from . import zmongo_text_agent_nodes
 from . import zmongo_helper_nodes
 from . import motd_node
-from . import api_nodes
+from . import zmongo_auth_nodes
 
 
 
@@ -41,9 +41,9 @@ def _merge_node_mappings(
 
 NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
     (
-        "zmongo_api_nodes",
-        zmongo_api_nodes.NODE_CLASS_MAPPINGS,
-        zmongo_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+        "zmongo_auth_nodes",
+        zmongo_auth_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_auth_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
     (
         "zmongo_image_nodes",
@@ -86,9 +86,9 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         motd_node.NODE_DISPLAY_NAME_MAPPINGS,
     ),
     (
-        "api_nodes",
-        api_nodes.NODE_CLASS_MAPPINGS,
-        api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+        "zmongo_docs_collections_nodes",
+        zmongo_docs_collections_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_docs_collections_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
 )
 

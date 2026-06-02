@@ -482,7 +482,7 @@ def _api_top_level_preset_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "save_mode": str(payload.get("save_mode") or ""),
         "field_count": int(payload.get("field_count") or 0),
         "updated_at_unix": time.time(),
-        "api_storage_format": "dot_path_fields_v2",
+        "api_storage_format": API_STORAGE_FORMAT,
     }
 
 
@@ -505,6 +505,169 @@ def _api_field_leafs(field: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+def _session_api_request(
+    *,
+    session: Any,
+    method: str,
+    path: str,
+    json_body: Optional[dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """
+    Call the real Comfy-ZMongo backend through ZMongoApiSession.request.
+
+    The verified backend route prefix is:
+
+        /comfy-zmongo/api
+
+    ZMongoApiSession.request(prefix="/api", path="/...") is responsible for
+    adding /comfy-zmongo before /api.
+    """
+    if session is None:
+        return {
+            "success": False,
+            "message": "No ZMongo API session provided.",
+            "data": {},
+            "error": {"msg": "missing session"},
+            "status_code": 400,
+        }
+
+    request_fn = getattr(session, "request", None)
+    if not callable(request_fn):
+        return {
+            "success": False,
+            "message": "ZMongo API session does not expose request().",
+            "data": {
+                "required_method": "request",
+                "method": method,
+                "path": path,
+                "json_body": json_body or {},
+                "params": params or {},
+            },
+            "error": {"msg": "session.request unavailable"},
+            "status_code": 500,
+        }
+
+    api_prefix = getattr(session, "API_PREFIX", "/api") or "/api"
+
+    try:
+        response = request_fn(
+            method,
+            api_prefix,
+            path,
+            json_body=json_body,
+            params=params,
+        )
+        return response if isinstance(response, dict) else {
+            "success": False,
+            "message": "API response was not a JSON object.",
+            "data": {"raw_response": response},
+            "error": {"msg": "non-dict response"},
+            "status_code": 0,
+        }
+    except TypeError:
+        try:
+            response = request_fn(
+                method,
+                api_prefix,
+                path,
+                json_body=json_body,
+            )
+            return response if isinstance(response, dict) else {}
+        except Exception as exc:
+            return {
+                "success": False,
+                "message": f"API request failed: {exc}",
+                "data": {
+                    "method": method,
+                    "path": path,
+                    "json_body": json_body or {},
+                    "params": params or {},
+                },
+                "error": {"type": exc.__class__.__name__, "msg": str(exc)},
+                "status_code": 0,
+            }
+    except Exception as exc:
+        return {
+            "success": False,
+            "message": f"API request failed: {exc}",
+            "data": {
+                "method": method,
+                "path": path,
+                "json_body": json_body or {},
+                "params": params or {},
+            },
+            "error": {"type": exc.__class__.__name__, "msg": str(exc)},
+            "status_code": 0,
+        }
+
+
+def _api_query_documents_direct(
+    *,
+    session: Any,
+    collection_name: str,
+    query: dict[str, Any],
+    many: bool = True,
+    limit: int = 50,
+    skip: int = 0,
+    sort: Any = None,
+    cache: bool = False,
+) -> dict[str, Any]:
+    """
+    Real backend query route.
+
+    Verified in ComfyZMongoRoutes:
+        POST /api/query
+    mounted as:
+        POST /comfy-zmongo/api/query
+    """
+    body: dict[str, Any] = {
+        "collection": collection_name,
+        "coll": collection_name,
+        "query": query or {},
+        "many": bool(many),
+        "limit": int(limit or 50),
+        "skip": int(skip or 0),
+        "cache": bool(cache),
+    }
+
+    if sort is not None:
+        body["sort"] = sort
+
+    return _session_api_request(
+        session=session,
+        method="POST",
+        path="/query",
+        json_body=body,
+    )
+
+
+def _api_get_document_direct(
+    *,
+    session: Any,
+    collection_name: str,
+    document_id: str,
+) -> dict[str, Any]:
+    """
+    Real backend single-document route.
+
+    Verified in ComfyZMongoRoutes:
+        GET /api/doc/<coll>/<doc_id>
+    mounted as:
+        GET /comfy-zmongo/api/doc/<coll>/<doc_id>
+    """
+    clean_collection = str(collection_name or "").strip()
+    clean_id = str(document_id or "").strip()
+
+    return _session_api_request(
+        session=session,
+        method="GET",
+        path=f"/doc/{clean_collection}/{clean_id}",
+        params={"cache": "false"},
+    )
+
+
 def _api_save_value(
     *,
     session: Any,
@@ -513,39 +676,75 @@ def _api_save_value(
     field_path: str,
     value: Any,
 ) -> tuple[bool, str, str, dict[str, Any]]:
-    try:
-        response = session.save_value(
-            collection=collection_name,
-            query=query,
-            document_id="",
-            field_path=field_path,
-            value=value,
-            upsert_if_missing=True,
-            parse_json_strings=False,
-            normalize_for_storage=True,
-        )
-    except TypeError:
-        try:
-            response = session.save_value(
-                collection=collection_name,
-                query=query,
-                field_path=field_path,
-                value=value,
-                upsert_if_missing=True,
-            )
-        except Exception as exc:
-            return False, f"save_value failed at {field_path!r}: {exc}", "", {}
-    except Exception as exc:
-        return False, f"save_value failed at {field_path!r}: {exc}", "", {}
+    """
+    Save one preset leaf through the verified real backend route.
 
-    response_dict = response if isinstance(response, dict) else {}
+    Verified in ComfyZMongoRoutes:
+        POST /api/save-value
+
+    Mounted URL:
+        /comfy-zmongo/api/save-value
+    """
+    body = {
+        "collection": collection_name,
+        "coll": collection_name,
+        "query": query or {},
+        "field_path": field_path,
+        "value": value,
+        "upsert_if_missing": True,
+        "upsert": True,
+        "parse_json_strings": False,
+        "normalize_for_storage": True,
+    }
+
+    response_dict = _session_api_request(
+        session=session,
+        method="POST",
+        path="/save-value",
+        json_body=body,
+    )
+
     success = _payload_success(response_dict)
     document_id = _document_id_from_payload(response_dict)
 
     if not success:
+        # Fallback for older local/session adapters that expose save_value()
+        # but not the direct backend request route.
+        save_value = getattr(session, "save_value", None)
+        if callable(save_value):
+            try:
+                fallback_response = save_value(
+                    collection=collection_name,
+                    query=query,
+                    document_id="",
+                    field_path=field_path,
+                    value=value,
+                    upsert_if_missing=True,
+                    parse_json_strings=False,
+                    normalize_for_storage=True,
+                )
+                fallback_dict = fallback_response if isinstance(fallback_response, dict) else {}
+                fallback_success = _payload_success(fallback_dict)
+                fallback_document_id = _document_id_from_payload(fallback_dict)
+
+                if fallback_success:
+                    return (
+                        True,
+                        f"Saved {field_path} using session.save_value fallback.",
+                        fallback_document_id or document_id,
+                        fallback_dict,
+                    )
+
+                response_dict = fallback_dict or response_dict
+                document_id = fallback_document_id or document_id
+
+            except Exception:
+                pass
+
+    if not success:
         return (
             False,
-            f"save_value returned failure at {field_path!r}: {response_dict}",
+            f"save-value returned failure at {field_path!r}: {response_dict}",
             document_id,
             response_dict,
         )
@@ -559,6 +758,13 @@ def _query_preset_api_document(
     collection_name: str,
     preset_name: str,
 ) -> tuple[dict[str, Any], str, dict[str, Any]]:
+    """
+    Query presets using the verified real backend route:
+
+        POST /comfy-zmongo/api/query
+
+    Falls back to session.query_docs/list_docs only for older local adapters.
+    """
     if session is None:
         return {}, "", {}
 
@@ -585,7 +791,7 @@ def _query_preset_api_document(
 
     def add_response(response: Any) -> None:
         nonlocal last_response
-        response_dict = response if isinstance(response, dict) else {}
+        response_dict = _normalize_bson_extended_json(response if isinstance(response, dict) else {})
         if response_dict:
             responses.append(response_dict)
             last_response = response_dict
@@ -613,75 +819,72 @@ def _query_preset_api_document(
 
     for query in queries:
         for sort in sort_variants:
-            try:
-                response = session.query_docs(
-                    collection=collection,
-                    query=query,
-                    document_id="",
-                    many=True,
-                    limit=25,
-                    skip=0,
-                    projection=None,
-                    sort=sort,
-                    cache=False,
-                )
-                add_response(response)
-            except TypeError:
-                try:
-                    kwargs = dict(collection=collection, query=query, many=True, limit=25, skip=0, cache=False)
-                    if sort is not None:
-                        kwargs["sort"] = sort
-                    response = session.query_docs(**kwargs)
-                    add_response(response)
-                except Exception as exc:
-                    last_response = {
-                        "success": False,
-                        "message": f"query_docs many=True failed: {exc}",
-                        "data": {},
-                        "error": {"type": exc.__class__.__name__, "msg": str(exc)},
-                        "status_code": 0,
-                    }
-            except Exception as exc:
-                last_response = {
-                    "success": False,
-                    "message": f"query_docs many=True failed: {exc}",
-                    "data": {},
-                    "error": {"type": exc.__class__.__name__, "msg": str(exc)},
-                    "status_code": 0,
-                }
+            response = _api_query_documents_direct(
+                session=session,
+                collection_name=collection,
+                query=query,
+                many=True,
+                limit=50,
+                skip=0,
+                sort=sort,
+                cache=False,
+            )
+            add_response(response)
 
+            response = _api_query_documents_direct(
+                session=session,
+                collection_name=collection,
+                query=query,
+                many=False,
+                limit=1,
+                skip=0,
+                sort=sort,
+                cache=False,
+            )
+            add_response(response)
+
+    # Fallback support for older adapters.
+    query_docs = getattr(session, "query_docs", None)
+    list_docs = getattr(session, "list_docs", None)
+
+    for query in queries:
+        if callable(query_docs):
             try:
-                response = session.query_docs(
-                    collection=collection,
-                    query=query,
-                    document_id="",
-                    many=False,
-                    limit=1,
-                    skip=0,
-                    projection=None,
-                    sort=sort,
-                    cache=False,
+                add_response(
+                    query_docs(
+                        collection=collection,
+                        query=query,
+                        document_id="",
+                        many=True,
+                        limit=25,
+                        skip=0,
+                        projection=None,
+                        sort=[["updated_at_unix", -1]],
+                        cache=False,
+                    )
                 )
-                add_response(response)
             except TypeError:
                 try:
-                    kwargs = dict(collection=collection, query=query, many=False, limit=1, skip=0, cache=False)
-                    if sort is not None:
-                        kwargs["sort"] = sort
-                    response = session.query_docs(**kwargs)
-                    add_response(response)
+                    add_response(
+                        query_docs(
+                            collection=collection,
+                            query=query,
+                            many=True,
+                            limit=25,
+                            skip=0,
+                            cache=False,
+                        )
+                    )
                 except Exception:
                     pass
             except Exception:
                 pass
 
-            list_docs = getattr(session, "list_docs", None)
-            if callable(list_docs):
-                try:
-                    response = list_docs(collection=collection, query=query, limit=25, skip=0)
-                    add_response(response)
-                except Exception:
-                    pass
+        if callable(list_docs):
+            try:
+                add_response(list_docs(collection=collection, query=query, limit=25, skip=0))
+            except Exception:
+                pass
 
     if candidates:
         candidates.sort(key=lambda doc: _preset_document_score(doc, cleaned_name), reverse=True)
@@ -694,6 +897,10 @@ def _query_preset_api_document(
                 "document": document,
                 "candidate_count": len(candidates),
                 "responses_checked": len(responses),
+                "real_backend_routes": [
+                    "POST /comfy-zmongo/api/query",
+                    "POST /comfy-zmongo/api/save-value",
+                ],
             },
             "error": None,
             "status_code": int((last_response or {}).get("status_code") or 200),
@@ -971,18 +1178,11 @@ def _load_preset_api(
         return {}, "collection_name is required.", ""
 
     if cleaned_document_id:
-        get_doc = getattr(session, "get_doc", None)
-        if not callable(get_doc):
-            return {}, "session.get_doc is not available.", cleaned_document_id
-
-        try:
-            response = get_doc(
-                collection=collection,
-                document_id=cleaned_document_id,
-                cache=False,
-            )
-        except Exception as exc:
-            return {}, f"API get_doc failed for document_id={cleaned_document_id}: {exc}", cleaned_document_id
+        response = _api_get_document_direct(
+            session=session,
+            collection_name=collection,
+            document_id=cleaned_document_id,
+        )
 
         response = _normalize_bson_extended_json(response)
         payload = _extract_preset_payload_from_document(response)
@@ -990,13 +1190,33 @@ def _load_preset_api(
         if payload:
             return (
                 payload,
-                f"Loaded preset from API document_id={cleaned_document_id}.",
+                f"Loaded preset from real backend document_id={cleaned_document_id}.",
                 cleaned_document_id,
             )
 
+        # Fallback for older session implementations.
+        get_doc = getattr(session, "get_doc", None)
+        if callable(get_doc):
+            try:
+                fallback_response = get_doc(
+                    collection=collection,
+                    document_id=cleaned_document_id,
+                    cache=False,
+                )
+                fallback_response = _normalize_bson_extended_json(fallback_response)
+                payload = _extract_preset_payload_from_document(fallback_response)
+                if payload:
+                    return (
+                        payload,
+                        f"Loaded preset from session.get_doc fallback document_id={cleaned_document_id}.",
+                        cleaned_document_id,
+                    )
+            except Exception:
+                pass
+
         return (
             {},
-            "API get_doc returned a document, but it did not contain reconstructable preset data. "
+            "API get document returned no reconstructable preset data. "
             + _json_dumps(response),
             cleaned_document_id,
         )
@@ -1004,138 +1224,48 @@ def _load_preset_api(
     if not cleaned_name:
         return {}, "preset_name or document_id is required.", ""
 
-    query_docs = getattr(session, "query_docs", None)
-    list_docs = getattr(session, "list_docs", None)
+    document, selected_id, response = _query_preset_api_document(
+        session=session,
+        collection_name=collection,
+        preset_name=cleaned_name,
+    )
 
-    queries = [
-        {"schema_kind": PRESET_KIND, "preset_name": cleaned_name},
-        {"preset_name": cleaned_name},
-    ]
-
-    responses: list[dict[str, Any]] = []
-    candidates: list[dict[str, Any]] = []
-
-    def add_response(response: Any) -> None:
-        response = _normalize_bson_extended_json(response)
-        if isinstance(response, dict):
-            responses.append(response)
-            candidates.extend(_extract_documents(response))
-
-    for query in queries:
-        if callable(query_docs):
-            for sort in (
-                [["updated_at_unix", -1]],
-                [("updated_at_unix", -1)],
-                None,
-            ):
-                try:
-                    add_response(
-                        query_docs(
-                            collection=collection,
-                            query=query,
-                            document_id="",
-                            many=True,
-                            limit=50,
-                            skip=0,
-                            projection=None,
-                            sort=sort,
-                            cache=False,
-                        )
-                    )
-                except TypeError:
-                    try:
-                        add_response(
-                            query_docs(
-                                collection=collection,
-                                query=query,
-                                many=True,
-                                limit=50,
-                                skip=0,
-                                cache=False,
-                            )
-                        )
-                    except Exception:
-                        pass
-                except Exception:
-                    pass
-
-        if callable(list_docs):
-            try:
-                add_response(
-                    list_docs(
-                        collection=collection,
-                        query=query,
-                        limit=50,
-                        skip=0,
-                    )
-                )
-            except Exception:
-                pass
-
-    matching: list[dict[str, Any]] = []
-    for document in candidates:
-        if not isinstance(document, dict):
-            continue
-
-        if str(document.get("preset_name") or "").strip() != cleaned_name:
-            continue
-
-        payload = _extract_preset_payload_from_document(document)
-        if payload:
-            matching.append(document)
-
-    if not matching:
+    if not document:
         return (
             {},
-            "No reconstructable preset document was found by API query. "
+            "No reconstructable preset document was found by real backend query. "
             + _json_dumps(
                 {
                     "collection": collection,
                     "preset_name": cleaned_name,
-                    "candidate_count": len(candidates),
-                    "candidate_names": sorted(
-                        {
-                            str(doc.get("preset_name") or "")
-                            for doc in candidates
-                            if isinstance(doc, dict)
-                        }
-                    ),
-                    "response_count": len(responses),
+                    "response": response,
                 }
             ),
             "",
         )
 
-    def score(document: dict[str, Any]) -> tuple[int, float]:
-        value = 0
+    payload = _extract_preset_payload_from_document(document)
 
-        if document.get("schema_kind") == PRESET_KIND:
-            value += 100
-
-        if document.get("api_storage_format") == API_STORAGE_FORMAT:
-            value += 100
-
-        if isinstance(document.get("preset_fields_by_index"), dict):
-            value += 100
-
-        try:
-            updated = float(document.get("updated_at_unix") or document.get("created_at_unix") or 0)
-        except Exception:
-            updated = 0.0
-
-        return value, updated
-
-    matching.sort(key=score, reverse=True)
-    selected = matching[0]
-    selected_id = _document_id_from_document(selected)
-    payload = _extract_preset_payload_from_document(selected)
+    if not payload:
+        return (
+            {},
+            "Preset document was found, but could not be reconstructed. "
+            + _json_dumps(
+                {
+                    "collection": collection,
+                    "preset_name": cleaned_name,
+                    "document_id": selected_id,
+                    "document_keys": sorted(str(key) for key in document.keys()),
+                }
+            ),
+            selected_id,
+        )
 
     return (
         payload,
-        f"Loaded preset {cleaned_name!r} from API query; document_id={selected_id}.",
+        f"Loaded preset {cleaned_name!r} from real backend query; document_id={selected_id}.",
         selected_id,
     )
-
 
 # -----------------------------------------------------------------------------
 # ComfyUI node inspection helpers
