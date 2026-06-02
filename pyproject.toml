@@ -3,12 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ComfyUI-ZMongo"
+name = "zmongo"
 version = "0.1.1"
 description = "Professional ZMongo Legal Operations suite for ComfyUI"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
-license = { text = "MIT" }
+# Updated to direct string to fix setuptools deprecation warning
+license = "Apache-2.0"
 authors = [
     { name = "CentralFloridaAttorney" }
 ]
@@ -34,17 +35,19 @@ dependencies = [
 [project.urls]
 "Repository" = "https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git"
 
+[tool.comfy]
+PublisherId = "CentralFloridaAttorney"
+DisplayName = "ZMongo"
+Icon = "https://raw.githubusercontent.com/CentralFloridaAttorney/ComfyUI-ZMongo/master/assets/icon.png"
+
 [tool.poetry]
 package-mode = false
 
 [tool.setuptools]
 include-package-data = true
+py-modules = ["__init__"]
 
-[tool.setuptools.package-dir]
-"ComfyUI_ZMongo" = "src"
-
+# Explicitly exclude non-python directories from being compiled as packages
 [tool.setuptools.packages.find]
-where = ["src"]
-namespaces = true
-include = ["*"]
-exclude = ["tests*", "examples*", "scripts*", "**/dist*", "**/build*", "**/.venv*", "__pycache__*"]
+where = ["."]
+exclude = ["js", "example_workflows", "assets", "docs"]
