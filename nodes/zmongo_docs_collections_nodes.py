@@ -7,173 +7,15 @@ import shutil
 import urllib
 from pathlib import Path
 
-from .generic_helpers import AlwaysDirtyMixin, DEFAULT_BASE_URL, DEFAULT_COMFY_ZMONGO_PREFIX, DEFAULT_FLEET_PREFIX, \
-    DEFAULT_COMFY_ZMONGO_FLEET_PREFIX, DEFAULT_TIMEOUT, _normalize_base_url, _clean_prefix, _json_text, _error_payload, \
-    _success_payload, _indexed_list_text, _extract_collections, _as_comfy_list, _dirty_token, _parse_json_object, \
+from .generic_helpers import AlwaysDirtyMixin, _indexed_list_text, _extract_collections, _as_comfy_list, _dirty_token, _parse_json_object, \
     _parse_json_list, _extract_doc_ids, _extract_count, _parse_any_json, _extract_document_from_payload, \
-    safe_get_by_path, _ensure_payload_dict, _local_payload_ok, _local_safe_name, _local_payload_error, \
+    safe_get_by_path, _local_payload_ok, _local_safe_name, _local_payload_error, \
     _local_clean_scalar, dedupe_strings, flatten_document_paths, _local_now_iso, _image_field_candidates, \
     _local_set_by_path, _local_get_by_path, _decode_image_bytes_from_value
 
 import json
 from typing import Any, Optional
-import requests
-from .generic_helpers import AlwaysDirtyMixin, DEFAULT_BASE_URL, _json_text, _error_payload, _success_payload
-
-# -----------------------------------------------------------------------------
-# HTTP client
-# -----------------------------------------------------------------------------
-#
-# class ZMongoApiSession:
-#     def __init__(self, *, base_url: str = DEFAULT_BASE_URL, zai_api_key: str = "", verify_tls: bool = True) -> None:
-#         self.base_url = base_url
-#         self.zai_api_key = zai_api_key.strip()
-#         self.verify_tls = verify_tls
-#         self.session = requests.Session()
-#
-#     def close(self) -> None:
-#         self.session.close()
-#
-#     def _headers(self) -> dict[str, str]:
-#         headers = {
-#             "Accept": "application/json",
-#             "Content-Type": "application/json",
-#             "Authorization": f"Bearer {self.zai_api_key}",
-#         }
-#         return headers
-#
-#     def whoami(self) -> dict[str, Any]:
-#         response = self.session.get(f"{self.base_url}/api/whoami", headers=self._headers(), verify=self.verify_tls)
-#         try:
-#             return response.json()
-#         except Exception:
-#             return {"success": False, "message": response.text}
-#
-# # -----------------------------------------------------------------------------
-# # 00 Auth Nodes (Simplified API Key only)
-# # -----------------------------------------------------------------------------
-#
-# class ZMongoApiKeyOnlySessionNode(AlwaysDirtyMixin):
-#     CATEGORY = "ZMongo/00 Auth"
-#     FUNCTION = "connect"
-#     DISPLAY_ONLY = True
-#
-#     @classmethod
-#     def INPUT_TYPES(cls):
-#         return {"required": {"api_key": ("STRING", {"description": "Your ZMongo API key"})}}
-#
-#     RETURN_TYPES = ("ZMONGO_API_SESSION", "STRING", "STRING")
-#     RETURN_NAMES = ("session", "json", "status")
-#
-#     def connect(self, api_key: str):
-#         try:
-#             session = ZMongoApiSession(base_url="https://businessprocessapplications.com/comfy-zmongo", zai_api_key=api_key)
-#             payload = session.whoami()
-#             status = payload.get("message", "API session created successfully.")
-#             return session, _json_text(payload), status
-#         except Exception as e:
-#             payload = _error_payload(str(e))
-#             return None, _json_text(payload), f"API session failed: {e}"
-#
-# class ZMongoApiCloseSessionNode(AlwaysDirtyMixin):
-#     CATEGORY = "ZMongo/00 Auth"
-#     FUNCTION = "close_session"
-#
-#     @classmethod
-#     def INPUT_TYPES(cls):
-#         return {"required": {"session": ("ZMONGO_API_SESSION",)}}
-#
-#     RETURN_TYPES = ("STRING",)
-#     RETURN_NAMES = ("json",)
-#
-#     def close_session(self, session):
-#         if session is None:
-#             return (_json_text(_error_payload("No session provided.")),)
-#         try:
-#             session.close()
-#             return (_json_text(_success_payload("Session closed.")),)
-#         except Exception as exc:
-#             return (_json_text(_error_payload(str(exc))),)
-
-
-
-
-# -----------------------------------------------------------------------------
-# 00 Auth nodes
-# -----------------------------------------------------------------------------
-
-# class ZMongoApiKeySessionNode(AlwaysDirtyMixin):
-#     @classmethod
-#     def INPUT_TYPES(cls):
-#         return {
-#             "required": {
-#                 "base_url": ("STRING", {"default": DEFAULT_BASE_URL}),
-#                 "zai_api_key": ("STRING", {"default": "", "multiline": False}),
-#                 "username": ("STRING", {"default": ""}),
-#                 "comfy_zmongo_prefix": ("STRING", {"default": DEFAULT_COMFY_ZMONGO_PREFIX}),
-#                 "fleet_prefix": ("STRING", {"default": DEFAULT_FLEET_PREFIX}),
-#                 "comfy_zmongo_fleet_prefix": ("STRING", {"default": DEFAULT_COMFY_ZMONGO_FLEET_PREFIX}),
-#                 "timeout_seconds": ("INT", {"default": DEFAULT_TIMEOUT, "min": 1, "max": 300}),
-#                 "verify_tls": ("BOOLEAN", {"default": True}),
-#                 "test_whoami": ("BOOLEAN", {"default": True}),
-#             }
-#         }
-#
-#     RETURN_TYPES = ("ZMONGO_API_SESSION", "STRING", "STRING")
-#     RETURN_NAMES = ("session", "json", "status")
-#     FUNCTION = "connect"
-#     CATEGORY = "ZMongo/00 Auth"
-#
-#     def connect(
-#         self,
-#         base_url: str,
-#         zai_api_key: str,
-#         username: str,
-#         comfy_zmongo_prefix: str,
-#         fleet_prefix: str,
-#         comfy_zmongo_fleet_prefix: str,
-#         timeout_seconds: int,
-#         verify_tls: bool,
-#         test_whoami: bool,
-#     ):
-#         try:
-#             session = ZMongoApiSession(
-#                 base_url=base_url,
-#                 zai_api_key=zai_api_key,
-#                 username=username,
-#                 comfy_zmongo_prefix=comfy_zmongo_prefix,
-#                 fleet_prefix=fleet_prefix,
-#                 comfy_zmongo_fleet_prefix=comfy_zmongo_fleet_prefix,
-#                 timeout=timeout_seconds,
-#                 verify_tls=verify_tls,
-#             )
-#
-#             if test_whoami:
-#                 payload = session.whoami()
-#                 status = payload.get("message") or "API session created."
-#                 return (session, _json_text(payload), status)
-#
-#             payload = _success_payload(
-#                 "API session created.",
-#                 {
-#                     "base_url": session.base_url,
-#                     "username": session.username,
-#                     "comfy_zmongo_prefix": session.comfy_zmongo_prefix,
-#                     "fleet_prefix": session.fleet_prefix,
-#                     "comfy_zmongo_fleet_prefix": session.comfy_zmongo_fleet_prefix,
-#                 },
-#             )
-#             return (session, _json_text(payload), "API session created.")
-#         except Exception as exc:
-#             payload = _error_payload(str(exc))
-#             return (None, _json_text(payload), f"API session failed: {exc}")
-
-
-# -----------------------------------------------------------------------------
-# 01 Service nodes
-# -----------------------------------------------------------------------------
-
-
+from .generic_helpers import AlwaysDirtyMixin, _json_text, _error_payload
 
 class LocalZMongoSession:
     """
@@ -892,23 +734,6 @@ class ZMongoLocalFileStoreSessionNode(AlwaysDirtyMixin):
                 "error_type": exc.__class__.__name__,
             }, status_code=0, error_type=exc.__class__.__name__)
             return (None, _json_text(payload), payload["message"])
-
-
-NODE_CLASS_MAPPINGS = {
-    "ZMongoLocalFileStoreSessionNode": ZMongoLocalFileStoreSessionNode,
-}
-
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "ZMongoLocalFileStoreSessionNode": "00 Local File Store Session",
-}
-
-__all__ = [
-    "AlwaysDirtyMixin",
-    "LocalZMongoSession",
-    "ZMongoLocalFileStoreSessionNode",
-    "NODE_CLASS_MAPPINGS",
-    "NODE_DISPLAY_NAME_MAPPINGS",
-]
 
 class ZMongoApiHealthNode(AlwaysDirtyMixin):
     @classmethod
