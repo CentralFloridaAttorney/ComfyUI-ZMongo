@@ -8,10 +8,10 @@ jobs:
   pypi-publish:
     name: Upload release to PyPI
     runs-on: ubuntu-latest
-    # Specify the environment we configured in the PyPI form
+    # Updated to match the actual built package name
     environment:
       name: pypi
-      url: https://pypi.org/p/comfyui-zmongo
+      url: https://pypi.org/p/zmongo-nodes
 
     # CRITICAL: This permission allows GitHub to request the OIDC token from PyPI
     permissions:
