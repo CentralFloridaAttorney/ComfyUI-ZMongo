@@ -12,6 +12,7 @@ from . import zmongo_text_agent_nodes
 from . import zmongo_helper_nodes
 from . import motd_node
 from . import zmongo_auth_nodes
+from . import zmongo_drive_node
 
 
 
@@ -89,6 +90,11 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         "zmongo_docs_collections_nodes",
         zmongo_docs_collections_nodes.NODE_CLASS_MAPPINGS,
         zmongo_docs_collections_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
+        "zmongo_drive_node",
+        zmongo_drive_node.NODE_CLASS_MAPPINGS,
+        zmongo_drive_node.NODE_DISPLAY_NAME_MAPPINGS,
     ),
 )
 
