@@ -2,8 +2,6 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 
-**NOTE:** Gemini based nodes are being updated to match changes in the backend.
-
 **ComfyUI-ZMongo** is a ComfyUI custom node package for saving, loading, browsing, masking, and reusing workflow data through a ZMongo-style storage model.
 
 The project supports two practical storage modes:
