@@ -7,6 +7,9 @@ from .generic_helpers import AlwaysDirtyMixin, DEFAULT_GEMINI_PREFIX, _as_bool, 
     _parse_json_object, _extract_text_from_gemini_payload, _dirty_token, _error_payload, _extract_models_from_payload, \
     _session_get_doc, _extract_document, _safe_get_by_path, _success_payload, _session_save_value, \
     _comfy_image_to_png_bytes, _extract_tensor_recursively
+from PIL import Image
+import numpy as np
+import io
 
 
 # -----------------------------------------------------------------------------
@@ -229,21 +232,6 @@ class GeminiChatNode(AlwaysDirtyMixin):
 class GeminiImageTextNode(AlwaysDirtyMixin):
     """
     Send a ComfyUI IMAGE tensor plus text prompt to Gemini and return text.
-
-    Preferred backend route:
-        POST <base_url><gemini_prefix>/api/vision
-
-    Compact request body:
-        {
-            "prompt": "...",
-            "model": "gemini-2.5-flash",
-            "max_output_tokens": 1024,
-            "temperature": 0.4,
-            "image": {
-                "mime_type": "image/jpeg",
-                "data": "<base64>"
-            }
-        }
     """
 
     @classmethod
@@ -253,7 +241,7 @@ class GeminiImageTextNode(AlwaysDirtyMixin):
                 "session": ("ZMONGO_API_SESSION",),
                 "image": ("IMAGE",),
                 "prompt": ("STRING", {"default": "Describe this image.", "multiline": True}),
-                "model": ("STRING", {"default": "gemini-2.5-flash"}),
+                "model": ("STRING", {"default": "gemini-3.1-flash-image"}),
                 "max_output_tokens": ("INT", {"default": 1024, "min": 1, "max": 65536}),
                 "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 2.0, "step": 0.05}),
                 "max_image_side": ("INT", {"default": 1024, "min": 256, "max": 4096}),
@@ -292,12 +280,6 @@ class GeminiImageTextNode(AlwaysDirtyMixin):
 
     @staticmethod
     def _tensor_to_compact_jpeg_base64(image: Any, max_image_side: int, jpeg_quality: int) -> tuple[str, int, tuple[int, int]]:
-        import base64
-        import io
-
-        import numpy as np
-        from PIL import Image
-
         tensor = GeminiImageTextNode._first_image_tensor(image).detach().cpu().clamp(0.0, 1.0)
         array = (tensor.numpy() * 255.0).round().astype(np.uint8)
 
@@ -362,42 +344,33 @@ class GeminiImageTextNode(AlwaysDirtyMixin):
                 jpeg_quality=jpeg_quality,
             )
 
+            # Map the exact schema expected by the Google SDK to prevent the backend
+            # from stripping the image data out of the request payload.
+            canonical_multimodal_contents = [
+                {"text": prompt or ""},
+                {
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": image_base64,
+                    }
+                },
+            ]
+
             base_body: dict[str, Any] = {
                 "prompt": prompt or "",
-                "model": (model or "gemini-2.5-flash").strip(),
+                "model": (model or "gemini-3.1-flash-image").strip(),
                 "max_output_tokens": int(max_output_tokens),
                 "temperature": float(temperature),
-                "image": {
-                    "mime_type": "image/jpeg",
-                    "data": image_base64,
-                },
+                "contents": canonical_multimodal_contents,
             }
 
             if (system_instruction or "").strip():
                 base_body["system_instruction"] = system_instruction.strip()
 
-            # Try compact canonical route shapes. Do not duplicate image data
-            # inside one request body.
             route_attempts: list[tuple[str, dict[str, Any]]] = [
                 ("/api/chat", base_body),
                 ("/api/vision", base_body),
-                ("/api/image-text", base_body),
-                ("/api/chat-with-image", base_body),
-                (
-                    "/api/multimodal",
-                    {
-                        **base_body,
-                        "parts": [
-                            {"text": prompt or ""},
-                            {
-                                "inline_data": {
-                                    "mime_type": "image/jpeg",
-                                    "data": image_base64,
-                                }
-                            },
-                        ],
-                    },
-                ),
+                ("/api/image-text", base_body)
             ]
 
             attempts: list[dict[str, Any]] = []
@@ -456,10 +429,8 @@ class GeminiImageTextNode(AlwaysDirtyMixin):
                 "Gemini image/text backend route failed or was not found.",
                 data={
                     "attempts": attempts,
-                    "expected_primary_route": f"{gemini_prefix.rstrip('/')}/api/vision",
                     "image_bytes": image_bytes,
                     "image_size": image_size,
-                    "fix_backend": "Add or repair POST /gemini/api/vision. Check the Quart/Hypercorn log for the exception behind nginx 502.",
                     "refresh": refresh,
                 },
                 status_code=502,
