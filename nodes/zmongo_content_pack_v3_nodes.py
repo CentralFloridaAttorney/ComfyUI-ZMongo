@@ -30,6 +30,8 @@ import json
 import re
 import time
 import uuid
+import os
+from pathlib import Path
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
@@ -72,6 +74,7 @@ except Exception:  # pragma: no cover
 
 
 CONTENT_PACK_SCHEMA_KIND = "zmongo_content_pack"
+PORTABLE_CONTENT_PACK_SCHEMA_KIND = "zmongo_portable_content_pack"
 CONTENT_PACK_SCHEMA_VERSION = "3.0.0"
 CONTENT_PACK_TYPE = "ZMONGO_CONTENT_PACK"
 CONTENT_PACK_REF_TYPE = "ZMONGO_CONTENT_PACK_REF"
@@ -311,8 +314,24 @@ def _as_content_pack(value: Any) -> dict[str, Any]:
     parsed = _parse_json(value, default={})
     if isinstance(parsed, dict) and parsed.get("schema_kind") == CONTENT_PACK_SCHEMA_KIND:
         return parsed
+    if isinstance(parsed, dict) and parsed.get("schema_kind") == PORTABLE_CONTENT_PACK_SCHEMA_KIND:
+        pack = deepcopy(parsed)
+        pack["schema_kind"] = CONTENT_PACK_SCHEMA_KIND
+        pack.setdefault("schema_version", CONTENT_PACK_SCHEMA_VERSION)
+        pack.setdefault("source", {"source_mode": "portable_json"})
+        pack.setdefault("outputs", _build_field_outputs(pack.get("fields") if isinstance(pack.get("fields"), list) else []))
+        pack.setdefault("field_count", len(pack.get("fields") if isinstance(pack.get("fields"), list) else []))
+        return pack
     if isinstance(value, dict) and value.get("schema_kind") == CONTENT_PACK_SCHEMA_KIND:
         return value
+    if isinstance(value, dict) and value.get("schema_kind") == PORTABLE_CONTENT_PACK_SCHEMA_KIND:
+        pack = deepcopy(value)
+        pack["schema_kind"] = CONTENT_PACK_SCHEMA_KIND
+        pack.setdefault("schema_version", CONTENT_PACK_SCHEMA_VERSION)
+        pack.setdefault("source", {"source_mode": "portable_json"})
+        pack.setdefault("outputs", _build_field_outputs(pack.get("fields") if isinstance(pack.get("fields"), list) else []))
+        pack.setdefault("field_count", len(pack.get("fields") if isinstance(pack.get("fields"), list) else []))
+        return pack
     return {}
 
 
@@ -1656,6 +1675,404 @@ class ZMongoContentPackAddImageV3(AlwaysDirtyMixin):
         return (pack, _json_dumps(pack), _json_dumps(_manifest_only(pack)), _preview_markdown(pack), _as_comfy_list(aliases), _as_comfy_list(data_types), _content_pack_indexed_aliases_text(pack), True)
 
 
+
+# -----------------------------------------------------------------------------
+# Portable Content Pack JSON File Nodes
+# -----------------------------------------------------------------------------
+
+def _portable_default_output_dir() -> Path:
+    """Resolve ComfyUI output directory without hard dependency during import."""
+    try:
+        import folder_paths  # type: ignore
+        return Path(folder_paths.get_output_directory()).resolve()
+    except Exception:
+        return (Path.cwd() / "output").resolve()
+
+
+def _safe_filename_stem(value: Any, fallback: str = "content_pack") -> str:
+    text = _safe_str(value) or fallback
+    text = re.sub(r"[^A-Za-z0-9_.-]+", "_", text).strip("._-")
+    return text or fallback
+
+
+def _content_pack_portable_envelope(
+    content_pack: Any,
+    *,
+    export_mode: str = "portable_inline",
+    include_images: bool = True,
+    include_metadata: bool = True,
+    session: Any = None,
+    master_key_hex: str = "",
+) -> dict[str, Any]:
+    """
+    Convert a normalized ZMONGO_CONTENT_PACK into a portable JSON envelope.
+
+    export_mode:
+    - portable_inline: keep scalars inline and keep inline_base64 images inline.
+      If an image is asset_ref and a session is supplied, try to resolve it to inline base64.
+    - asset_refs: keep image asset references instead of embedding them.
+    - manifest_only: include aliases/types/source metadata only; omit actual values.
+    """
+    pack = deepcopy(_as_content_pack(content_pack))
+    if not pack:
+        raise ValueError("content_pack is empty or invalid.")
+
+    mode = _safe_str(export_mode) or "portable_inline"
+    if mode not in {"portable_inline", "asset_refs", "manifest_only"}:
+        mode = "portable_inline"
+
+    fields_out: list[dict[str, Any]] = []
+    for index, source_field in enumerate(_field_list(pack)):
+        field = deepcopy(source_field)
+        comfy_type = _normalize_type(field.get("comfy_type"), "ANY")
+        storage = _safe_str(field.get("storage")) or "inline"
+
+        portable_field: dict[str, Any] = {
+            "index": index,
+            "alias": _safe_str(field.get("alias")) or f"field_{index}",
+            "label": _safe_str(field.get("label")) or _title_from_alias(field.get("alias") or f"field_{index}"),
+            "comfy_type": comfy_type,
+            "json_type": _safe_str(field.get("json_type")) or comfy_type.lower(),
+            "storage": storage,
+        }
+
+        if include_metadata:
+            portable_field.update({
+                "source_path": _safe_str(field.get("source_path")),
+                "summary": field.get("summary") if isinstance(field.get("summary"), dict) else _value_summary(field.get("value")),
+            })
+        else:
+            portable_field.update({"source_path": "", "summary": {}})
+
+        if mode == "manifest_only":
+            portable_field["storage"] = "manifest_only"
+            fields_out.append(portable_field)
+            continue
+
+        if comfy_type == "IMAGE":
+            if not include_images:
+                portable_field["storage"] = "image_omitted"
+                fields_out.append(portable_field)
+                continue
+
+            value = field.get("value")
+            asset_ref = field.get("asset_ref") if isinstance(field.get("asset_ref"), dict) else {}
+
+            if mode == "asset_refs":
+                portable_field["storage"] = "asset_ref"
+                portable_field["asset_ref"] = asset_ref
+                portable_field["value"] = value if storage == "inline_base64" else None
+                fields_out.append(portable_field)
+                continue
+
+            # portable_inline
+            try:
+                if isinstance(value, str) and value.strip().startswith("data:image/"):
+                    portable_field["storage"] = "inline_base64"
+                    portable_field["value"] = value.strip()
+                    portable_field["content_type"] = value.split(";", 1)[0].replace("data:", "")
+                    portable_field["filename"] = _safe_str(field.get("filename")) or f"{portable_field['alias']}.png"
+                elif storage == "inline_base64" and value:
+                    portable_field["storage"] = "inline_base64"
+                    portable_field["value"] = value
+                    portable_field["content_type"] = _safe_str(field.get("content_type")) or "image/png"
+                    portable_field["filename"] = _safe_str(field.get("filename")) or f"{portable_field['alias']}.png"
+                elif asset_ref and session is not None:
+                    collection = _safe_str(
+                        asset_ref.get("collection")
+                        or asset_ref.get("asset_collection")
+                        or (asset_ref.get("original", {}) or {}).get("asset_collection") if isinstance(asset_ref.get("original"), dict) else ""
+                    )
+                    document_id = _safe_str(
+                        asset_ref.get("document_id")
+                        or asset_ref.get("file_id")
+                        or asset_ref.get("_id")
+                        or (asset_ref.get("original", {}) or {}).get("file_id") if isinstance(asset_ref.get("original"), dict) else ""
+                    )
+                    field_path = _safe_str(asset_ref.get("field_path") or asset_ref.get("path") or "image_data")
+                    if not collection or not document_id:
+                        raise ValueError("asset_ref missing collection/document id")
+                    image_bytes, _where = session.fetch_image_field(
+                        collection=collection,
+                        document_id=document_id,
+                        field_path=field_path,
+                        master_key_hex=master_key_hex,
+                    )
+                    portable_field["storage"] = "inline_base64"
+                    portable_field["content_type"] = "image/png"
+                    portable_field["filename"] = f"{portable_field['alias']}.png"
+                    portable_field["value"] = "data:image/png;base64," + base64.b64encode(image_bytes).decode("ascii")
+                else:
+                    portable_field["storage"] = "asset_ref"
+                    portable_field["asset_ref"] = asset_ref
+                    portable_field["value"] = value if value else None
+                    portable_field.setdefault("warning", "Image was not inlined because no inline value or resolvable session asset was available.")
+            except Exception as exc:
+                portable_field["storage"] = "asset_ref"
+                portable_field["asset_ref"] = asset_ref
+                portable_field["value"] = None
+                portable_field["warning"] = f"Failed to inline image: {exc}"
+
+            fields_out.append(portable_field)
+            continue
+
+        # Non-image values.
+        portable_field["storage"] = "inline"
+        portable_field["value"] = field.get("value")
+        fields_out.append(portable_field)
+
+    envelope = {
+        "schema_kind": PORTABLE_CONTENT_PACK_SCHEMA_KIND,
+        "schema_version": CONTENT_PACK_SCHEMA_VERSION,
+        "export_format": mode,
+        "portable": True,
+        "content_pack_name": pack.get("content_pack_name") or "portable_content_pack",
+        "project_name": pack.get("project_name") or "default",
+        "source": {
+            "source_mode": "portable_content_pack_export",
+            "original_schema_kind": pack.get("schema_kind"),
+            "original_manifest_hash": pack.get("manifest_hash", ""),
+        },
+        "field_count": len(fields_out),
+        "fields": fields_out,
+        "outputs": _build_field_outputs(fields_out),
+        "content": {
+            "summary": f"Portable content pack '{pack.get('content_pack_name') or 'portable_content_pack'}' exported with {len(fields_out)} field(s).",
+            "markdown": _preview_markdown({**pack, "fields": fields_out}),
+        },
+        "created_at": pack.get("created_at") or _utc_now_iso(),
+        "created_at_unix": pack.get("created_at_unix") or time.time(),
+        "updated_at": _utc_now_iso(),
+        "updated_at_unix": time.time(),
+        "exported_at": _utc_now_iso(),
+    }
+    envelope["manifest_hash"] = _stable_hash(_manifest_only({**envelope, "schema_kind": CONTENT_PACK_SCHEMA_KIND}))
+    return envelope
+
+
+def _portable_to_content_pack(value: Any, *, validate_schema: bool = True) -> dict[str, Any]:
+    parsed = _parse_json(value, default={})
+    if not isinstance(parsed, dict):
+        raise ValueError("Portable content pack JSON must parse to an object.")
+
+    schema_kind = _safe_str(parsed.get("schema_kind"))
+    if schema_kind == CONTENT_PACK_SCHEMA_KIND:
+        pack = deepcopy(parsed)
+    elif schema_kind == PORTABLE_CONTENT_PACK_SCHEMA_KIND:
+        pack = deepcopy(parsed)
+        pack["schema_kind"] = CONTENT_PACK_SCHEMA_KIND
+        pack.setdefault("source", {})
+        if isinstance(pack.get("source"), dict):
+            pack["source"]["source_mode"] = "portable_content_pack_import"
+    else:
+        if validate_schema:
+            raise ValueError(f"Unsupported schema_kind: {schema_kind!r}")
+        pack = deepcopy(parsed)
+        pack["schema_kind"] = CONTENT_PACK_SCHEMA_KIND
+
+    fields = _field_list(pack)
+    for index, field in enumerate(fields):
+        field["index"] = index
+        field["alias"] = _slug_alias(field.get("alias") or field.get("source_path") or f"field_{index}", f"field_{index}")
+        field["label"] = _safe_str(field.get("label")) or _title_from_alias(field["alias"])
+        field["comfy_type"] = _normalize_type(field.get("comfy_type"), "ANY")
+        field.setdefault("storage", "inline")
+        field.setdefault("source_path", field["alias"])
+        field.setdefault("summary", _value_summary(field.get("value")))
+
+    now = _utc_now_iso()
+    pack["fields"] = fields
+    pack["outputs"] = _build_field_outputs(fields)
+    pack["field_count"] = len(fields)
+    pack["updated_at"] = pack.get("updated_at") or now
+    pack["updated_at_unix"] = pack.get("updated_at_unix") or time.time()
+    pack["manifest_hash"] = pack.get("manifest_hash") or _stable_hash(_manifest_only(pack))
+    pack["content"] = {
+        "summary": f"Content pack '{pack.get('content_pack_name') or 'portable_content_pack'}' loaded from portable JSON with {len(fields)} field(s).",
+        "markdown": _preview_markdown(pack),
+    }
+    return pack
+
+
+class ZMongoContentPackExportJSONFileV3(AlwaysDirtyMixin):
+    CATEGORY = "ZMongo/Content Packs/V3/Portable"
+    FUNCTION = "export_json_file"
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN", "STRING")
+    RETURN_NAMES = ("json", "file_path", "filename", "success", "refresh")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "content_pack": (CONTENT_PACK_TYPE,),
+                "filename_prefix": ("STRING", {"default": "content_pack"}),
+                "export_mode": (["portable_inline", "asset_refs", "manifest_only"], {"default": "portable_inline"}),
+                "include_images": ("BOOLEAN", {"default": True}),
+                "include_metadata": ("BOOLEAN", {"default": True}),
+                "pretty_json": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "session": ("ZMONGO_API_SESSION",),
+                "output_subfolder": ("STRING", {"default": "content_packs"}),
+                "master_key_hex": ("STRING", {"default": ""}),
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    def export_json_file(
+        self,
+        content_pack: Any,
+        filename_prefix: str = "content_pack",
+        export_mode: str = "portable_inline",
+        include_images: bool = True,
+        include_metadata: bool = True,
+        pretty_json: bool = True,
+        session: Any = None,
+        output_subfolder: str = "content_packs",
+        master_key_hex: str = "",
+        refresh_token: str = "",
+    ):
+        refresh = _stable_hash([time.time(), filename_prefix, export_mode, refresh_token])[:16]
+        try:
+            envelope = _content_pack_portable_envelope(
+                content_pack,
+                export_mode=export_mode,
+                include_images=include_images,
+                include_metadata=include_metadata,
+                session=session,
+                master_key_hex=master_key_hex,
+            )
+            out_dir = _portable_default_output_dir()
+            sub = _safe_filename_stem(output_subfolder, "content_packs")
+            if sub:
+                out_dir = out_dir / sub
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            stem = _safe_filename_stem(filename_prefix or envelope.get("content_pack_name") or "content_pack")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{stem}_{timestamp}.json"
+            path = out_dir / filename
+            text = _json_dumps(envelope, pretty=pretty_json)
+            path.write_text(text, encoding="utf-8")
+
+            payload = {
+                "success": True,
+                "message": "Portable content pack JSON exported.",
+                "data": {
+                    "file_path": str(path),
+                    "filename": filename,
+                    "export_mode": export_mode,
+                    "field_count": len(_field_list(envelope)),
+                    "refresh": refresh,
+                },
+                "error": None,
+            }
+            return {
+                "ui": {
+                    "portable_json": [text],
+                    "filename": [filename],
+                    "file_path": [str(path)],
+                    "message": ["Portable content pack JSON exported."],
+                },
+                "result": (_json_dumps(payload), str(path), filename, True, refresh),
+            }
+        except Exception as exc:
+            payload = {
+                "success": False,
+                "message": f"Portable export failed: {exc}",
+                "data": {"refresh": refresh},
+                "error": {"type": exc.__class__.__name__, "msg": str(exc)},
+            }
+            return (_json_dumps(payload), "", "", False, refresh)
+
+
+class ZMongoContentPackLoadJSONFileV3(AlwaysDirtyMixin):
+    CATEGORY = "ZMongo/Content Packs/V3/Portable"
+    FUNCTION = "load_json_file"
+    RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("content_pack", "json", "manifest_json", "aliases", "data_types", "indexed", "success")
+    OUTPUT_IS_LIST = (False, False, False, True, True, False, False)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "content_pack_file": ("STRING", {"default": "", "multiline": False}),
+                "validate_schema": ("BOOLEAN", {"default": True}),
+                "image_policy": (["load_inline", "ignore_images", "require_images"], {"default": "load_inline"}),
+            },
+            "optional": {
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    def load_json_file(self, content_pack_file: str = "", validate_schema: bool = True, image_policy: str = "load_inline", refresh_token: str = ""):
+        try:
+            path_text = _safe_str(content_pack_file)
+            if not path_text:
+                raise ValueError("content_pack_file is required.")
+
+            if path_text.strip().startswith("{"):
+                raw = path_text
+            else:
+                path = Path(os.path.expanduser(path_text)).resolve()
+                if not path.exists():
+                    raise FileNotFoundError(f"Portable content pack file not found: {path}")
+                raw = path.read_text(encoding="utf-8")
+
+            pack = _portable_to_content_pack(raw, validate_schema=validate_schema)
+            if image_policy == "ignore_images":
+                fields = []
+                for field in _field_list(pack):
+                    item = deepcopy(field)
+                    if _normalize_type(item.get("comfy_type"), "ANY") == "IMAGE":
+                        item["storage"] = "image_ignored"
+                        item["value"] = None
+                    fields.append(item)
+                pack["fields"] = fields
+                pack["outputs"] = _build_field_outputs(fields)
+            elif image_policy == "require_images":
+                missing = [field.get("alias") for field in _field_list(pack) if _normalize_type(field.get("comfy_type"), "ANY") == "IMAGE" and not field.get("value") and not field.get("asset_ref")]
+                if missing:
+                    raise ValueError(f"Image fields missing portable image data: {missing}")
+
+            aliases = _content_pack_alias_items(pack)
+            data_types = _content_pack_type_items(pack)
+            return (pack, _json_dumps(pack), _json_dumps(_manifest_only(pack)), _as_comfy_list(aliases), _as_comfy_list(data_types), _content_pack_indexed_aliases_text(pack), True)
+        except Exception as exc:
+            payload = {"success": False, "message": f"Load portable file failed: {exc}", "error": {"type": exc.__class__.__name__, "msg": str(exc)}}
+            return ({}, _json_dumps(payload), _json_dumps({}), [], [], _indexed_list_text([]), False)
+
+
+class ZMongoContentPackJSONTextLoaderV3(AlwaysDirtyMixin):
+    CATEGORY = "ZMongo/Content Packs/V3/Portable"
+    FUNCTION = "load_json_text"
+    RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("content_pack", "json", "manifest_json", "aliases", "data_types", "indexed", "success")
+    OUTPUT_IS_LIST = (False, False, False, True, True, False, False)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "content_pack_json": ("STRING", {"default": "{}", "multiline": True}),
+                "validate_schema": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    def load_json_text(self, content_pack_json: str = "{}", validate_schema: bool = True, refresh_token: str = ""):
+        try:
+            pack = _portable_to_content_pack(content_pack_json, validate_schema=validate_schema)
+            aliases = _content_pack_alias_items(pack)
+            data_types = _content_pack_type_items(pack)
+            return (pack, _json_dumps(pack), _json_dumps(_manifest_only(pack)), _as_comfy_list(aliases), _as_comfy_list(data_types), _content_pack_indexed_aliases_text(pack), True)
+        except Exception as exc:
+            payload = {"success": False, "message": f"Load portable JSON text failed: {exc}", "error": {"type": exc.__class__.__name__, "msg": str(exc)}}
+            return ({}, _json_dumps(payload), _json_dumps({}), [], [], _indexed_list_text([]), False)
+
 NODE_CLASS_MAPPINGS = {
     "ZMongoContentPackBuildV3": ZMongoContentPackBuildV3,
     "ZMongoContentPackAddImageV3": ZMongoContentPackAddImageV3,
@@ -1670,6 +2087,9 @@ NODE_CLASS_MAPPINGS = {
     "ZMongoContentPackGetJSONV3": ZMongoContentPackGetJSONV3,
     "ZMongoContentPackGetImageV3": ZMongoContentPackGetImageV3,
     "ZMongoContentPackGetSelectedV3": ZMongoContentPackGetSelectedV3,
+    "ZMongoContentPackExportJSONFileV3": ZMongoContentPackExportJSONFileV3,
+    "ZMongoContentPackLoadJSONFileV3": ZMongoContentPackLoadJSONFileV3,
+    "ZMongoContentPackJSONTextLoaderV3": ZMongoContentPackJSONTextLoaderV3,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -1686,6 +2106,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoContentPackGetJSONV3": "ZMongo Content Pack Get JSON V3",
     "ZMongoContentPackGetImageV3": "ZMongo Content Pack Get Image V3",
     "ZMongoContentPackGetSelectedV3": "ZMongo Content Pack Get Selected V3",
+    "ZMongoContentPackExportJSONFileV3": "ZMongo Content Pack Export JSON File V3",
+    "ZMongoContentPackLoadJSONFileV3": "ZMongo Content Pack Load JSON File V3",
+    "ZMongoContentPackJSONTextLoaderV3": "ZMongo Content Pack JSON Text Loader V3",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
