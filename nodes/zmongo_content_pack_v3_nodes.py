@@ -1695,6 +1695,110 @@ def _safe_filename_stem(value: Any, fallback: str = "content_pack") -> str:
     return text or fallback
 
 
+def _first_image_alias_from_pack(content_pack: Any, fallback: str = "hero_image") -> str:
+    """Return the first IMAGE field alias from a content pack or portable envelope."""
+    for field in _field_list(content_pack):
+        if _normalize_type(field.get("comfy_type"), "ANY") == "IMAGE":
+            alias = _safe_str(field.get("alias"))
+            if alias:
+                return alias
+    return fallback
+
+
+def _portable_pack_to_comfy_workflow_json(
+    portable_pack: dict[str, Any],
+    *,
+    workflow_name: str = "ZMongo Content Pack Workflow",
+    image_alias: str = "",
+) -> dict[str, Any]:
+    """
+    Wrap a portable content pack envelope in a normal ComfyUI/LiteGraph workflow.
+
+    This is intentionally a workflow file, not a raw ZMongo content-pack file.
+    It lets users open the exported JSON through ComfyUI's normal workflow loader.
+    """
+    portable_text = _json_dumps(portable_pack, pretty=True)
+    alias = _safe_str(image_alias) or _first_image_alias_from_pack(portable_pack)
+    name = _safe_str(workflow_name) or _safe_str(portable_pack.get("content_pack_name")) or "ZMongo Content Pack Workflow"
+
+    loader_id = 1
+    image_getter_id = 2
+    link_id = 1
+
+    return {
+        "last_node_id": image_getter_id,
+        "last_link_id": link_id,
+        "nodes": [
+            {
+                "id": loader_id,
+                "type": "ZMongoContentPackJSONTextLoaderV3",
+                "pos": [240, 220],
+                "size": [560, 360],
+                "flags": {},
+                "order": 0,
+                "mode": 0,
+                "inputs": [],
+                "outputs": [
+                    {"name": "content_pack", "type": CONTENT_PACK_TYPE, "links": [link_id], "shape": 3, "slot_index": 0},
+                    {"name": "json", "type": "STRING", "links": None, "shape": 3, "slot_index": 1},
+                    {"name": "manifest_json", "type": "STRING", "links": None, "shape": 3, "slot_index": 2},
+                    {"name": "aliases", "type": "*", "links": None, "shape": 3, "slot_index": 3},
+                    {"name": "data_types", "type": "*", "links": None, "shape": 3, "slot_index": 4},
+                    {"name": "indexed", "type": "STRING", "links": None, "shape": 3, "slot_index": 5},
+                    {"name": "success", "type": "BOOLEAN", "links": None, "shape": 3, "slot_index": 6},
+                ],
+                "properties": {"Node name for S&R": "ZMongoContentPackJSONTextLoaderV3"},
+                "widgets_values": [
+                    portable_text,
+                    True,
+                    "",
+                ],
+            },
+            {
+                "id": image_getter_id,
+                "type": "ZMongoContentPackGetImageV3",
+                "pos": [900, 260],
+                "size": [380, 220],
+                "flags": {},
+                "order": 1,
+                "mode": 0,
+                "inputs": [
+                    {"name": "content_pack", "type": CONTENT_PACK_TYPE, "link": link_id},
+                    {"name": "session", "type": "ZMONGO_API_SESSION", "link": None},
+                ],
+                "outputs": [
+                    {"name": "image", "type": "IMAGE", "links": None, "shape": 3, "slot_index": 0},
+                    {"name": "field_info_json", "type": "STRING", "links": None, "shape": 3, "slot_index": 1},
+                    {"name": "found", "type": "BOOLEAN", "links": None, "shape": 3, "slot_index": 2},
+                ],
+                "properties": {"Node name for S&R": "ZMongoContentPackGetImageV3"},
+                "widgets_values": [
+                    alias,
+                    True,
+                    "",
+                ],
+            },
+        ],
+        "links": [
+            [link_id, loader_id, 0, image_getter_id, 0, CONTENT_PACK_TYPE],
+        ],
+        "groups": [],
+        "config": {},
+        "extra": {
+            "ds": {"scale": 1, "offset": [0, 0]},
+            "zmongo": {
+                "workflow_kind": "portable_content_pack_workflow",
+                "workflow_name": name,
+                "content_pack_name": portable_pack.get("content_pack_name", ""),
+                "project_name": portable_pack.get("project_name", ""),
+                "field_count": portable_pack.get("field_count", 0),
+                "image_alias": alias,
+            },
+        },
+        "version": 0.4,
+    }
+
+
 def _content_pack_portable_envelope(
     content_pack: Any,
     *,
@@ -1850,10 +1954,57 @@ def _content_pack_portable_envelope(
     return envelope
 
 
+
+def _extract_portable_pack_from_workflow_json(value: Any) -> dict[str, Any]:
+    """Extract embedded portable content-pack JSON from a ComfyUI workflow JSON.
+
+    This lets the loader nodes accept either:
+    - raw zmongo_portable_content_pack JSON, or
+    - workflow_json files produced by ZMongoContentPackExportJSONFileV3.
+    """
+    parsed = _parse_json(value, default={})
+    if not isinstance(parsed, dict):
+        return {}
+
+    extra = parsed.get("extra") if isinstance(parsed.get("extra"), dict) else {}
+    zmongo_extra = extra.get("zmongo") if isinstance(extra.get("zmongo"), dict) else {}
+    is_zmongo_workflow = _safe_str(zmongo_extra.get("workflow_kind")) == "portable_content_pack_workflow"
+
+    nodes = parsed.get("nodes")
+    if not isinstance(nodes, list):
+        return {}
+
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if _safe_str(node.get("type")) != "ZMongoContentPackJSONTextLoaderV3":
+            continue
+        widgets = node.get("widgets_values")
+        if not isinstance(widgets, list) or not widgets:
+            continue
+        candidate = widgets[0]
+        candidate_parsed = _parse_json(candidate, default={})
+        if (
+            isinstance(candidate_parsed, dict)
+            and candidate_parsed.get("schema_kind") in {CONTENT_PACK_SCHEMA_KIND, PORTABLE_CONTENT_PACK_SCHEMA_KIND}
+        ):
+            return candidate_parsed
+
+    # If the workflow marker is present but the loader JSON could not be found,
+    # return an empty dict so the caller reports the normal unsupported schema error.
+    if is_zmongo_workflow:
+        return {}
+
+    return {}
+
 def _portable_to_content_pack(value: Any, *, validate_schema: bool = True) -> dict[str, Any]:
     parsed = _parse_json(value, default={})
     if not isinstance(parsed, dict):
         raise ValueError("Portable content pack JSON must parse to an object.")
+
+    embedded = _extract_portable_pack_from_workflow_json(parsed)
+    if embedded:
+        parsed = embedded
 
     schema_kind = _safe_str(parsed.get("schema_kind"))
     if schema_kind == CONTENT_PACK_SCHEMA_KIND:
@@ -1906,7 +2057,7 @@ class ZMongoContentPackExportJSONFileV3(AlwaysDirtyMixin):
             "required": {
                 "content_pack": (CONTENT_PACK_TYPE,),
                 "filename_prefix": ("STRING", {"default": "content_pack"}),
-                "export_mode": (["portable_inline", "asset_refs", "manifest_only"], {"default": "portable_inline"}),
+                "export_mode": (["workflow_json", "portable_inline", "asset_refs", "manifest_only"], {"default": "workflow_json"}),
                 "include_images": ("BOOLEAN", {"default": True}),
                 "include_metadata": ("BOOLEAN", {"default": True}),
                 "pretty_json": ("BOOLEAN", {"default": True}),
@@ -1923,7 +2074,7 @@ class ZMongoContentPackExportJSONFileV3(AlwaysDirtyMixin):
         self,
         content_pack: Any,
         filename_prefix: str = "content_pack",
-        export_mode: str = "portable_inline",
+        export_mode: str = "workflow_json",
         include_images: bool = True,
         include_metadata: bool = True,
         pretty_json: bool = True,
@@ -1934,14 +2085,23 @@ class ZMongoContentPackExportJSONFileV3(AlwaysDirtyMixin):
     ):
         refresh = _stable_hash([time.time(), filename_prefix, export_mode, refresh_token])[:16]
         try:
+            portable_export_mode = "portable_inline" if export_mode == "workflow_json" else export_mode
             envelope = _content_pack_portable_envelope(
                 content_pack,
-                export_mode=export_mode,
+                export_mode=portable_export_mode,
                 include_images=include_images,
                 include_metadata=include_metadata,
                 session=session,
                 master_key_hex=master_key_hex,
             )
+            export_document: dict[str, Any] = envelope
+            if export_mode == "workflow_json":
+                export_document = _portable_pack_to_comfy_workflow_json(
+                    envelope,
+                    workflow_name=_safe_str(filename_prefix) or envelope.get("content_pack_name") or "content_pack",
+                    image_alias=_first_image_alias_from_pack(envelope),
+                )
+
             out_dir = _portable_default_output_dir()
             sub = _safe_filename_stem(output_subfolder, "content_packs")
             if sub:
@@ -1952,16 +2112,18 @@ class ZMongoContentPackExportJSONFileV3(AlwaysDirtyMixin):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{stem}_{timestamp}.json"
             path = out_dir / filename
-            text = _json_dumps(envelope, pretty=pretty_json)
+            text = _json_dumps(export_document, pretty=pretty_json)
             path.write_text(text, encoding="utf-8")
 
             payload = {
                 "success": True,
-                "message": "Portable content pack JSON exported.",
+                "message": "Content pack JSON exported.",
                 "data": {
                     "file_path": str(path),
                     "filename": filename,
                     "export_mode": export_mode,
+                    "portable_export_mode": portable_export_mode,
+                    "opens_as_comfy_workflow": export_mode == "workflow_json",
                     "field_count": len(_field_list(envelope)),
                     "refresh": refresh,
                 },
@@ -1972,7 +2134,7 @@ class ZMongoContentPackExportJSONFileV3(AlwaysDirtyMixin):
                     "portable_json": [text],
                     "filename": [filename],
                     "file_path": [str(path)],
-                    "message": ["Portable content pack JSON exported."],
+                    "message": ["Content pack JSON exported."],
                 },
                 "result": (_json_dumps(payload), str(path), filename, True, refresh),
             }
