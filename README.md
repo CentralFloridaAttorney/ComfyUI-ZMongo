@@ -22,20 +22,23 @@ Whether you want to synchronize complex generation parameters across multiple lo
 
 ## 🔑 00 Session / Auth
 
-Every enterprise data pipeline requires a secure, authenticated entry point. The initialization section provides nodes that securely bind local canvas memory to distant backend configurations using modern token infrastructure.
+Every enterprise data pipeline requires a flexible, authenticated entry point. The initialization section provides nodes that bridge local canvas variables to backend configurations using modern token infrastructure.
+
+💡 **Added Benefit — Dual Operational Backends**: ZMongo custom nodes include a robust **Local File Store** system. If you don't supply a hosted base URL or authentication credentials, the database nodes can be operated using a Local Storage Node for saving and loading your data cleanly on your local hard drive. This provides immediate, zero-config persistence out of the box, with an effortless upgrade path to a hosted production cluster later on.  Below is a recommended graph structure for a dual-operational setup:
 
 [ ComfyUI Graph Grid ] ──► (00 API Key Session) ──► Secure Bearer Socket ──► Hosted Silo DB
+        │
+        └─► [ No Credentials Supplied ] ──► Built-In Local File Store ──► Local Disk Cache
 
 ### `00 API Key Session` (`ZMongoApiKeySessionNode`)
-The primary cryptographic gateway for your database sessions. It manages persistence, tracks transaction logging, and securely flows your authenticated session downstream to all other operational nodes.
+The primary cryptographic gateway for your database sessions. It manages persistence, tracks transaction logging, handles fallback switches for local-only storage, and securely flows your authenticated session downstream to all other operational nodes.
 * **Inputs**:
-  * `base_url`: The address of your backend operational cluster (e.g., `https://businessprocessapplications.com`).
+  * `base_url`: The address of your backend operational cluster (e.g., `https://businessprocessapplications.com`). Leave blank or default to engage local-only mode.
   * `zai_api_key`: Your private security key fetched from your user management panel.
   * `username`: Your explicit account identity for logging and telemetry data isolating your personal silo storage.
 
 ### `00 Who Am I` (`ZMongoApiWhoAmINode`)
 A network sanity-check block used to verify connection integrity. It pings the database server, validating active tokens, user access levels, and infrastructure connectivity statuses.
-
 ---
 
 ## 📁 01 Collections & 02 Docs
@@ -102,7 +105,7 @@ Integrate advanced intelligence directly into your node graph to dynamically bui
 
 ---
 
-## 📦 07 Text Agents
+## 📦 07 Text Agents (In-Development)
 
 Turn your text strings into active logic directors. The text agents layer extracts context from your documents to dynamically branch your execution pipeline.
 
