@@ -3,11 +3,12 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "zmongo-nodes"
+name = "zmongo"
 version = "0.1.3"
 description = "Advanced database framework, parameter library, and local file store persistence engine for ComfyUI."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
+# Updated to direct string to fix setuptools deprecation warning
 license = "Apache-2.0"
 authors = [
     { name = "CentralFloridaAttorney" }
@@ -29,9 +30,6 @@ dependencies = [
     "pandas",
     "FlagEmbedding",
     "transformers",
-    "pymupdf",
-    "python-docx",
-    "requests",
 ]
 
 [project.urls]
@@ -47,11 +45,9 @@ package-mode = false
 
 [tool.setuptools]
 include-package-data = true
-packages = ["nodes"]
+py-modules = ["__init__"]
 
-[tool.setuptools.package-data]
-nodes = ["local_store/**/*", "local_store/**/.*"]
-
+# Explicitly exclude non-python directories from being compiled as packages
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["js", "example_workflows", "assets", "docs", "tests"]
+exclude = ["js", "example_workflows", "assets", "docs"]

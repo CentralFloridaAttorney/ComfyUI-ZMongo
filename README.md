@@ -24,7 +24,7 @@ Whether you want to synchronize complex generation parameters across multiple lo
 
 Every enterprise data pipeline requires a flexible, authenticated entry point. The initialization section provides nodes that bridge local canvas variables to backend configurations using modern token infrastructure.
 
-💡 **Added Benefit — Dual Operational Backends**: ZMongo custom nodes include a robust **Local File Store** system. If you don't supply a hosted base URL or authentication credentials, the database nodes can be operated using a Local Storage Node for saving and loading your data cleanly on your local hard drive. This provides immediate, zero-config persistence out of the box, with an effortless upgrade path to a hosted production cluster later on.  Below is a recommended graph structure for a dual-operational setup:
+💡 **Added Benefit — Dual Operational Backends**: ZMongo custom nodes include a robust **Local File Store** system. If you don't supply a hosted base URL or authentication credentials, the database nodes can be operated using a Local Storage Node for saving and loading your data cleanly on your local hard drive. This provides immediate, zero-config persistence out of the box, with an effortless upgrade path to a hosted production cluster later on. Below is a recommended graph structure for a dual-operational setup:
 
 [ ComfyUI Graph Grid ] ──► (00 API Key Session) ──► Secure Bearer Socket ──► Hosted Silo DB
         │
@@ -39,6 +39,7 @@ The primary cryptographic gateway for your database sessions. It manages persist
 
 ### `00 Who Am I` (`ZMongoApiWhoAmINode`)
 A network sanity-check block used to verify connection integrity. It pings the database server, validating active tokens, user access levels, and infrastructure connectivity statuses.
+
 ---
 
 ## 📁 01 Collections & 02 Docs
@@ -135,10 +136,10 @@ An automated output pin factory that parses structural preset entries and expose
 
 ## 🎒 09 Content Packs
 
-Content Packs expand on the preset system by bundling entire multi-node generation environments into unified assets. This allows you to store mixed production data—including images, structural strings, meta flags, and numeric generation configs—into Content Packs that can be easily shared across multiple projects.
+Content Packs expand on the preset system by bundling entire multi-node generation environments into single, highly transportable database collections. This allows you to store mixed production data—including images, structural strings, meta flags, and numeric generation configs—into Content Packs that can be easily shared across multiple projects.
 
 * **`09 Export Content Pack`**: Packages active generation parameters, text items, and images into Downloadable Content Packs, which can be dropped into a canvas to rehydrate the saved content.
-* **`09 Dynamic Content Pack Outputs`**: Automatically expands content pack array records back into sequential canvas links, provid a single, highly transportable database collection.ing a clean solution for building template-driven production pipelines.
+* **`09 Dynamic Content Pack Outputs`**: Automatically expands content pack array records back into sequential canvas links, providing a clean solution for building template-driven production pipelines.
 
 ---
 
@@ -146,8 +147,8 @@ Content Packs expand on the preset system by bundling entire multi-node generati
 
 * **`Message Of The Day (MOTD)`**: Connects to infrastructure alerts, updating your canvas with package change logs and cluster status announcements.
 
-
 ---
+
 ## ⚙️ Installation & Setup
 
 To install the extension along with all advanced document extraction tools, clone the repository into your custom nodes directory and install dependencies inside your ComfyUI Python environment:
