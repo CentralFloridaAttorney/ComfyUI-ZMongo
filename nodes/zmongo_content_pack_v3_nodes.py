@@ -1571,6 +1571,60 @@ def _comfy_image_to_png_data_uri(image: Any) -> str:
     return "data:image/png;base64," + encoded
 
 
+def _array_to_png_data_uri(array: Any) -> str:
+    """Encode one HWC image array/tensor to PNG data URI."""
+    if Image is None or np is None:
+        raise RuntimeError("Pillow and numpy are required to encode content pack images.")
+    if torch is not None and hasattr(array, "detach"):
+        array = array.detach().cpu().numpy()
+    else:
+        array = np.asarray(array)
+    if array.ndim == 2:
+        array = np.stack([array, array, array], axis=-1)
+    if array.ndim != 3:
+        raise ValueError(f"Unsupported IMAGE frame shape: {array.shape!r}")
+    if array.shape[-1] == 1:
+        array = np.repeat(array, 3, axis=-1)
+    elif array.shape[-1] > 4:
+        array = array[..., :3]
+    array = np.nan_to_num(array)
+    if array.dtype != np.uint8:
+        try:
+            if float(np.nanmax(array)) <= 1.0:
+                array = array * 255.0
+        except Exception:
+            pass
+        array = np.clip(array, 0, 255).astype(np.uint8)
+    pil_image = Image.fromarray(array, mode="RGBA" if array.shape[-1] == 4 else "RGB")
+    buffer = io.BytesIO()
+    pil_image.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return "data:image/png;base64," + encoded
+
+
+def _comfy_image_batch_to_png_data_uris(images: Any, max_images: int = 0) -> list[str]:
+    """Convert a Comfy IMAGE batch [N,H,W,C] into a list of inline PNG data URIs."""
+    if Image is None or np is None:
+        raise RuntimeError("Pillow and numpy are required to encode content pack images.")
+    value = images
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+    if torch is not None and hasattr(value, "detach"):
+        array = value.detach().cpu().numpy()
+    else:
+        array = np.asarray(value)
+    if array.ndim == 3:
+        frames = [array]
+    elif array.ndim == 4:
+        frames = [array[index] for index in range(array.shape[0])]
+    else:
+        raise ValueError(f"Unsupported IMAGE batch shape for content pack sequence: {array.shape!r}")
+    limit = _safe_int(max_images, 0)
+    if limit > 0:
+        frames = frames[:limit]
+    return [_array_to_png_data_uri(frame) for frame in frames]
+
+
 class ZMongoContentPackAddImageV3(AlwaysDirtyMixin):
     CATEGORY = "ZMongo/09 Content Packs"
     FUNCTION = "add_image"
@@ -1669,6 +1723,378 @@ class ZMongoContentPackAddImageV3(AlwaysDirtyMixin):
         pack["content"] = {
             "markdown": _preview_markdown(pack),
             "summary": f"Content pack '{pack.get('content_pack_name', 'content_pack')}' contains {len(fields)} typed field(s), including image '{alias}'.",
+        }
+        aliases = _content_pack_alias_items(pack)
+        data_types = _content_pack_type_items(pack)
+        return (pack, _json_dumps(pack), _json_dumps(_manifest_only(pack)), _preview_markdown(pack), _as_comfy_list(aliases), _as_comfy_list(data_types), _content_pack_indexed_aliases_text(pack), True)
+
+
+
+def _iter_comfy_image_items(images: Any, max_images: int = 64) -> list[Any]:
+    """Split a Comfy IMAGE batch/list into individual image items.
+
+    Comfy IMAGE tensors normally arrive as NHWC tensors. A LoadImage node can
+    produce a batch when animated/multiple images are loaded. This helper keeps
+    each image as a single 3D HWC tensor/array so it can be encoded into its own
+    content-pack IMAGE field.
+    """
+    limit = max(1, min(_safe_int(max_images, 64), 256))
+
+    if images is None:
+        return []
+
+    if isinstance(images, (list, tuple)):
+        out: list[Any] = []
+        for item in images:
+            out.extend(_iter_comfy_image_items(item, max_images=limit - len(out)))
+            if len(out) >= limit:
+                break
+        return out[:limit]
+
+    value = images
+    shape = getattr(value, "shape", None)
+
+    if shape is not None:
+        try:
+            dims = len(shape)
+            if dims == 4:
+                count = min(int(shape[0]), limit)
+                return [value[index] for index in range(count)]
+            if dims == 3:
+                return [value]
+        except Exception:
+            pass
+
+    if np is not None:
+        try:
+            array = np.asarray(value)
+            if array.ndim == 4:
+                return [array[index] for index in range(min(array.shape[0], limit))]
+            if array.ndim == 3:
+                return [array]
+        except Exception:
+            pass
+
+    return [value]
+
+
+def _comfy_single_image_to_png_data_uri(image: Any) -> str:
+    """Convert one Comfy image item to inline PNG data URI."""
+    if Image is None or np is None:
+        raise RuntimeError("Pillow and numpy are required to encode content pack images.")
+
+    value = image
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+
+    if torch is not None and hasattr(value, "detach"):
+        array = value.detach().cpu().numpy()
+    else:
+        array = np.asarray(value)
+
+    if array.ndim == 4:
+        array = array[0]
+    if array.ndim == 2:
+        array = np.stack([array, array, array], axis=-1)
+    if array.ndim != 3:
+        raise ValueError(f"Unsupported IMAGE tensor shape for content pack image: {array.shape!r}")
+
+    if array.shape[-1] == 1:
+        array = np.repeat(array, 3, axis=-1)
+    elif array.shape[-1] > 4:
+        array = array[..., :3]
+
+    array = np.nan_to_num(array)
+    if array.dtype != np.uint8:
+        max_value = float(np.nanmax(array)) if array.size else 1.0
+        if max_value <= 1.0:
+            array = array * 255.0
+        array = np.clip(array, 0, 255).astype(np.uint8)
+
+    if array.shape[-1] == 4:
+        pil_image = Image.fromarray(array, mode="RGBA")
+    else:
+        pil_image = Image.fromarray(array[..., :3], mode="RGB")
+
+    buffer = io.BytesIO()
+    pil_image.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return "data:image/png;base64," + encoded
+
+
+class ZMongoContentPackAddImagesV3(AlwaysDirtyMixin):
+    """Add multiple images from a Comfy IMAGE batch to a content pack.
+
+    Each image becomes its own IMAGE field:
+        image_00, image_01, image_02, ...
+
+    This keeps compatibility with the working static exporter because the
+    exporter already restores one typed output per content-pack field.
+    """
+
+    CATEGORY = "ZMongo/09 Content Packs"
+    FUNCTION = "add_images"
+    RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("content_pack", "content_pack_json", "manifest_json", "preview_markdown", "aliases", "data_types", "indexed", "success")
+    OUTPUT_IS_LIST = (False, False, False, False, True, True, False, False)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "content_pack": (CONTENT_PACK_TYPE,),
+                "images": ("IMAGE",),
+                "field_alias_prefix": ("STRING", {"default": "image"}),
+                "label_prefix": ("STRING", {"default": "Image"}),
+                "source_path_prefix": ("STRING", {"default": "load_image.images"}),
+                "storage_mode": (["inline_base64_png"], {"default": "inline_base64_png"}),
+                "replace_existing_prefix": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "start_index": ("INT", {"default": 0, "min": 0, "max": 100000}),
+                "max_images": ("INT", {"default": 16, "min": 1, "max": 256}),
+                "index_padding": ("INT", {"default": 2, "min": 0, "max": 8}),
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    def add_images(
+        self,
+        content_pack: Any,
+        images: Any,
+        field_alias_prefix: str,
+        label_prefix: str,
+        source_path_prefix: str,
+        storage_mode: str = "inline_base64_png",
+        replace_existing_prefix: bool = True,
+        start_index: int = 0,
+        max_images: int = 16,
+        index_padding: int = 2,
+        refresh_token: str = "",
+    ):
+        pack = deepcopy(_as_content_pack(content_pack))
+        if not pack:
+            now = _utc_now_iso()
+            pack = {
+                "schema_kind": CONTENT_PACK_SCHEMA_KIND,
+                "schema_version": CONTENT_PACK_SCHEMA_VERSION,
+                "content_pack_name": "content_pack_with_images",
+                "project_name": "default",
+                "source": {},
+                "fields": [],
+                "outputs": {},
+                "created_at": now,
+                "created_at_unix": time.time(),
+            }
+
+        prefix = _slug_alias(field_alias_prefix or "image", "image")
+        label_base = _safe_str(label_prefix) or _title_from_alias(prefix)
+        source_base = _safe_str(source_path_prefix) or "load_image.images"
+        first_index = max(0, _safe_int(start_index, 0))
+        limit = max(1, min(_safe_int(max_images, 16), 256))
+        padding = max(0, min(_safe_int(index_padding, 2), 8))
+
+        image_items = _iter_comfy_image_items(images, max_images=limit)
+        if not image_items:
+            preview = "# Add Images Failed\n\n- Error: no images were supplied."
+            aliases = _content_pack_alias_items(pack)
+            data_types = _content_pack_type_items(pack)
+            return (pack, _json_dumps(pack), _json_dumps(_manifest_only(pack)), preview, _as_comfy_list(aliases), _as_comfy_list(data_types), _content_pack_indexed_aliases_text(pack), False)
+
+        fields = _field_list(pack)
+        if replace_existing_prefix:
+            fields = [field for field in fields if not _safe_str(field.get("alias")).startswith(prefix + "_") and _safe_str(field.get("alias")) != prefix]
+
+        used_aliases = {_safe_str(field.get("alias")) for field in fields if _safe_str(field.get("alias"))}
+        added_aliases: list[str] = []
+        errors: list[dict[str, Any]] = []
+
+        for offset, image_item in enumerate(image_items):
+            image_number = first_index + offset
+            suffix = str(image_number).zfill(padding) if padding > 0 else str(image_number)
+            base_alias = f"{prefix}_{suffix}"
+            alias = base_alias
+            if alias in used_aliases:
+                n = 2
+                while f"{base_alias}_{n}" in used_aliases:
+                    n += 1
+                alias = f"{base_alias}_{n}"
+            used_aliases.add(alias)
+
+            try:
+                data_uri = _comfy_single_image_to_png_data_uri(image_item)
+            except Exception as exc:
+                errors.append({"index": offset, "alias": alias, "type": exc.__class__.__name__, "message": str(exc)})
+                continue
+
+            field = {
+                "index": len(fields),
+                "alias": alias,
+                "label": f"{label_base} {suffix}" if suffix else label_base,
+                "source_path": f"{source_base}.{image_number}",
+                "comfy_type": "IMAGE",
+                "json_type": "image_asset",
+                "storage": "inline_base64",
+                "value": data_uri,
+                "asset_ref": {},
+                "json_ref": {},
+                "content_type": "image/png",
+                "filename": f"{alias}.png",
+                "summary": {
+                    "display": f"Inline PNG image saved in content pack as '{alias}'.",
+                    "length": len(data_uri),
+                    "truncated": False,
+                },
+            }
+            fields.append(field)
+            added_aliases.append(alias)
+
+        for index, item in enumerate(fields):
+            item["index"] = index
+
+        now = _utc_now_iso()
+        pack["fields"] = fields
+        pack["outputs"] = _build_field_outputs(fields)
+        pack["field_count"] = len(fields)
+        pack["updated_at"] = now
+        pack["updated_at_unix"] = time.time()
+        pack["manifest_hash"] = _stable_hash(_manifest_only(pack))
+        pack["content"] = {
+            "markdown": _preview_markdown(pack),
+            "summary": (
+                f"Content pack '{pack.get('content_pack_name', 'content_pack')}' contains "
+                f"{len(fields)} typed field(s); added {len(added_aliases)} image field(s)."
+            ),
+        }
+        pack["last_add_images"] = {
+            "added_count": len(added_aliases),
+            "added_aliases": added_aliases,
+            "error_count": len(errors),
+            "errors": errors,
+        }
+
+        aliases = _content_pack_alias_items(pack)
+        data_types = _content_pack_type_items(pack)
+        success = bool(added_aliases) and not errors
+        if errors and added_aliases:
+            success = True
+        preview = _preview_markdown(pack)
+        if errors:
+            preview += "\n\n## Add Images Warnings\n\n" + _json_dumps(errors)
+        return (pack, _json_dumps(pack), _json_dumps(_manifest_only(pack)), preview, _as_comfy_list(aliases), _as_comfy_list(data_types), _content_pack_indexed_aliases_text(pack), success)
+
+
+class ZMongoContentPackAddImageSequenceV3(AlwaysDirtyMixin):
+    """Add a Comfy IMAGE batch/sequence as one IMAGE field in a content pack.
+
+    This creates one content-pack field and therefore one IMAGE output in the
+    exported static workflow. The runtime value is a Comfy IMAGE batch tensor.
+    """
+
+    CATEGORY = "ZMongo/09 Content Packs"
+    FUNCTION = "add_image_sequence"
+    RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("content_pack", "content_pack_json", "manifest_json", "preview_markdown", "aliases", "data_types", "indexed", "success")
+    OUTPUT_IS_LIST = (False, False, False, False, True, True, False, False)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "content_pack": (CONTENT_PACK_TYPE,),
+                "images": ("IMAGE",),
+                "field_alias": ("STRING", {"default": "image_sequence"}),
+                "label": ("STRING", {"default": "Image Sequence"}),
+                "source_path": ("STRING", {"default": "load_image.images"}),
+                "storage_mode": (["inline_base64_png_sequence"], {"default": "inline_base64_png_sequence"}),
+                "replace_existing": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "max_images": ("INT", {"default": 0, "min": 0, "max": 4096}),
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    def add_image_sequence(
+        self,
+        content_pack: Any,
+        images: Any,
+        field_alias: str,
+        label: str,
+        source_path: str,
+        storage_mode: str = "inline_base64_png_sequence",
+        replace_existing: bool = True,
+        max_images: int = 0,
+        refresh_token: str = "",
+    ):
+        pack = deepcopy(_as_content_pack(content_pack))
+        if not pack:
+            now = _utc_now_iso()
+            pack = {
+                "schema_kind": CONTENT_PACK_SCHEMA_KIND,
+                "schema_version": CONTENT_PACK_SCHEMA_VERSION,
+                "content_pack_name": "content_pack_with_image_sequence",
+                "project_name": "default",
+                "source": {},
+                "fields": [],
+                "outputs": {},
+                "created_at": now,
+                "created_at_unix": time.time(),
+            }
+
+        alias = _slug_alias(field_alias or "image_sequence", "image_sequence")
+        display_label = _safe_str(label) or _title_from_alias(alias)
+        source = _safe_str(source_path) or "load_image.images"
+
+        try:
+            data_uris = _comfy_image_batch_to_png_data_uris(images, max_images=_safe_int(max_images, 0))
+            if not data_uris:
+                raise ValueError("No images were found in the IMAGE input batch.")
+        except Exception as exc:
+            preview = f"# Add Image Sequence Failed\n\n- Error: `{exc.__class__.__name__}`\n- Message: {exc}"
+            aliases = _content_pack_alias_items(pack)
+            data_types = _content_pack_type_items(pack)
+            return (pack, _json_dumps(pack), _json_dumps(_manifest_only(pack)), preview, _as_comfy_list(aliases), _as_comfy_list(data_types), _content_pack_indexed_aliases_text(pack), False)
+
+        fields = _field_list(pack)
+        if replace_existing:
+            fields = [field for field in fields if _safe_str(field.get("alias")) != alias]
+
+        field = {
+            "index": len(fields),
+            "alias": alias,
+            "label": display_label,
+            "source_path": source,
+            "comfy_type": "IMAGE",
+            "json_type": "image_sequence_asset",
+            "storage": "inline_base64_sequence",
+            "value": data_uris,
+            "asset_ref": {},
+            "json_ref": {},
+            "content_type": "image/png",
+            "filename": f"{alias}.png",
+            "sequence": {"kind": "image_sequence", "count": len(data_uris), "frame_content_type": "image/png"},
+            "summary": {
+                "display": f"Inline PNG image sequence saved in content pack as '{alias}' with {len(data_uris)} frame(s).",
+                "length": sum(len(item) for item in data_uris),
+                "count": len(data_uris),
+                "truncated": False,
+            },
+        }
+        fields.append(field)
+        for index, item in enumerate(fields):
+            item["index"] = index
+
+        now = _utc_now_iso()
+        pack["fields"] = fields
+        pack["outputs"] = _build_field_outputs(fields)
+        pack["field_count"] = len(fields)
+        pack["updated_at"] = now
+        pack["updated_at_unix"] = time.time()
+        pack["manifest_hash"] = _stable_hash(_manifest_only(pack))
+        pack["content"] = {
+            "markdown": _preview_markdown(pack),
+            "summary": f"Content pack '{pack.get('content_pack_name', 'content_pack')}' contains {len(fields)} typed field(s), including image sequence '{alias}' with {len(data_uris)} frame(s).",
         }
         aliases = _content_pack_alias_items(pack)
         data_types = _content_pack_type_items(pack)
@@ -2238,6 +2664,8 @@ class ZMongoContentPackJSONTextLoaderV3(AlwaysDirtyMixin):
 NODE_CLASS_MAPPINGS = {
     "ZMongoContentPackBuildV3": ZMongoContentPackBuildV3,
     "ZMongoContentPackAddImageV3": ZMongoContentPackAddImageV3,
+    "ZMongoContentPackAddImagesV3": ZMongoContentPackAddImagesV3,
+    "ZMongoContentPackAddImageSequenceV3": ZMongoContentPackAddImageSequenceV3,
     "ZMongoContentPackAliasEditorV3": ZMongoContentPackAliasEditorV3,
     "ZMongoContentPackSaveV3": ZMongoContentPackSaveV3,
     "ZMongoContentPackLoadV3": ZMongoContentPackLoadV3,
@@ -2257,6 +2685,8 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoContentPackBuildV3": "09 ZMongo Content Pack Build",
     "ZMongoContentPackAddImageV3": "09 ZMongo Content Pack Add Image",
+    "ZMongoContentPackAddImagesV3": "09 ZMongo Content Pack Add Images",
+    "ZMongoContentPackAddImageSequenceV3": "09 ZMongo Content Pack Add Image Sequence",
     "ZMongoContentPackAliasEditorV3": "09 ZMongo Content Pack Alias Editor",
     "ZMongoContentPackSaveV3": "09 ZMongo Content Pack Save",
     "ZMongoContentPackLoadV3": "09 ZMongo Content Pack Load",

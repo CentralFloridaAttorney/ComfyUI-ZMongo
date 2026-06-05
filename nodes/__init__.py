@@ -16,7 +16,7 @@ from . import zmongo_content_pack_v3_nodes
 from . import zmongo_text_agent_nodes
 from . import zmongo_helper_nodes
 from . import motd_node
-
+from . import zmongo_content_pack_static_workflow_nodes
 
 def _merge_node_mappings(
     *mapping_sets: Tuple[str, Dict[str, object], Dict[str, str]]
@@ -96,6 +96,12 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         "zmongo_content_pack_v3_nodes",
         zmongo_content_pack_v3_nodes.NODE_CLASS_MAPPINGS,
         zmongo_content_pack_v3_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    # 09 Content Packs
+        (
+        "zmongo_content_pack_static_workflow_nodes",
+        zmongo_content_pack_static_workflow_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_content_pack_static_workflow_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
     # 99 Utility / Helpers
     (

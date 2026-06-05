@@ -1,18 +1,19 @@
 import { app } from "../../scripts/app.js";
 
 /*
- * ComfyUI-ZMongo Content Pack Browser Download + Drop Helper
- * ----------------------------------------------------------
+ * ComfyUI-ZMongo Content Pack Browser Download Helper
+ * ---------------------------------------------------
  *
- * What this does:
- * 1. Auto-downloads ZMongoContentPackExportJSONFileV3 output to browser Downloads.
- * 2. Adds a "Download Last Export" button to the export node.
- * 3. Makes valid ZMongo workflow_json files droppable onto the canvas/page.
- * 4. Makes raw zmongo_portable_content_pack JSON droppable by creating loader/getter nodes.
+ * Safe version:
+ * - DOES NOT register dragover/drop handlers.
+ * - DOES NOT block ComfyUI native workflow drag/drop.
+ * - Keeps browser Downloads support for ZMongoContentPackExportJSONFileV3.
  *
- * Important:
- * - Python saves to the ComfyUI server output folder.
- * - JavaScript saves to the user's browser Downloads folder.
+ * Python exporter:
+ * - Saves to ComfyUI/output/content_packs.
+ *
+ * Browser JS:
+ * - Downloads the same exported JSON to the user's browser Downloads folder.
  */
 
 const PORTABLE_SCHEMA_KIND = "zmongo_portable_content_pack";
@@ -21,9 +22,8 @@ const CONTENT_PACK_SCHEMA_KIND = "zmongo_content_pack";
 const JSON_TEXT_LOADER_NODE_TYPE = "ZMongoContentPackJSONTextLoaderV3";
 const JSON_FILE_EXPORT_NODE_TYPE = "ZMongoContentPackExportJSONFileV3";
 const GET_IMAGE_NODE_TYPE = "ZMongoContentPackGetImageV3";
-const PREVIEW_IMAGE_NODE_TYPE = "PreviewImage";
 
-const EXTENSION_NAME = "BusinessProcessApplications.ZMongo.ContentPackDownloadsAndDrop";
+const EXTENSION_NAME = "BusinessProcessApplications.ZMongo.ContentPackDownloadsOnly";
 
 function parseJsonMaybe(value) {
     if (value === null || value === undefined) return null;
@@ -82,7 +82,7 @@ function isZMongoWorkflow(value) {
     });
 }
 
-function isZMongoExportJson(value) {
+function isDownloadableJson(value) {
     return isPortableContentPack(value) || isZMongoWorkflow(value) || isComfyWorkflow(value);
 }
 
@@ -183,7 +183,8 @@ function downloadTextToBrowserDownloads(text, filename = "") {
     }
 
     const parsed = parseJsonMaybe(cleanText);
-    if (!isZMongoExportJson(parsed)) {
+
+    if (!isDownloadableJson(parsed)) {
         const proceed = confirm(
             "The selected text does not look like a ZMongo content pack or workflow JSON. Download anyway?"
         );
@@ -222,7 +223,7 @@ function deepFindExportJson(value, depth = 0) {
 
     if (typeof value === "string") {
         const parsed = parseJsonMaybe(value);
-        return isZMongoExportJson(parsed) ? value : "";
+        return isDownloadableJson(parsed) ? value : "";
     }
 
     if (Array.isArray(value)) {
@@ -234,7 +235,7 @@ function deepFindExportJson(value, depth = 0) {
     }
 
     if (typeof value === "object") {
-        if (isZMongoExportJson(value)) {
+        if (isDownloadableJson(value)) {
             try {
                 return JSON.stringify(value, null, 2);
             } catch {
@@ -242,15 +243,6 @@ function deepFindExportJson(value, depth = 0) {
             }
         }
 
-        /*
-         * Comfy node UI payloads usually arrive as direct keys:
-         * {
-         *   portable_json: ["..."],
-         *   filename: ["..."]
-         * }
-         *
-         * But this recursive search also handles nested forms.
-         */
         const preferredKeys = [
             "workflow_json",
             "content_pack_workflow_json",
@@ -298,7 +290,11 @@ function deepFindFilename(value, depth = 0) {
     }
 
     if (typeof value === "object") {
-        const preferredKeys = ["filename", "file_name", "download_filename"];
+        const preferredKeys = [
+            "filename",
+            "file_name",
+            "download_filename",
+        ];
 
         for (const key of preferredKeys) {
             if (Object.prototype.hasOwnProperty.call(value, key)) {
@@ -337,304 +333,6 @@ function addToggleOnce(node, internalName, label, defaultValue = true) {
     });
 }
 
-function getWidget(node, widgetName) {
-    if (!node?.widgets) return null;
-
-    return node.widgets.find((widget) => {
-        return (
-            widget.name === widgetName ||
-            widget.label === widgetName ||
-            String(widget.name || "").toLowerCase() === String(widgetName || "").toLowerCase()
-        );
-    }) || null;
-}
-
-function setWidgetValue(node, widgetName, value) {
-    const widget = getWidget(node, widgetName);
-    if (!widget) return false;
-
-    widget.value = value;
-
-    try {
-        widget.callback?.(value, app.canvas, node, null);
-    } catch {
-        try { widget.callback?.(value); } catch {}
-    }
-
-    return true;
-}
-
-function nodeTypeExists(typeName) {
-    try {
-        return !!window.LiteGraph?.registered_node_types?.[typeName];
-    } catch {
-        return false;
-    }
-}
-
-function getCanvasGraphPosition(event) {
-    const canvas = app.canvas;
-    const rect = canvas?.canvas?.getBoundingClientRect?.();
-
-    const x = rect ? event.clientX - rect.left : event.clientX;
-    const y = rect ? event.clientY - rect.top : event.clientY;
-
-    try {
-        if (canvas?.convertEventToCanvasOffset) {
-            return canvas.convertEventToCanvasOffset(event);
-        }
-    } catch {}
-
-    try {
-        const ds = canvas.ds;
-        return [
-            (x - ds.offset[0]) / ds.scale,
-            (y - ds.offset[1]) / ds.scale,
-        ];
-    } catch {}
-
-    return [x, y];
-}
-
-function markGraphDirty() {
-    try { app.graph.setDirtyCanvas(true, true); } catch {}
-    try { app.canvas.setDirty(true, true); } catch {}
-    try { app.canvas.draw(true, true); } catch {}
-}
-
-function clearGraph() {
-    try {
-        app.graph.clear();
-    } catch {
-        try {
-            while (app.graph._nodes?.length) {
-                app.graph.remove(app.graph._nodes[0]);
-            }
-        } catch {}
-    }
-}
-
-async function loadWorkflowJson(workflowJson) {
-    /*
-     * File menu works because ComfyUI routes the JSON through its workflow loader.
-     * This reproduces that behavior as closely as possible.
-     */
-    const attempts = [
-        async () => {
-            if (typeof app.loadGraphData === "function") {
-                await app.loadGraphData(workflowJson);
-                return true;
-            }
-            return false;
-        },
-        async () => {
-            if (typeof app.loadGraphData === "function") {
-                await app.loadGraphData(workflowJson, true);
-                return true;
-            }
-            return false;
-        },
-        async () => {
-            clearGraph();
-            app.graph.configure(workflowJson);
-            return true;
-        },
-    ];
-
-    let lastError = null;
-
-    for (const attempt of attempts) {
-        try {
-            const ok = await attempt();
-            if (ok) {
-                markGraphDirty();
-                showNotice("Loaded workflow JSON onto the canvas.");
-                return true;
-            }
-        } catch (error) {
-            lastError = error;
-            console.warn("[ZMongo] Workflow load attempt failed.", error);
-        }
-    }
-
-    showNotice(`Failed to load workflow JSON: ${lastError?.message || lastError || "unknown error"}`, "error");
-    return false;
-}
-
-function findInputIndex(node, inputName) {
-    const inputs = node?.inputs || [];
-    return inputs.findIndex((input) => input?.name === inputName);
-}
-
-function ensureInputSlot(node, inputName, inputType = "*") {
-    let index = findInputIndex(node, inputName);
-    if (index >= 0) return index;
-
-    try {
-        node.addInput(inputName, inputType);
-        return findInputIndex(node, inputName);
-    } catch {
-        return -1;
-    }
-}
-
-function firstImageAlias(contentPack) {
-    const fields = Array.isArray(contentPack?.fields) ? contentPack.fields : [];
-    const imageField = fields.find((field) => {
-        return String(field?.comfy_type || "").toUpperCase() === "IMAGE";
-    });
-
-    return imageField?.alias || "hero_image";
-}
-
-function createPortableContentPackNodes(contentPack, rawText, event) {
-    if (!nodeTypeExists(JSON_TEXT_LOADER_NODE_TYPE)) {
-        showNotice(`Missing node type: ${JSON_TEXT_LOADER_NODE_TYPE}`, "error");
-        return false;
-    }
-
-    const basePos = getCanvasGraphPosition(event);
-
-    clearGraph();
-
-    const loader = window.LiteGraph.createNode(JSON_TEXT_LOADER_NODE_TYPE);
-    loader.title = "09 ZMongo Content Pack JSON Text Loader";
-    loader.pos = [basePos[0], basePos[1]];
-    app.graph.add(loader);
-
-    setWidgetValue(loader, "content_pack_json", prettyJsonText(rawText));
-    setWidgetValue(loader, "validate_schema", true);
-    setWidgetValue(loader, "refresh_token", "");
-
-    let getter = null;
-
-    if (nodeTypeExists(GET_IMAGE_NODE_TYPE)) {
-        getter = window.LiteGraph.createNode(GET_IMAGE_NODE_TYPE);
-        getter.title = "09 ZMongo Content Pack Get Image";
-        getter.pos = [basePos[0] + 560, basePos[1]];
-        app.graph.add(getter);
-
-        setWidgetValue(getter, "field_alias", firstImageAlias(contentPack));
-        setWidgetValue(getter, "strict_type", true);
-        setWidgetValue(getter, "master_key_hex", "");
-
-        try {
-            loader.connect(0, getter, ensureInputSlot(getter, "content_pack", "ZMONGO_CONTENT_PACK"));
-        } catch {}
-    }
-
-    if (getter && nodeTypeExists(PREVIEW_IMAGE_NODE_TYPE)) {
-        const preview = window.LiteGraph.createNode(PREVIEW_IMAGE_NODE_TYPE);
-        preview.title = "Preview Image";
-        preview.pos = [basePos[0] + 1040, basePos[1]];
-        app.graph.add(preview);
-
-        try {
-            getter.connect(0, preview, ensureInputSlot(preview, "images", "IMAGE"));
-        } catch {}
-    }
-
-    markGraphDirty();
-    showNotice("Loaded raw portable ZMongo content pack onto the canvas.");
-    return true;
-}
-
-async function handleDroppedJsonFile(file, event) {
-    const text = await file.text();
-    const parsed = parseJsonMaybe(text);
-
-    if (!parsed) {
-        showNotice(`Dropped file is not valid JSON: ${file.name}`, "warn");
-        return false;
-    }
-
-    if (isComfyWorkflow(parsed)) {
-        return await loadWorkflowJson(parsed);
-    }
-
-    if (isPortableContentPack(parsed)) {
-        return createPortableContentPackNodes(parsed, text, event);
-    }
-
-    showNotice(`JSON file is not a ComfyUI workflow or ZMongo content pack: ${file.name}`, "warn");
-    return false;
-}
-
-async function handleDrop(event) {
-    const files = Array.from(event.dataTransfer?.files || []);
-    const jsonFiles = files.filter((file) => file.name.toLowerCase().endsWith(".json"));
-
-    if (!jsonFiles.length) return false;
-
-    /*
-     * We only prevent default after confirming this is a JSON file drop.
-     * This avoids breaking non-JSON browser/ComfyUI drag behavior.
-     */
-    event.preventDefault();
-    event.stopPropagation();
-
-    let loadedAny = false;
-
-    for (const file of jsonFiles) {
-        try {
-            const loaded = await handleDroppedJsonFile(file, event);
-            loadedAny = loadedAny || loaded;
-        } catch (error) {
-            console.error("[ZMongo] Failed to load dropped JSON file.", error);
-            showNotice(`Failed to load ${file.name}: ${error?.message || error}`, "error");
-        }
-    }
-
-    return loadedAny;
-}
-
-function handleDragOver(event) {
-    const items = Array.from(event.dataTransfer?.items || []);
-    const hasJson = items.some((item) => {
-        return (
-            item.kind === "file" &&
-            (
-                String(item.type || "").includes("json") ||
-                item.type === "" ||
-                item.type === "application/json"
-            )
-        );
-    });
-
-    if (hasJson) {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "copy";
-    }
-}
-
-function installDropHandlers() {
-    if (window.__zmongo_content_pack_global_drop_installed) return;
-    window.__zmongo_content_pack_global_drop_installed = true;
-
-    /*
-     * Use document/window capture, not only canvas.
-     * Newer ComfyUI frontends can route drag events through overlays or layout panes,
-     * so canvas-only handlers may never see the drop.
-     */
-    document.addEventListener("dragover", handleDragOver, true);
-    document.addEventListener("drop", (event) => {
-        handleDrop(event).catch((error) => {
-            console.error("[ZMongo] Document drop handler failed.", error);
-            showNotice(`ZMongo drop failed: ${error?.message || error}`, "error");
-        });
-    }, true);
-
-    window.addEventListener("dragover", handleDragOver, true);
-    window.addEventListener("drop", (event) => {
-        handleDrop(event).catch((error) => {
-            console.error("[ZMongo] Window drop handler failed.", error);
-            showNotice(`ZMongo drop failed: ${error?.message || error}`, "error");
-        });
-    }, true);
-
-    console.info("[ZMongo] Content-pack JSON browser-download/drop handlers installed.");
-}
-
 function installExportNodeHelpers(node) {
     if (!node) return;
 
@@ -651,6 +349,7 @@ function installExportNodeHelpers(node) {
         "⬇️ Download Last Export to Browser Downloads",
         () => {
             const jsonText = node.__zmongo_last_export_json || "";
+
             if (!jsonText) {
                 showNotice("No export JSON is cached yet. Run the export node first.", "warn");
                 return;
@@ -669,9 +368,11 @@ app.registerExtension({
     name: EXTENSION_NAME,
 
     async setup() {
-        window.setTimeout(installDropHandlers, 250);
-        window.setTimeout(installDropHandlers, 1000);
-        window.setTimeout(installDropHandlers, 2500);
+        /*
+         * Intentionally no dragover/drop listeners.
+         * This preserves ComfyUI's native workflow drag/drop behavior.
+         */
+        console.info("[ZMongo] Content-pack browser Downloads helper loaded. Native ComfyUI drop behavior preserved.");
     },
 
     async beforeRegisterNodeDef(nodeType, nodeData) {
@@ -715,9 +416,10 @@ app.registerExtension({
     },
 
     async nodeCreated(node) {
-        installDropHandlers();
-
-        if (node?.comfyClass === JSON_FILE_EXPORT_NODE_TYPE || node?.type === JSON_FILE_EXPORT_NODE_TYPE) {
+        if (
+            node?.comfyClass === JSON_FILE_EXPORT_NODE_TYPE ||
+            node?.type === JSON_FILE_EXPORT_NODE_TYPE
+        ) {
             installExportNodeHelpers(node);
         }
     },

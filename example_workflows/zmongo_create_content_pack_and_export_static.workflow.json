@@ -1,0 +1,1222 @@
+{
+  "id": "zmongo-create-and-export-content-pack-demo",
+  "revision": 0,
+  "last_node_id": 19,
+  "last_link_id": 15,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        -1160,
+        -520
+      ],
+      "size": [
+        520,
+        360
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "# \ud83e\udde9 ZMongo Content Pack V3 \u2014 Create + Static Export Demo\n\nThis workflow demonstrates both steps in one canvas:\n\n1. **Create a V3 content pack** from JSON values.\n2. **Add an IMAGE** from ComfyUI `LoadImage` into the same content pack.\n3. **Export the completed content pack** as a self-contained static workflow JSON.\n\n## Run steps\n\n1. Select an image in the `00 Load Image` node.\n2. Run the workflow.\n3. The `ZMongo Content Pack Export Static Workflow V3` node should trigger the browser download helper.\n4. Open the downloaded `.workflow.json`; it should contain only restored value outputs, such as `message`, `seed`, `guidance_scale`, and `hero_image`.\n\nNo aliases, alias indices, manifest, or success outputs are exported into the static node."
+      ],
+      "title": "\ud83d\udcd8 README: Create Content Pack + Export Static Workflow",
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 2,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        -1160,
+        -80
+      ],
+      "size": [
+        560,
+        260
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "{\n  \"content\": {\n    \"message\": \"This string came from JSON, while the image came from ComfyUI LoadImage.\"\n  },\n  \"numeric\": {\n    \"seed\": 246813579,\n    \"guidance_scale\": 7.25\n  },\n  \"note\": \"The hero_image is intentionally not in this JSON. It is added from the LoadImage node.\"\n}"
+      ],
+      "title": "\ud83d\udce6 INPUT: JSON with string, int, float",
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 3,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        -1160,
+        220
+      ],
+      "size": [
+        420,
+        90
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "load_image_saved_in_content_pack_demo"
+      ],
+      "title": "\ud83c\udff7\ufe0f INPUT: content_pack_name",
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 4,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        -1160,
+        340
+      ],
+      "size": [
+        420,
+        90
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "comfyui_zmongo_content_pack_v3"
+      ],
+      "title": "\ud83d\uddc2\ufe0f INPUT: project_name",
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 6,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        -1160,
+        480
+      ],
+      "size": [
+        500,
+        110
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "content.message,numeric.seed,numeric.guidance_scale"
+      ],
+      "title": "\u2705 INPUT: include_paths_csv",
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 7,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        -1160,
+        620
+      ],
+      "size": [
+        500,
+        150
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            5
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "{\n  \"content.message\": \"message\",\n  \"numeric.seed\": \"seed\",\n  \"numeric.guidance_scale\": \"guidance_scale\"\n}"
+      ],
+      "title": "\ud83c\udff7\ufe0f INPUT: alias_map_json",
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 8,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        -1160,
+        800
+      ],
+      "size": [
+        500,
+        140
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            6
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "{\n  \"content.message\": \"STRING\",\n  \"numeric.seed\": \"INT\",\n  \"numeric.guidance_scale\": \"FLOAT\"\n}"
+      ],
+      "title": "\ud83d\udd27 INPUT: type_overrides_json",
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 9,
+      "type": "LoadImage",
+      "pos": [
+        -520,
+        -500
+      ],
+      "size": [
+        360,
+        320
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "image",
+          "name": "image",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "image"
+          }
+        },
+        {
+          "localized_name": "upload",
+          "name": "upload",
+          "type": "IMAGEUPLOAD",
+          "link": null,
+          "widget": {
+            "name": "upload"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            8
+          ]
+        },
+        {
+          "localized_name": "MASK",
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "example.png",
+        "image"
+      ],
+      "title": "00 \ud83d\uddbc\ufe0f Load Image \u2014 select image to embed in pack",
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 11,
+      "type": "ZMongoContentPackBuildV3",
+      "pos": [
+        -520,
+        -80
+      ],
+      "size": [
+        460,
+        500
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "document_json",
+          "name": "document_json",
+          "type": "STRING",
+          "link": 1,
+          "widget": {
+            "name": "document_json"
+          }
+        },
+        {
+          "localized_name": "content_pack_name",
+          "name": "content_pack_name",
+          "type": "STRING",
+          "link": 2,
+          "widget": {
+            "name": "content_pack_name"
+          }
+        },
+        {
+          "localized_name": "project_name",
+          "name": "project_name",
+          "type": "STRING",
+          "link": 3,
+          "widget": {
+            "name": "project_name"
+          }
+        },
+        {
+          "localized_name": "field_selection_mode",
+          "name": "field_selection_mode",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "field_selection_mode"
+          }
+        },
+        {
+          "localized_name": "image_policy",
+          "name": "image_policy",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "image_policy"
+          }
+        },
+        {
+          "localized_name": "source_collection",
+          "name": "source_collection",
+          "type": "STRING",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "source_collection"
+          }
+        },
+        {
+          "localized_name": "source_document_id",
+          "name": "source_document_id",
+          "type": "STRING",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "source_document_id"
+          }
+        },
+        {
+          "localized_name": "include_paths_csv",
+          "name": "include_paths_csv",
+          "type": "STRING",
+          "link": 4,
+          "shape": 7,
+          "widget": {
+            "name": "include_paths_csv"
+          }
+        },
+        {
+          "localized_name": "exclude_paths_csv",
+          "name": "exclude_paths_csv",
+          "type": "STRING",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "exclude_paths_csv"
+          }
+        },
+        {
+          "localized_name": "alias_map_json",
+          "name": "alias_map_json",
+          "type": "STRING",
+          "link": 5,
+          "shape": 7,
+          "widget": {
+            "name": "alias_map_json"
+          }
+        },
+        {
+          "localized_name": "type_overrides_json",
+          "name": "type_overrides_json",
+          "type": "STRING",
+          "link": 6,
+          "shape": 7,
+          "widget": {
+            "name": "type_overrides_json"
+          }
+        },
+        {
+          "localized_name": "max_inline_text_chars",
+          "name": "max_inline_text_chars",
+          "type": "INT",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "max_inline_text_chars"
+          }
+        },
+        {
+          "localized_name": "max_inline_json_bytes",
+          "name": "max_inline_json_bytes",
+          "type": "INT",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "max_inline_json_bytes"
+          }
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "refresh_token"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "content_pack",
+          "name": "content_pack",
+          "type": "ZMONGO_CONTENT_PACK",
+          "links": [
+            7
+          ]
+        },
+        {
+          "localized_name": "content_pack_json",
+          "name": "content_pack_json",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "localized_name": "manifest_json",
+          "name": "manifest_json",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "localized_name": "field_report_json",
+          "name": "field_report_json",
+          "type": "STRING",
+          "links": [
+            15
+          ]
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoContentPackBuildV3"
+      },
+      "widgets_values": [
+        "{}",
+        "load_image_saved_in_content_pack_demo",
+        "comfyui_zmongo_content_pack_v3",
+        "manual_include_paths",
+        "ignore",
+        "",
+        "",
+        "",
+        "",
+        "{}",
+        "{}",
+        3000,
+        8192,
+        ""
+      ],
+      "title": "01 \ud83e\uddf1 Create Content Pack V3 from JSON values",
+      "color": "#223322",
+      "bgcolor": "#335533"
+    },
+    {
+      "id": 12,
+      "type": "ZMongoContentPackAddImageV3",
+      "pos": [
+        20,
+        -500
+      ],
+      "size": [
+        480,
+        420
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "content_pack",
+          "name": "content_pack",
+          "type": "ZMONGO_CONTENT_PACK",
+          "link": 7
+        },
+        {
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "link": 8
+        },
+        {
+          "localized_name": "field_alias",
+          "name": "field_alias",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "field_alias"
+          }
+        },
+        {
+          "localized_name": "label",
+          "name": "label",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "label"
+          }
+        },
+        {
+          "localized_name": "source_path",
+          "name": "source_path",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "source_path"
+          }
+        },
+        {
+          "localized_name": "storage_mode",
+          "name": "storage_mode",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "storage_mode"
+          }
+        },
+        {
+          "localized_name": "replace_existing",
+          "name": "replace_existing",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "replace_existing"
+          }
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "refresh_token"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "content_pack",
+          "name": "content_pack",
+          "type": "ZMONGO_CONTENT_PACK",
+          "links": [
+            9
+          ]
+        },
+        {
+          "localized_name": "content_pack_json",
+          "name": "content_pack_json",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "localized_name": "manifest_json",
+          "name": "manifest_json",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "localized_name": "preview_markdown",
+          "name": "preview_markdown",
+          "type": "STRING",
+          "links": [
+            10
+          ]
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZMongoContentPackAddImageV3"
+      },
+      "widgets_values": [
+        "hero_image",
+        "Hero Image from LoadImage",
+        "load_image.IMAGE",
+        "inline_base64_png",
+        true,
+        ""
+      ],
+      "title": "02 \ud83d\uddbc\ufe0f Add LoadImage into Created Content Pack",
+      "color": "#223322",
+      "bgcolor": "#335533"
+    },
+    {
+      "id": 13,
+      "type": "ZMongoContentPackExportStaticWorkflowV3",
+      "pos": [
+        600,
+        -500
+      ],
+      "size": [
+        460,
+        260
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "content_pack",
+          "name": "content_pack",
+          "type": "ZMONGO_CONTENT_PACK",
+          "link": 9
+        },
+        {
+          "localized_name": "workflow_filename_prefix",
+          "name": "workflow_filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "workflow_filename_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "node_title",
+          "name": "node_title",
+          "type": "STRING",
+          "widget": {
+            "name": "node_title"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "pretty_json",
+          "name": "pretty_json",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "pretty_json"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "browser_download",
+          "name": "browser_download",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "browser_download"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "refresh_token"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "workflow_json",
+          "name": "workflow_json",
+          "type": "STRING",
+          "links": [
+            11
+          ]
+        },
+        {
+          "localized_name": "flat_pack_json",
+          "name": "flat_pack_json",
+          "type": "STRING",
+          "links": [
+            12
+          ]
+        },
+        {
+          "localized_name": "filename",
+          "name": "filename",
+          "type": "STRING",
+          "links": [
+            13
+          ]
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "links": [
+            14
+          ]
+        },
+        {
+          "localized_name": "refresh",
+          "name": "refresh",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "03 \u2b07\ufe0f Export Created Content Pack as Static Workflow JSON",
+      "properties": {
+        "Node name for S&R": "ZMongoContentPackExportStaticWorkflowV3"
+      },
+      "widgets_values": [
+        "created_content_pack_static_export",
+        "\ud83d\udce6 Static Outputs: created content pack",
+        true,
+        true,
+        ""
+      ]
+    },
+    {
+      "id": 14,
+      "type": "PreviewAny",
+      "pos": [
+        20,
+        -60
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 10
+        }
+      ],
+      "outputs": [],
+      "title": "\ud83d\udd0e Preview: created pack after image added",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 15,
+      "type": "PreviewAny",
+      "pos": [
+        600,
+        -160
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "STRING",
+          "link": 11
+        }
+      ],
+      "outputs": [],
+      "title": "\ud83d\udcc4 Preview: exported workflow JSON",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 16,
+      "type": "PreviewAny",
+      "pos": [
+        600,
+        80
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "STRING",
+          "link": 12
+        }
+      ],
+      "outputs": [],
+      "title": "\ud83d\udce6 Preview: flattened pack JSON",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 17,
+      "type": "PreviewAny",
+      "pos": [
+        600,
+        320
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "STRING",
+          "link": 13
+        }
+      ],
+      "outputs": [],
+      "title": "\ud83c\udff7\ufe0f Preview: exported filename",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 18,
+      "type": "PreviewAny",
+      "pos": [
+        600,
+        560
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "BOOLEAN",
+          "link": 14
+        }
+      ],
+      "outputs": [],
+      "title": "\u2705 Preview: export success",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 19,
+      "type": "PreviewAny",
+      "pos": [
+        20,
+        180
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "STRING",
+          "link": 15
+        }
+      ],
+      "outputs": [],
+      "title": "\ud83d\udccb Preview: content pack creation report",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      11,
+      0,
+      "STRING"
+    ],
+    [
+      2,
+      3,
+      0,
+      11,
+      1,
+      "STRING"
+    ],
+    [
+      3,
+      4,
+      0,
+      11,
+      2,
+      "STRING"
+    ],
+    [
+      4,
+      6,
+      0,
+      11,
+      7,
+      "STRING"
+    ],
+    [
+      5,
+      7,
+      0,
+      11,
+      9,
+      "STRING"
+    ],
+    [
+      6,
+      8,
+      0,
+      11,
+      10,
+      "STRING"
+    ],
+    [
+      7,
+      11,
+      0,
+      12,
+      0,
+      "ZMONGO_CONTENT_PACK"
+    ],
+    [
+      8,
+      9,
+      0,
+      12,
+      1,
+      "IMAGE"
+    ],
+    [
+      9,
+      12,
+      0,
+      13,
+      0,
+      "ZMONGO_CONTENT_PACK"
+    ],
+    [
+      10,
+      12,
+      3,
+      14,
+      0,
+      "STRING"
+    ],
+    [
+      11,
+      13,
+      0,
+      15,
+      0,
+      "STRING"
+    ],
+    [
+      12,
+      13,
+      1,
+      16,
+      0,
+      "STRING"
+    ],
+    [
+      13,
+      13,
+      2,
+      17,
+      0,
+      "STRING"
+    ],
+    [
+      14,
+      13,
+      3,
+      18,
+      0,
+      "BOOLEAN"
+    ],
+    [
+      15,
+      11,
+      3,
+      19,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "1. Inputs",
+      "bounding": [
+        -1200,
+        -560,
+        560,
+        1540
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "2. Create Pack",
+      "bounding": [
+        -560,
+        -540,
+        540,
+        780
+      ],
+      "color": "#8a6d3b",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "3. Export Static Workflow",
+      "bounding": [
+        560,
+        -540,
+        560,
+        1280
+      ],
+      "color": "#3f8a4b",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.75,
+      "offset": [
+        1400,
+        660
+      ]
+    },
+    "zmongo_demo": {
+      "purpose": "create content pack and export static workflow in one workflow",
+      "static_export_values_only": true
+    }
+  },
+  "version": 0.4
+}
