@@ -49,7 +49,7 @@ class ZMongoSaveImageSequenceNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING", "INT", "BOOLEAN")
     RETURN_NAMES = ("json", "refresh", "total_saved_frames", "success")
     FUNCTION = "save_images"
-    CATEGORY = "ZMongo/07 Image Sequences"
+    CATEGORY = "ZMongo/05 Image Sequences"
 
     def save_images(
         self,
@@ -203,7 +203,7 @@ class ZMongoLoadImageSequenceNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("IMAGE", "STRING", "INT", "STRING")
     RETURN_NAMES = ("images", "json", "frame_count", "status")
     FUNCTION = "load_images"
-    CATEGORY = "ZMongo/07 Image Sequences"
+    CATEGORY = "ZMongo/05 Image Sequences"
 
     def load_images(
         self,

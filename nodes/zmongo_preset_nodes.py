@@ -1946,7 +1946,7 @@ class ZMongoSavePresetByNodeID:
         "status",
     )
     FUNCTION = "save_preset"
-    CATEGORY = "ZMongo/04 Presets"
+    CATEGORY = "ZMongo/08 Presets"
 
     def save_preset(
         self,
@@ -2100,7 +2100,7 @@ class ZMongoLoadPreset:
         "status",
     )
     FUNCTION = "load_preset"
-    CATEGORY = "ZMongo/04 Presets"
+    CATEGORY = "ZMongo/08 Presets"
 
     def _return_payload(
         self,
@@ -2258,7 +2258,7 @@ class ZMongoDynamicPresetOutputs:
     RETURN_TYPES = tuple(["*"] * MAX_DYNAMIC_OUTPUTS)
     RETURN_NAMES = tuple([f"out_{i:02d}" for i in range(MAX_DYNAMIC_OUTPUTS)])
     FUNCTION = "hydrate"
-    CATEGORY = "ZMongo/04 Presets"
+    CATEGORY = "ZMongo/08 Presets"
 
     def hydrate(
         self,
@@ -2305,7 +2305,7 @@ class ZMongoPresetDebugInfo:
     RETURN_TYPES = ("STRING", "STRING", "STRING", "INT", "STRING")
     RETURN_NAMES = ("preset_name", "source_node_id", "source_node_class", "field_count", "summary_json")
     FUNCTION = "debug"
-    CATEGORY = "ZMongo/04 Presets"
+    CATEGORY = "ZMongo/08 Presets"
 
     def debug(self, preset_json: str):
         payload = _parse_json(preset_json)
@@ -2369,10 +2369,10 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ZMongoSavePresetByNodeID": "04 Save Preset By Node ID",
-    "ZMongoLoadPreset": "04 Load Preset",
-    "ZMongoDynamicPresetOutputs": "04 Dynamic Preset Outputs",
-    "ZMongoPresetDebugInfo": "04 Preset Debug Info",
+    "ZMongoSavePresetByNodeID": "08 Save Preset By Node ID",
+    "ZMongoLoadPreset": "08 Load Preset",
+    "ZMongoDynamicPresetOutputs": "08 Dynamic Preset Outputs",
+    "ZMongoPresetDebugInfo": "08 Preset Debug Info",
 }
 
 __all__ = [

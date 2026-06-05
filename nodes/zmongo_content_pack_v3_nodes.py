@@ -849,7 +849,7 @@ def _session_query_docs(session: Any, collection: str, query: dict[str, Any], do
 
 
 class ZMongoContentPackBuildV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3"
+    CATEGORY = "ZMongo/09 Content Packs"
     FUNCTION = "build"
     RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
     RETURN_NAMES = ("content_pack", "content_pack_json", "manifest_json", "field_report_json", "aliases", "data_types", "indexed", "success")
@@ -936,7 +936,7 @@ class ZMongoContentPackBuildV3(AlwaysDirtyMixin):
 
 
 class ZMongoContentPackAliasEditorV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3"
+    CATEGORY = "ZMongo/09 Content Packs"
     FUNCTION = "edit"
     RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
     RETURN_NAMES = ("content_pack", "manifest_json", "preview_markdown", "aliases", "data_types", "indexed", "success")
@@ -1012,7 +1012,7 @@ class ZMongoContentPackAliasEditorV3(AlwaysDirtyMixin):
 
 
 class ZMongoContentPackSaveV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3"
+    CATEGORY = "ZMongo/09 Content Packs"
     FUNCTION = "save"
     RETURN_TYPES = (CONTENT_PACK_REF_TYPE, "STRING", "STRING", "BOOLEAN", "STRING")
     RETURN_NAMES = ("pack_ref", "document_id", "content_pack_json", "success", "refresh")
@@ -1084,7 +1084,7 @@ class ZMongoContentPackSaveV3(AlwaysDirtyMixin):
 
 
 class ZMongoContentPackLoadV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3"
+    CATEGORY = "ZMongo/09 Content Packs"
     FUNCTION = "load"
     RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
     RETURN_NAMES = (
@@ -1167,7 +1167,7 @@ class ZMongoContentPackLoadV3(AlwaysDirtyMixin):
         )
 
 class ZMongoContentPackManifestPreviewV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3"
+    CATEGORY = "ZMongo/09 Content Packs"
     FUNCTION = "preview"
     RETURN_TYPES = ("STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
     RETURN_NAMES = ("markdown", "field_table_json", "aliases", "data_types", "indexed", "success")
@@ -1200,7 +1200,7 @@ class ZMongoContentPackManifestPreviewV3(AlwaysDirtyMixin):
 
 
 class _BaseContentPackGetV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3/Get"
+    CATEGORY = "ZMongo/09 Content Packs/Get"
     EXPECTED_TYPE = "ANY"
     DEFAULT_VALUE: Any = None
 
@@ -1317,7 +1317,7 @@ class ZMongoContentPackGetJSONV3(_BaseContentPackGetV3):
 
 class ZMongoContentPackGetImageV3(_BaseContentPackGetV3):
     EXPECTED_TYPE = "IMAGE"
-    CATEGORY = "ZMongo/Content Packs/V3/Get"
+    CATEGORY = "ZMongo/09 Content Packs/Get"
     FUNCTION = "get_image"
     RETURN_TYPES = ("IMAGE", "STRING", "BOOLEAN")
     RETURN_NAMES = ("image", "field_info_json", "found")
@@ -1387,7 +1387,7 @@ class ZMongoContentPackGetSelectedV3(AlwaysDirtyMixin):
     aliases and data_types outputs.
     """
 
-    CATEGORY = "ZMongo/Content Packs/V3/Get"
+    CATEGORY = "ZMongo/09 Content Packs/Get"
     FUNCTION = "get_selected"
     RETURN_TYPES = ("STRING", "INT", "FLOAT", "BOOLEAN", "IMAGE", "STRING", "STRING", "BOOLEAN")
     RETURN_NAMES = ("string", "int", "float", "boolean", "image", "json", "selected_type", "found")
@@ -1572,7 +1572,7 @@ def _comfy_image_to_png_data_uri(image: Any) -> str:
 
 
 class ZMongoContentPackAddImageV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3"
+    CATEGORY = "ZMongo/09 Content Packs"
     FUNCTION = "add_image"
     RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
     RETURN_NAMES = ("content_pack", "content_pack_json", "manifest_json", "preview_markdown", "aliases", "data_types", "indexed", "success")
@@ -1895,7 +1895,7 @@ def _portable_to_content_pack(value: Any, *, validate_schema: bool = True) -> di
 
 
 class ZMongoContentPackExportJSONFileV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3/Portable"
+    CATEGORY = "ZMongo/09 Content Packs/Portable"
     FUNCTION = "export_json_file"
     RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN", "STRING")
     RETURN_NAMES = ("json", "file_path", "filename", "success", "refresh")
@@ -1987,7 +1987,7 @@ class ZMongoContentPackExportJSONFileV3(AlwaysDirtyMixin):
 
 
 class ZMongoContentPackLoadJSONFileV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3/Portable"
+    CATEGORY = "ZMongo/09 Content Packs/Portable"
     FUNCTION = "load_json_file"
     RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
     RETURN_NAMES = ("content_pack", "json", "manifest_json", "aliases", "data_types", "indexed", "success")
@@ -2045,7 +2045,7 @@ class ZMongoContentPackLoadJSONFileV3(AlwaysDirtyMixin):
 
 
 class ZMongoContentPackJSONTextLoaderV3(AlwaysDirtyMixin):
-    CATEGORY = "ZMongo/Content Packs/V3/Portable"
+    CATEGORY = "ZMongo/09 Content Packs/Portable"
     FUNCTION = "load_json_text"
     RETURN_TYPES = (CONTENT_PACK_TYPE, "STRING", "STRING", "*", "*", "STRING", "BOOLEAN")
     RETURN_NAMES = ("content_pack", "json", "manifest_json", "aliases", "data_types", "indexed", "success")
@@ -2093,22 +2093,22 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ZMongoContentPackBuildV3": "ZMongo Content Pack Build V3",
-    "ZMongoContentPackAddImageV3": "ZMongo Content Pack Add Image V3",
-    "ZMongoContentPackAliasEditorV3": "ZMongo Content Pack Alias Editor V3",
-    "ZMongoContentPackSaveV3": "ZMongo Content Pack Save V3",
-    "ZMongoContentPackLoadV3": "ZMongo Content Pack Load V3",
-    "ZMongoContentPackManifestPreviewV3": "ZMongo Content Pack Manifest Preview V3",
-    "ZMongoContentPackGetStringV3": "ZMongo Content Pack Get String V3",
-    "ZMongoContentPackGetIntV3": "ZMongo Content Pack Get Int V3",
-    "ZMongoContentPackGetFloatV3": "ZMongo Content Pack Get Float V3",
-    "ZMongoContentPackGetBooleanV3": "ZMongo Content Pack Get Boolean V3",
-    "ZMongoContentPackGetJSONV3": "ZMongo Content Pack Get JSON V3",
-    "ZMongoContentPackGetImageV3": "ZMongo Content Pack Get Image V3",
-    "ZMongoContentPackGetSelectedV3": "ZMongo Content Pack Get Selected V3",
-    "ZMongoContentPackExportJSONFileV3": "ZMongo Content Pack Export JSON File V3",
-    "ZMongoContentPackLoadJSONFileV3": "ZMongo Content Pack Load JSON File V3",
-    "ZMongoContentPackJSONTextLoaderV3": "ZMongo Content Pack JSON Text Loader V3",
+    "ZMongoContentPackBuildV3": "09 ZMongo Content Pack Build",
+    "ZMongoContentPackAddImageV3": "09 ZMongo Content Pack Add Image",
+    "ZMongoContentPackAliasEditorV3": "09 ZMongo Content Pack Alias Editor",
+    "ZMongoContentPackSaveV3": "09 ZMongo Content Pack Save",
+    "ZMongoContentPackLoadV3": "09 ZMongo Content Pack Load",
+    "ZMongoContentPackManifestPreviewV3": "09 ZMongo Content Pack Manifest Preview",
+    "ZMongoContentPackGetStringV3": "09 ZMongo Content Pack Get String",
+    "ZMongoContentPackGetIntV3": "09 ZMongo Content Pack Get Int",
+    "ZMongoContentPackGetFloatV3": "09 ZMongo Content Pack Get Float",
+    "ZMongoContentPackGetBooleanV3": "ZMongo Content Pack Get Boolean",
+    "ZMongoContentPackGetJSONV3": "09 ZMongo Content Pack Get JSON",
+    "ZMongoContentPackGetImageV3": "09 ZMongo Content Pack Get Image",
+    "ZMongoContentPackGetSelectedV3": "09 ZMongo Content Pack Get Selected",
+    "ZMongoContentPackExportJSONFileV3": "09 ZMongo Content Pack Export JSON File",
+    "ZMongoContentPackLoadJSONFileV3": "09 ZMongo Content Pack Load JSON File",
+    "ZMongoContentPackJSONTextLoaderV3": "09 ZMongo Content Pack JSON Text Loader",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

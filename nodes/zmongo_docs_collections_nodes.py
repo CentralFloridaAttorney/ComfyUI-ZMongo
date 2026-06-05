@@ -701,86 +701,6 @@ class LocalZMongoSession:
                 "storage_backend": "local_file_store",
             }, status_code=0, error_type=exc.__class__.__name__)
 
-
-class ZMongoLocalFileStoreSessionNode(AlwaysDirtyMixin):
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "local_store_root": ("STRING", {"default": "", "multiline": False}),
-                "test_health": ("BOOLEAN", {"default": True}),
-            }
-        }
-
-    RETURN_TYPES = ("ZMONGO_API_SESSION", "STRING", "STRING")
-    RETURN_NAMES = ("session", "json", "status")
-    FUNCTION = "connect"
-    CATEGORY = "ZMongo/00 Auth"
-
-    def connect(self, local_store_root: str = "", test_health: bool = True):
-        try:
-            root_text = _local_clean_scalar(local_store_root)
-            root_dir = Path(root_text).expanduser().resolve() if root_text else None
-            session = LocalZMongoSession(root_dir=root_dir)
-            payload = session.health() if test_health else _local_payload_ok("Local File Store session created.", {
-                "storage_backend": "local_file_store",
-                "root_dir": str(session.root_dir),
-                "mode": "Local File Store",
-            })
-            return (session, _json_text(payload), payload.get("message", "Local File Store session created."))
-        except Exception as exc:
-            payload = _local_payload_error(f"Local File Store session failed: {exc}", {
-                "local_store_root": local_store_root,
-                "error_type": exc.__class__.__name__,
-            }, status_code=0, error_type=exc.__class__.__name__)
-            return (None, _json_text(payload), payload["message"])
-
-class ZMongoApiHealthNode(AlwaysDirtyMixin):
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {"session": ("ZMONGO_API_SESSION",)},
-            "optional": {"refresh_token": ("STRING", {"default": ""})},
-        }
-
-    RETURN_TYPES = ("STRING", "BOOLEAN")
-    RETURN_NAMES = ("json", "success")
-    FUNCTION = "health"
-    CATEGORY = "ZMongo/01 Service"
-
-    def health(self, session, refresh_token: str = ""):
-        if session is None:
-            payload = _error_payload("No session provided.")
-            return (_json_text(payload), False)
-        payload = session.health()
-        return (_json_text(payload), bool(payload.get("success")))
-
-
-class ZMongoApiWhoamiNode(AlwaysDirtyMixin):
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {"session": ("ZMONGO_API_SESSION",)},
-            "optional": {"refresh_token": ("STRING", {"default": ""})},
-        }
-
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN")
-    RETURN_NAMES = ("json", "username", "db_name", "success")
-    FUNCTION = "whoami"
-    CATEGORY = "ZMongo/01 Service"
-
-    def whoami(self, session, refresh_token: str = ""):
-        if session is None:
-            payload = _error_payload("No session provided.")
-            return (_json_text(payload), "", "", False)
-
-        payload = session.whoami()
-        data = payload.get("data", {}) if isinstance(payload, dict) else {}
-        username = str(data.get("username") or "") if isinstance(data, dict) else ""
-        db_name = str(data.get("silo_db_name") or data.get("db_name") or "") if isinstance(data, dict) else ""
-        return (_json_text(payload), username, db_name, bool(payload.get("success")))
-
-
 # -----------------------------------------------------------------------------
 # 02 Collections nodes
 # -----------------------------------------------------------------------------
@@ -797,7 +717,7 @@ class ZMongoApiListCollectionsNode(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "collections", "indexed")
     OUTPUT_IS_LIST = (False, True, False)
     FUNCTION = "list_collections"
-    CATEGORY = "ZMongo/02 Collections"
+    CATEGORY = "ZMongo/01 Collections"
 
     def list_collections(self, session, refresh_token: str = ""):
         if session is None:
@@ -817,7 +737,7 @@ class ZMongoApiCreateCollectionNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("json", "refresh")
     FUNCTION = "create_collection"
-    CATEGORY = "ZMongo/02 Collections"
+    CATEGORY = "ZMongo/01 Collections"
 
     def create_collection(self, session, collection_name: str):
         token = _dirty_token("create_collection", collection_name)
@@ -841,7 +761,7 @@ class ZMongoApiDeleteCollectionNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("json", "refresh")
     FUNCTION = "delete_collection"
-    CATEGORY = "ZMongo/02 Collections"
+    CATEGORY = "ZMongo/01 Collections"
 
     def delete_collection(self, session, collection_name: str, confirm_collection_name: str):
         token = _dirty_token("delete_collection", collection_name)
@@ -880,7 +800,7 @@ class ZMongoApiListDocsNode(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "ids", "indexed")
     OUTPUT_IS_LIST = (False, True, False)
     FUNCTION = "list_docs"
-    CATEGORY = "ZMongo/03 Docs"
+    CATEGORY = "ZMongo/02 Docs"
 
     def list_docs(self, session, collection_name: str, query_json: str, limit: int, skip: int, refresh_token: str = ""):
         if session is None:
@@ -913,7 +833,7 @@ class ZMongoApiGetDocNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "BOOLEAN")
     RETURN_NAMES = ("json", "success")
     FUNCTION = "get_doc"
-    CATEGORY = "ZMongo/03 Docs"
+    CATEGORY = "ZMongo/02 Docs"
 
     def get_doc(self, session, collection_name: str, document_id: str, cache: bool, refresh_token: str = ""):
         if session is None:
@@ -947,7 +867,7 @@ class ZMongoApiQueryDocsNode(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "ids", "indexed")
     OUTPUT_IS_LIST = (False, True, False)
     FUNCTION = "query_docs"
-    CATEGORY = "ZMongo/03 Docs"
+    CATEGORY = "ZMongo/02 Docs"
 
     def query_docs(
         self,
@@ -1006,7 +926,7 @@ class ZMongoApiCountDocsNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "INT")
     RETURN_NAMES = ("json", "count")
     FUNCTION = "count_docs"
-    CATEGORY = "ZMongo/03 Docs"
+    CATEGORY = "ZMongo/02 Docs"
 
     def count_docs(self, session, collection_name: str, query_json: str, document_id: str, cache: bool, refresh_token: str = ""):
         if session is None:
@@ -1041,7 +961,7 @@ class ZMongoApiCreateDocNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING", "STRING")
     RETURN_NAMES = ("json", "document_id", "refresh")
     FUNCTION = "create_doc"
-    CATEGORY = "ZMongo/03 Docs"
+    CATEGORY = "ZMongo/02 Docs"
 
     def create_doc(self, session, collection_name: str, document_json: str):
         token = _dirty_token("create_doc", collection_name)
@@ -1081,7 +1001,7 @@ class ZMongoApiUpdateDocNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("json", "refresh")
     FUNCTION = "update_doc"
-    CATEGORY = "ZMongo/03 Docs"
+    CATEGORY = "ZMongo/02 Docs"
 
     def update_doc(
         self,
@@ -1143,7 +1063,7 @@ class ZMongoApiDeleteDocNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("json", "refresh")
     FUNCTION = "delete_doc"
-    CATEGORY = "ZMongo/03 Docs"
+    CATEGORY = "ZMongo/02 Docs"
 
     @staticmethod
     def _clean_scalar(value: Any) -> str:
@@ -1297,7 +1217,7 @@ class ZMongoApiGetValueNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN", "STRING", "STRING")
     RETURN_NAMES = ("json", "value", "exists", "value_type", "refresh")
     FUNCTION = "get_value"
-    CATEGORY = "ZMongo/03 Docs"
+    CATEGORY = "ZMongo/02 Docs"
 
     @staticmethod
     def _clean_scalar(value: Any) -> str:
@@ -1523,7 +1443,7 @@ class ZMongoApiSaveValueNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN")
     RETURN_NAMES = ("json", "refresh", "success")
     FUNCTION = "save_value"
-    CATEGORY = "ZMongo/03 Docs"
+    CATEGORY = "ZMongo/02 Docs"
 
     @staticmethod
     def _clean_scalar(value: Any) -> str:
@@ -1814,9 +1734,9 @@ NODE_CLASS_MAPPINGS = {
     # "ZMongoApiKeyOnlySessionNode": ZMongoApiKeyOnlySessionNode,
     # "ZMongoApiCloseSessionNode": ZMongoApiCloseSessionNode,
 
-    # 01 Service
-    "ZMongoApiHealthNode": ZMongoApiHealthNode,
-    "ZMongoApiWhoamiNode": ZMongoApiWhoamiNode,
+    # # 01 Service
+    # "ZMongoApiHealthNode": ZMongoApiHealthNode,
+    # "ZMongoApiWhoamiNode": ZMongoApiWhoamiNode,
 
     # 02 Collections
     "ZMongoApiListCollectionsNode": ZMongoApiListCollectionsNode,
@@ -1841,9 +1761,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     # "ZMongoApiKeyOnlySessionNode": "00 API Key Session (Simplified)",
     # "ZMongoApiCloseSessionNode": "00 Close API Session",
 
-    # 01 Service
-    "ZMongoApiHealthNode": "01 Health",
-    "ZMongoApiWhoamiNode": "01 Who Am I",
+    # # 01 Service
+    # "ZMongoApiHealthNode": "00 Health",
+    # "ZMongoApiWhoamiNode": "00 Who Am I",
 
     # 02 Collections
     "ZMongoApiListCollectionsNode": "02 List Collections",

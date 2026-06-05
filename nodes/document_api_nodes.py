@@ -604,7 +604,7 @@ class ZMongoDocumentHealth(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "success", "refresh") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "health"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def health(self, session: Any, document_prefix: str, refresh_token: str = ""):
@@ -622,7 +622,7 @@ class ZMongoDocumentWhoAmI(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "username", "silo_db_name", "success", "refresh") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "whoami"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def whoami(self, session: Any, document_prefix: str, refresh_token: str = ""):
@@ -704,7 +704,7 @@ class ZMongoDocumentFilePathBrowser(AlwaysDirtyMixin):
     ) + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, False, False, False, False, True, True, False, False, False) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "resolve_file_path"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     @staticmethod
@@ -880,7 +880,7 @@ class ZMongoDocumentUploadFile(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "document_id", "document_id_link", "filename", "filename_link", "size_bytes", "success", "refresh", "document_ids", "filenames") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, False, False, False, True, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "upload_file"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def upload_file(self, session: Any, file_path: str, case_id: str, metadata_json: str, document_prefix: str, file_path_link: str = "", known_text: str = "", refresh_token: str = ""):
@@ -1086,7 +1086,7 @@ class ZMongoDocumentIngestTextFile(AlwaysDirtyMixin):
     ) + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, False, False, False, False, False, True, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "ingest_text_file"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def _nonfatal(
@@ -1384,7 +1384,7 @@ class ZMongoDocumentCreateText(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "document_id", "document_id_link", "filename", "filename_link", "text_length", "success", "refresh", "document_ids", "filenames") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, False, False, False, True, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "create_text_document"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def create_text_document(self, session: Any, filename: str, text: str, case_id: str, metadata_json: str, document_json: str, document_prefix: str, refresh_token: str = ""):
@@ -1419,7 +1419,7 @@ class ZMongoDocumentList(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "documents_json", "document_ids_json", "filenames_json", "first_document_id_link", "first_filename_link", "count", "success", "refresh", "document_ids", "filenames") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, False, False, False, False, True, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "list_documents"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def list_documents(self, session: Any, query_json: str, sort_json: str, limit: int, skip: int, include_file_data: bool, document_prefix: str, refresh_token: str = ""):
@@ -1448,7 +1448,7 @@ class ZMongoDocumentGet(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "document_id", "document_json", "text", "summary", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "get_document"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def get_document(self, session: Any, document_id: str, include_file_data: bool, document_prefix: str, document_id_link: str = "", refresh_token: str = ""):
@@ -1486,7 +1486,7 @@ class ZMongoDocumentGetText(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "text", "text_length", "success", "refresh", "text_items") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "get_text"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def _nonfatal_get_text_result(
@@ -1664,7 +1664,7 @@ class ZMongoDocumentFieldPaths(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "field_paths_json", "indexed_field_paths", "count", "success", "refresh", "field_paths") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "field_paths"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def _local_field_paths_fallback(
@@ -1780,7 +1780,7 @@ class ZMongoDocumentGetValue(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "value", "exists", "value_type", "refresh", "value_items") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "get_value"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def get_value(self, session: Any, document_id: str, field_path: str, fallback: str, document_prefix: str, document_id_link: str = "", field_path_link: str = "", refresh_token: str = ""):
@@ -1846,7 +1846,7 @@ class ZMongoDocumentSaveText(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "document_id", "text_length", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "save_text"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def save_text(self, session: Any, document_id: str, text: str, document_prefix: str, document_id_link: str = "", refresh_token: str = ""):
@@ -1878,7 +1878,7 @@ class ZMongoDocumentSaveValue(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "document_id", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "save_value"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def save_value(self, session: Any, document_id: str, field_path: str, value: str, parse_json: bool, normalize_for_storage: bool, document_prefix: str, document_id_link: str = "", field_path_link: str = "", refresh_token: str = ""):
@@ -1948,7 +1948,7 @@ class ZMongoDocumentUpdateMetadata(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "document_id", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "update_metadata"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def update_metadata(self, session: Any, document_id: str, metadata_json: str, case_id: str, status: str, title: str, description: str, tags_json: str, document_prefix: str, document_id_link: str = "", refresh_token: str = ""):
@@ -1982,7 +1982,7 @@ class ZMongoDocumentExtractText(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "text", "text_length", "success", "refresh", "text_items") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "extract_text"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def extract_text(self, session: Any, document_id: str, save: bool, document_prefix: str, document_id_link: str = "", refresh_token: str = ""):
@@ -2077,7 +2077,7 @@ class ZMongoDocumentQueueOCR(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "document_id", "status", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "queue_ocr"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def queue_ocr(self, session: Any, document_id: str, priority: int, source: str, document_prefix: str, document_id_link: str = "", refresh_token: str = ""):
@@ -2101,7 +2101,7 @@ class ZMongoDocumentOCRStatus(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "status", "has_text", "last_error", "success", "refresh", "status_items") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "ocr_status"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def ocr_status(self, session: Any, document_id: str, document_prefix: str, document_id_link: str = "", refresh_token: str = ""):
@@ -2125,7 +2125,7 @@ class ZMongoDocumentDelete(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "document_id", "success", "refresh", "document_ids") + SELECTABLE_RETURN_NAMES
     OUTPUT_IS_LIST = (False, False, False, False, True) + SELECTABLE_OUTPUT_IS_LIST
     FUNCTION = "delete_document"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     OUTPUT_NODE = True
 
     def delete_document(self, session: Any, document_id: str, confirm_delete: bool, document_prefix: str, document_id_link: str = "", refresh_token: str = ""):
@@ -2167,7 +2167,7 @@ class ZMongoDocumentSelectNthItem(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", ZMONGO_DOCUMENT_ID, ZMONGO_FIELD_PATH, ZMONGO_FILE_PATH, ZMONGO_FILENAME, ZMONGO_TEXT, "STRING")
     RETURN_NAMES = ("item", "document_id_link", "field_path_link", "file_path_link", "filename_link", "text_link", "status")
     FUNCTION = "select_nth_item"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     INPUT_IS_LIST = True
     OUTPUT_NODE = True
 
@@ -2372,7 +2372,7 @@ class ZMongoDocumentIndexSelector(AlwaysDirtyMixin):
         False,
     )
     FUNCTION = "select_indexes"
-    CATEGORY = "ZMongo/06 Documents"
+    CATEGORY = "ZMongo/03 Documents"
     INPUT_IS_LIST = True
     OUTPUT_NODE = True
 

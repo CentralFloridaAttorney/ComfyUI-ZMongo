@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from typing import Dict, Tuple
 
+# Register modules in the same numeric order used by the ComfyUI menu
+# categories.  This keeps the node search/menu grouping predictable when
+# ComfyUI builds the extension node registry.
+from . import zmongo_auth_nodes
 from . import zmongo_docs_collections_nodes
-from . import gemini_api_nodes
+from . import document_api_nodes
 from . import zmongo_image_nodes
 from . import zmongo_images_nodes
-from . import document_api_nodes
+from . import gemini_api_nodes
 from . import zmongo_preset_nodes
+from . import zmongo_content_pack_v3_nodes
 from . import zmongo_text_agent_nodes
 from . import zmongo_helper_nodes
 from . import motd_node
-from . import zmongo_auth_nodes
-from . import zmongo_drive_node
-from . import zmongo_content_pack_nodes
-from . import zmongo_content_pack_v3_nodes
-
 
 
 def _merge_node_mappings(
@@ -43,41 +43,61 @@ def _merge_node_mappings(
 
 
 NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
+    # 00 Session / Auth
     (
         "zmongo_auth_nodes",
         zmongo_auth_nodes.NODE_CLASS_MAPPINGS,
         zmongo_auth_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
+    # 01 Collections / 02 Docs
     (
-        "zmongo_image_nodes",
-        zmongo_image_nodes.NODE_CLASS_MAPPINGS,
-        zmongo_image_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+        "zmongo_docs_collections_nodes",
+        zmongo_docs_collections_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_docs_collections_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
-    (
-        "gemini_api_nodes",
-        gemini_api_nodes.NODE_CLASS_MAPPINGS,
-        gemini_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
-    ),
+    # 03 Documents
     (
         "document_api_nodes",
         document_api_nodes.NODE_CLASS_MAPPINGS,
         document_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
+    # 04 Images
+    (
+        "zmongo_image_nodes",
+        zmongo_image_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_image_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    # 05 Images
     (
         "zmongo_images_nodes",
         zmongo_images_nodes.NODE_CLASS_MAPPINGS,
         zmongo_images_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
+    # 06 Gemini / AI API
     (
-        "zmongo_preset_nodes",
-        zmongo_preset_nodes.NODE_CLASS_MAPPINGS,
-        zmongo_preset_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+        "gemini_api_nodes",
+        gemini_api_nodes.NODE_CLASS_MAPPINGS,
+        gemini_api_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
+    # 07 Text Agents
     (
         "zmongo_text_agent_nodes",
         zmongo_text_agent_nodes.NODE_CLASS_MAPPINGS,
         zmongo_text_agent_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
+    # 08 Presets
+    (
+        "zmongo_preset_nodes",
+        zmongo_preset_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_preset_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    # 09 Content Packs
+    (
+        "zmongo_content_pack_v3_nodes",
+        zmongo_content_pack_v3_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_content_pack_v3_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    # 99 Utility / Helpers
     (
         "zmongo_helper_nodes",
         zmongo_helper_nodes.NODE_CLASS_MAPPINGS,
@@ -87,26 +107,6 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         "motd_node",
         motd_node.NODE_CLASS_MAPPINGS,
         motd_node.NODE_DISPLAY_NAME_MAPPINGS,
-    ),
-    (
-        "zmongo_docs_collections_nodes",
-        zmongo_docs_collections_nodes.NODE_CLASS_MAPPINGS,
-        zmongo_docs_collections_nodes.NODE_DISPLAY_NAME_MAPPINGS,
-    ),
-    (
-        "zmongo_drive_node",
-        zmongo_drive_node.NODE_CLASS_MAPPINGS,
-        zmongo_drive_node.NODE_DISPLAY_NAME_MAPPINGS,
-    ),
-    (
-        "zmongo_content_pack_nodes",
-        zmongo_content_pack_nodes.NODE_CLASS_MAPPINGS,
-        zmongo_content_pack_nodes.NODE_DISPLAY_NAME_MAPPINGS,
-    ),
-    (
-        "zmongo_content_pack_v3_nodes",
-        zmongo_content_pack_v3_nodes.NODE_CLASS_MAPPINGS,
-        zmongo_content_pack_v3_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
 )
 

@@ -1021,16 +1021,66 @@ class ZMongoApiCloseSessionNode(AlwaysDirtyMixin):
             return (_json_text(_error_payload(str(exc))),)
 
 
+class ZMongoApiHealthNode(AlwaysDirtyMixin):
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {"session": ("ZMONGO_API_SESSION",)},
+            "optional": {"refresh_token": ("STRING", {"default": ""})},
+        }
+
+    RETURN_TYPES = ("STRING", "BOOLEAN")
+    RETURN_NAMES = ("json", "success")
+    FUNCTION = "health"
+    CATEGORY = "ZMongo/00 Auth"
+
+    def health(self, session, refresh_token: str = ""):
+        if session is None:
+            payload = _error_payload("No session provided.")
+            return (_json_text(payload), False)
+        payload = session.health()
+        return (_json_text(payload), bool(payload.get("success")))
+
+
+class ZMongoApiWhoamiNode(AlwaysDirtyMixin):
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {"session": ("ZMONGO_API_SESSION",)},
+            "optional": {"refresh_token": ("STRING", {"default": ""})},
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("json", "username", "db_name", "success")
+    FUNCTION = "whoami"
+    CATEGORY = "ZMongo/00 Auth"
+
+    def whoami(self, session, refresh_token: str = ""):
+        if session is None:
+            payload = _error_payload("No session provided.")
+            return (_json_text(payload), "", "", False)
+
+        payload = session.whoami()
+        data = payload.get("data", {}) if isinstance(payload, dict) else {}
+        username = str(data.get("username") or "") if isinstance(data, dict) else ""
+        db_name = str(data.get("silo_db_name") or data.get("db_name") or "") if isinstance(data, dict) else ""
+        return (_json_text(payload), username, db_name, bool(payload.get("success")))
+
+
 NODE_CLASS_MAPPINGS = {
     "ZMongoApiKeyOnlySessionNode": ZMongoApiKeyOnlySessionNode,
     "ZMongoLocalFileStoreSessionNode": ZMongoLocalFileStoreSessionNode,
     "ZMongoApiCloseSessionNode": ZMongoApiCloseSessionNode,
+    "ZMongoApiHealthNode": ZMongoApiHealthNode,
+    "ZMongoApiWhoamiNode": ZMongoApiWhoamiNode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoApiKeyOnlySessionNode": "00 API Key Session",
     "ZMongoLocalFileStoreSessionNode": "00 Local File Store Session",
     "ZMongoApiCloseSessionNode": "00 Close Session",
+    "ZMongoApiHealthNode": "00 Health",
+    "ZMongoApiWhoamiNode": "00 Who Am I",
 }
 
 __all__ = [

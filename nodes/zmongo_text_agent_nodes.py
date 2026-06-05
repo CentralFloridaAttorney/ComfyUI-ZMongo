@@ -25,8 +25,8 @@ from .generic_helpers import (
 )
 
 
-TEXT_AGENT_CATEGORY = "ZMongo/06 Text Agents"
-DEFAULT_MODEL = "gemini-2.5-flash"
+TEXT_AGENT_CATEGORY = "ZMongo/07 Text Agents"
+DEFAULT_MODEL = "gemini-3.5-flash"
 DEFAULT_MEMORY_COLLECTION = "text_agent_memory"
 DEFAULT_LEDGER_COLLECTION = "text_agent_ledger"
 DEFAULT_CAPSULE_COLLECTION = "text_agent_capsules"
@@ -1498,17 +1498,17 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ZMongoTextAgentSessionNode": "08 Text Agent Session",
-    "ZMongoSavePromptMemoryNode": "08 Save Prompt Memory",
-    "ZMongoLoadMemoryCapsuleNode": "08 Load Memory Capsule",
-    "ZMongoBuildContextPackNode": "08 Build Context Pack",
-    "ZMongoPromptCriticNode": "08 Prompt Critic",
-    "ZMongoPromptEvolverNode": "08 Prompt Evolver",
-    "ZMongoBestVariantSelectorNode": "08 Best Variant Selector",
-    "ZMongoPromptProvenanceLedgerNode": "08 Save Prompt Provenance Ledger",
-    "ZMongoFindSimilarSuccessfulPromptsNode": "08 Find Similar Successful Prompts",
-    "ZMongoCaptionPackGeneratorNode": "08 Caption Pack Generator",
-    "ZMongoWorkflowDocumentationAgentNode": "08 Workflow Documentation Agent",
+    "ZMongoTextAgentSessionNode": "10 Text Agent Session",
+    "ZMongoSavePromptMemoryNode": "10 Save Prompt Memory",
+    "ZMongoLoadMemoryCapsuleNode": "10 Load Memory Capsule",
+    "ZMongoBuildContextPackNode": "10 Build Context Pack",
+    "ZMongoPromptCriticNode": "10 Prompt Critic",
+    "ZMongoPromptEvolverNode": "10 Prompt Evolver",
+    "ZMongoBestVariantSelectorNode": "10 Best Variant Selector",
+    "ZMongoPromptProvenanceLedgerNode": "10 Save Prompt Provenance Ledger",
+    "ZMongoFindSimilarSuccessfulPromptsNode": "10 Find Similar Successful Prompts",
+    "ZMongoCaptionPackGeneratorNode": "10 Caption Pack Generator",
+    "ZMongoWorkflowDocumentationAgentNode": "10 Workflow Documentation Agent",
 }
 
 __all__ = [

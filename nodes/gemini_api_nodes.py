@@ -102,7 +102,7 @@ class GeminiApiKeyStatusNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "BOOLEAN", "STRING")
     RETURN_NAMES = ("json", "has_key", "masked_key")
     FUNCTION = "key_status"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def key_status(self, session, gemini_prefix: str = DEFAULT_GEMINI_PREFIX, refresh_token: str = ""):
         payload = _gemini_request(session, "GET", "/api/key/status", gemini_prefix=gemini_prefix)
@@ -126,7 +126,7 @@ class GeminiSaveApiKeyNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "BOOLEAN", "STRING")
     RETURN_NAMES = ("json", "success", "masked_key")
     FUNCTION = "save_key"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def save_key(self, session, gemini_api_key: str, gemini_prefix: str = DEFAULT_GEMINI_PREFIX):
         body = {"gemini_api_key": (gemini_api_key or "").strip()}
@@ -147,7 +147,7 @@ class GeminiDeleteApiKeyNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "BOOLEAN", "STRING")
     RETURN_NAMES = ("json", "success", "refresh")
     FUNCTION = "delete_key"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def delete_key(self, session, gemini_prefix: str = DEFAULT_GEMINI_PREFIX):
         token = _dirty_token("gemini_delete_key")
@@ -170,7 +170,7 @@ class GeminiTestApiKeyNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "BOOLEAN", "STRING")
     RETURN_NAMES = ("json", "success", "text")
     FUNCTION = "test_key"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def test_key(self, session, gemini_prefix: str = DEFAULT_GEMINI_PREFIX, model: str = "gemini-2.5-flash", refresh_token: str = ""):
         payload = _gemini_request(
@@ -204,7 +204,7 @@ class GeminiChatNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN")
     RETURN_NAMES = ("json", "text", "success")
     FUNCTION = "chat"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def chat(
         self,
@@ -257,7 +257,7 @@ class GeminiImageTextNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN", "STRING")
     RETURN_NAMES = ("json", "text", "success", "refresh")
     FUNCTION = "image_text"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     @staticmethod
     def _first_image_tensor(image: Any) -> Any:
@@ -468,7 +468,7 @@ class GeminiJsonNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN")
     RETURN_NAMES = ("json", "parsed_or_text", "success")
     FUNCTION = "generate_json"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def generate_json(
         self,
@@ -519,7 +519,7 @@ class GeminiListModelsNode(AlwaysDirtyMixin):
     RETURN_NAMES = ("json", "models", "indexed")
     OUTPUT_IS_LIST = (False, True, False)
     FUNCTION = "list_models"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def list_models(self, session, gemini_prefix: str = DEFAULT_GEMINI_PREFIX, refresh_token: str = ""):
         payload = _gemini_request(session, "GET", "/api/models", gemini_prefix=gemini_prefix)
@@ -546,7 +546,7 @@ class GeminiCountTokensNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "INT", "BOOLEAN")
     RETURN_NAMES = ("json", "token_count", "success")
     FUNCTION = "count_tokens"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def count_tokens(self, session, prompt: str, model: str = "gemini-2.5-flash", gemini_prefix: str = DEFAULT_GEMINI_PREFIX, refresh_token: str = ""):
         payload = _gemini_request(
@@ -600,7 +600,7 @@ class GeminiPromptFromZMongoDocNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN")
     RETURN_NAMES = ("json", "source_text", "gemini_text", "success")
     FUNCTION = "prompt_from_doc"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def prompt_from_doc(
         self,
@@ -691,7 +691,7 @@ class GeminiChatAndSaveToZMongoNode(AlwaysDirtyMixin):
     RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN")
     RETURN_NAMES = ("json", "gemini_text", "refresh", "success")
     FUNCTION = "chat_and_save"
-    CATEGORY = "ZMongo/05 Gemini"
+    CATEGORY = "ZMongo/06 Gemini"
 
     def chat_and_save(
         self,
