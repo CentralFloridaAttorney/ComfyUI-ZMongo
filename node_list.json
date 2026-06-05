@@ -1,0 +1,457 @@
+[
+  {
+    "title": "00 API Key Session",
+    "name": "ZMongoApiKeyOnlySessionNode",
+    "category": "ZMongo/00 Auth"
+  },
+  {
+    "title": "00 Local File Store Session",
+    "name": "ZMongoLocalFileStoreSessionNode",
+    "category": "ZMongo/00 Auth"
+  },
+  {
+    "title": "00 Close Session",
+    "name": "ZMongoApiCloseSessionNode",
+    "category": "ZMongo/00 Auth"
+  },
+  {
+    "title": "00 Health",
+    "name": "ZMongoApiHealthNode",
+    "category": "ZMongo/00 Auth"
+  },
+  {
+    "title": "00 Who Am I",
+    "name": "ZMongoApiWhoamiNode",
+    "category": "ZMongo/00 Auth"
+  },
+  {
+    "title": "02 List Collections",
+    "name": "ZMongoApiListCollectionsNode",
+    "category": "ZMongo/01 Collections"
+  },
+  {
+    "title": "02 Create Collection",
+    "name": "ZMongoApiCreateCollectionNode",
+    "category": "ZMongo/01 Collections"
+  },
+  {
+    "title": "02 Delete Collection",
+    "name": "ZMongoApiDeleteCollectionNode",
+    "category": "ZMongo/01 Collections"
+  },
+  {
+    "title": "03 List Docs",
+    "name": "ZMongoApiListDocsNode",
+    "category": "ZMongo/02 Docs"
+  },
+  {
+    "title": "03 Get Doc",
+    "name": "ZMongoApiGetDocNode",
+    "category": "ZMongo/02 Docs"
+  },
+  {
+    "title": "03 Query Docs",
+    "name": "ZMongoApiQueryDocsNode",
+    "category": "ZMongo/02 Docs"
+  },
+  {
+    "title": "03 Count Docs",
+    "name": "ZMongoApiCountDocsNode",
+    "category": "ZMongo/02 Docs"
+  },
+  {
+    "title": "03 Create Doc",
+    "name": "ZMongoApiCreateDocNode",
+    "category": "ZMongo/02 Docs"
+  },
+  {
+    "title": "03 Update Doc",
+    "name": "ZMongoApiUpdateDocNode",
+    "category": "ZMongo/02 Docs"
+  },
+  {
+    "title": "03 Delete Doc",
+    "name": "ZMongoApiDeleteDocNode",
+    "category": "ZMongo/02 Docs"
+  },
+  {
+    "title": "03 Get Value",
+    "name": "ZMongoApiGetValueNode",
+    "category": "ZMongo/02 Docs"
+  },
+  {
+    "title": "03 Save Value",
+    "name": "ZMongoApiSaveValueNode",
+    "category": "ZMongo/02 Docs"
+  },
+  {
+    "title": "06 Document Index Selector",
+    "name": "ZMongoDocumentIndexSelector",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Select Nth Document Item",
+    "name": "ZMongoDocumentSelectNthItem",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Document File Browser",
+    "name": "ZMongoDocumentFilePathBrowser",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Document API Health",
+    "name": "ZMongoDocumentHealth",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Document WhoAmI",
+    "name": "ZMongoDocumentWhoAmI",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Upload Document File",
+    "name": "ZMongoDocumentUploadFile",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Ingest Text PDF / DOCX",
+    "name": "ZMongoDocumentIngestTextFile",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Create Text Document",
+    "name": "ZMongoDocumentCreateText",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 List Documents",
+    "name": "ZMongoDocumentList",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Get Document",
+    "name": "ZMongoDocumentGet",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Get Document Text",
+    "name": "ZMongoDocumentGetText",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Document Field Paths",
+    "name": "ZMongoDocumentFieldPaths",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Get Document Value",
+    "name": "ZMongoDocumentGetValue",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Save Document Text",
+    "name": "ZMongoDocumentSaveText",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Save Document Value",
+    "name": "ZMongoDocumentSaveValue",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Update Document Metadata",
+    "name": "ZMongoDocumentUpdateMetadata",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Extract Document Text",
+    "name": "ZMongoDocumentExtractText",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Queue Document OCR",
+    "name": "ZMongoDocumentQueueOCR",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Document OCR Status",
+    "name": "ZMongoDocumentOCRStatus",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "06 Delete Document",
+    "name": "ZMongoDocumentDelete",
+    "category": "ZMongo/03 Documents"
+  },
+  {
+    "title": "04 Display Image from ZMongo",
+    "name": "ZMongoDisplayImageNode",
+    "category": "ZMongo/04 Images"
+  },
+  {
+    "title": "04 Browse Collection Images",
+    "name": "ZMongoApiBrowseCollectionImagesNode",
+    "category": "ZMongo/04 Images"
+  },
+  {
+    "title": "04 Easy Save Image",
+    "name": "ZMongoApiEasySaveImageNode",
+    "category": "ZMongo/04 Images"
+  },
+  {
+    "title": "04 Debug Image Document",
+    "name": "ZMongoApiDocumentImageDebugNode",
+    "category": "ZMongo/04 Images"
+  },
+  {
+    "title": "04 Image Field Candidates",
+    "name": "ZMongoApiImageFieldCandidatesNode",
+    "category": "ZMongo/04 Images"
+  },
+  {
+    "title": "04 Metadata Flattened Paths",
+    "name": "ZMongoApiMetadataFlattenedPathsNode",
+    "category": "ZMongo/04 Images"
+  },
+  {
+    "title": "07 Save Image Sequence to ZMongo",
+    "name": "ZMongoSaveImageSequenceNode",
+    "category": "ZMongo/05 Image Sequences"
+  },
+  {
+    "title": "07 Load Image Sequence from ZMongo",
+    "name": "ZMongoLoadImageSequenceNode",
+    "category": "ZMongo/05 Image Sequences"
+  },
+  {
+    "title": "05 Gemini Key Status",
+    "name": "GeminiApiKeyStatusNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Save Gemini API Key",
+    "name": "GeminiSaveApiKeyNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Delete Gemini API Key",
+    "name": "GeminiDeleteApiKeyNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Test Gemini API Key",
+    "name": "GeminiTestApiKeyNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Gemini Chat",
+    "name": "GeminiChatNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Gemini Image + Text",
+    "name": "GeminiImageTextNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Gemini JSON",
+    "name": "GeminiJsonNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Gemini List Models",
+    "name": "GeminiListModelsNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Gemini Count Tokens",
+    "name": "GeminiCountTokensNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Gemini Prompt from ZMongo Doc",
+    "name": "GeminiPromptFromZMongoDocNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "05 Gemini Chat and Save to ZMongo",
+    "name": "GeminiChatAndSaveToZMongoNode",
+    "category": "ZMongo/06 Gemini"
+  },
+  {
+    "title": "10 Text Agent Session",
+    "name": "ZMongoTextAgentSessionNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Save Prompt Memory",
+    "name": "ZMongoSavePromptMemoryNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Load Memory Capsule",
+    "name": "ZMongoLoadMemoryCapsuleNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Build Context Pack",
+    "name": "ZMongoBuildContextPackNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Prompt Critic",
+    "name": "ZMongoPromptCriticNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Prompt Evolver",
+    "name": "ZMongoPromptEvolverNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Best Variant Selector",
+    "name": "ZMongoBestVariantSelectorNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Save Prompt Provenance Ledger",
+    "name": "ZMongoPromptProvenanceLedgerNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Find Similar Successful Prompts",
+    "name": "ZMongoFindSimilarSuccessfulPromptsNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Caption Pack Generator",
+    "name": "ZMongoCaptionPackGeneratorNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "10 Workflow Documentation Agent",
+    "name": "ZMongoWorkflowDocumentationAgentNode",
+    "category": "ZMongo/07 Text Agents"
+  },
+  {
+    "title": "08 Save Preset By Node ID",
+    "name": "ZMongoSavePresetByNodeID",
+    "category": "ZMongo/08 Presets"
+  },
+  {
+    "title": "08 Load Preset",
+    "name": "ZMongoLoadPreset",
+    "category": "ZMongo/08 Presets"
+  },
+  {
+    "title": "08 Dynamic Preset Outputs",
+    "name": "ZMongoDynamicPresetOutputs",
+    "category": "ZMongo/08 Presets"
+  },
+  {
+    "title": "08 Preset Debug Info",
+    "name": "ZMongoPresetDebugInfo",
+    "category": "ZMongo/08 Presets"
+  },
+  {
+    "title": "09 ZMongo Content Pack Build",
+    "name": "ZMongoContentPackBuildV3",
+    "category": "ZMongo/09 Content Packs"
+  },
+  {
+    "title": "09 ZMongo Content Pack Add Image",
+    "name": "ZMongoContentPackAddImageV3",
+    "category": "ZMongo/09 Content Packs"
+  },
+  {
+    "title": "09 ZMongo Content Pack Alias Editor",
+    "name": "ZMongoContentPackAliasEditorV3",
+    "category": "ZMongo/09 Content Packs"
+  },
+  {
+    "title": "09 ZMongo Content Pack Save",
+    "name": "ZMongoContentPackSaveV3",
+    "category": "ZMongo/09 Content Packs"
+  },
+  {
+    "title": "09 ZMongo Content Pack Load",
+    "name": "ZMongoContentPackLoadV3",
+    "category": "ZMongo/09 Content Packs"
+  },
+  {
+    "title": "09 ZMongo Content Pack Manifest Preview",
+    "name": "ZMongoContentPackManifestPreviewV3",
+    "category": "ZMongo/09 Content Packs"
+  },
+  {
+    "title": "09 ZMongo Content Pack Get String",
+    "name": "ZMongoContentPackGetStringV3",
+    "category": "ZMongo/09 Content Packs/Get"
+  },
+  {
+    "title": "09 ZMongo Content Pack Get Int",
+    "name": "ZMongoContentPackGetIntV3",
+    "category": "ZMongo/09 Content Packs/Get"
+  },
+  {
+    "title": "09 ZMongo Content Pack Get Float",
+    "name": "ZMongoContentPackGetFloatV3",
+    "category": "ZMongo/09 Content Packs/Get"
+  },
+  {
+    "title": "09 ZMongo Content Pack Get Boolean",
+    "name": "ZMongoContentPackGetBooleanV3",
+    "category": "ZMongo/09 Content Packs/Get"
+  },
+  {
+    "title": "09 ZMongo Content Pack Get JSON",
+    "name": "ZMongoContentPackGetJSONV3",
+    "category": "ZMongo/09 Content Packs/Get"
+  },
+  {
+    "title": "09 ZMongo Content Pack Get Image",
+    "name": "ZMongoContentPackGetImageV3",
+    "category": "ZMongo/09 Content Packs/Get"
+  },
+  {
+    "title": "09 ZMongo Content Pack Get Selected",
+    "name": "ZMongoContentPackGetSelectedV3",
+    "category": "ZMongo/09 Content Packs/Get"
+  },
+  {
+    "title": "09 ZMongo Content Pack Export JSON File",
+    "name": "ZMongoContentPackExportJSONFileV3",
+    "category": "ZMongo/09 Content Packs/Portable"
+  },
+  {
+    "title": "09 ZMongo Content Pack Load JSON File",
+    "name": "ZMongoContentPackLoadJSONFileV3",
+    "category": "ZMongo/09 Content Packs/Portable"
+  },
+  {
+    "title": "09 ZMongo Content Pack JSON Text Loader",
+    "name": "ZMongoContentPackJSONTextLoaderV3",
+    "category": "ZMongo/09 Content Packs/Portable"
+  },
+  {
+    "title": "99 Select Nth Item",
+    "name": "ZMongoApiSelectNthItemNode",
+    "category": "ZMongo/99 Helpers"
+  },
+  {
+    "title": "99 Record Loop Manager",
+    "name": "ZMongoRecordLoopManagerNode",
+    "category": "ZMongo/99 Helpers"
+  },
+  {
+    "title": "99 JSON Pick",
+    "name": "ZMongoApiJsonPickNode",
+    "category": "ZMongo/99 Helpers"
+  },
+  {
+    "title": "ZMongo: Message of the Day",
+    "name": "ZMongoMotdDisplayNode",
+    "category": "ZMongo/99 Utility"
+  }
+]
