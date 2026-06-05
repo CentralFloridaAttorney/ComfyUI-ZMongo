@@ -1,794 +1,158 @@
-# ComfyUI-ZMongo
+# 🚀 ComfyUI-ZMongo
 
-[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+Welcome to **ComfyUI-ZMongo**, an advanced framework that transforms ComfyUI into an integrated production ecosystem. By decoupling hardcoded values from your workflow graph and offloading them into a centralized database layer, ZMongo allows you to utilize your database as a reusable parameter library, prompt hub, and structured asset store.
 
-**ComfyUI-ZMongo** is a ComfyUI custom node package for saving, loading, browsing, masking, and reusing workflow data through a ZMongo-style storage model.
-
-The project supports two practical storage modes:
-
-1. **Hosted ZMongo API mode** through `https://businessprocessapplications.com`.
-2. **Local File Store mode** for private testing, offline use, and portable local workflows.
-
-Both modes use the same workflow pattern: sessions, collections, document IDs, flattened dot-path fields, image fields, mask fields, metadata fields, saved values, and reloadable workflow assets.
+Whether you want to synchronize complex generation parameters across multiple local worker rigs, store structured prompt configurations, or build automated document ingestion pipelines driven by Large Language Models (LLMs), ComfyUI-ZMongo seamlessly bridges your visual graphs with database state management.
 
 ---
 
-### 🔐 ZMongo API Setup
-
-Create your account, generate an API key, and connect ComfyUI-ZMongo to hosted workflow storage.
-
-[🌐 **Open Business Process Applications** →](https://businessprocessapplications.com)
-
----
-
-## Quick Links: Official Workflows
-
-| Workflow | Preview | Download |
-|---|---|---|
-| Generate, Save, Load, Browse, and Verify Image | [![Generate, Save, Load, Browse, and Verify Image](example_workflows/zmongo_generate_save_load_image.jpg)](example_workflows/zmongo_generate_save_load_image.json) | [`zmongo_generate_save_load_image.json`](example_workflows/zmongo_generate_save_load_image.json) |
-| Get / Save Value | [![Get / Save Value](example_workflows/zmongo_get_save_value.jpg)](example_workflows/zmongo_get_save_value.json) | [`zmongo_get_save_value.json`](example_workflows/zmongo_get_save_value.json) |
-| Browse Image + Mask Collection | [![Browse Image + Mask Collection](example_workflows/zmongo_browse_image_mask_collection.jpg)](example_workflows/zmongo_browse_image_mask_collection.json) | [`zmongo_browse_image_mask_collection.json`](example_workflows/zmongo_browse_image_mask_collection.json) |
-| Dynamic Preset Features | [![Dynamic Preset Features](example_workflows/zmongo_preset_features.jpg)](example_workflows/zmongo_preset_features.json) | [`zmongo_preset_features.json`](example_workflows/zmongo_preset_features.json) |
-
-> The workflow screenshots are clickable. Click a screenshot to open/download the matching `.json` workflow.
+## 📌 Table of Contents
+* [🔑 00 Session / Auth](#-00-session--auth)
+* [📁 01 Collections & 02 Docs](#-01-collections--02-docs)
+* [📄 03 Documents](#-03-documents)
+* [🖼️ 04 Image & 05 Images](#-04-image--05-images)
+* [🧠 06 Gemini / AI API](#-06-gemini--ai-api)
+* [📦 07 Text Agents](#-07-text-agents)
+* [🎛️ 08 Presets](#-08-presets)
+* [🎒 09 Content Packs](#-09-content-packs)
+* [🛠️ Message of the Day (MOTD)](#-message-of-the-day-motd)
+* [⚙️ Installation & Setup](#-installation--setup)
 
 ---
 
-## Table of Contents
+## 🔑 00 Session / Auth
 
-1. [Current Status](#current-status)
-2. [Installation](#installation)
-3. [ZMongo Side Panel and API Key Setup](#zmongo-side-panel-and-api-key-setup)
-4. [Node Categories](#node-categories)
-5. [Core Concepts](#core-concepts)
-6. [Official Example Workflows](#official-example-workflows)
-7. [Workflow Instructions](#workflow-instructions)
-8. [Local File Store](#local-file-store)
-9. [Security Rules](#security-rules)
-10. [Troubleshooting](#troubleshooting)
-11. [Contributing](#contributing)
-12. [License](#license)
+Every enterprise data pipeline requires a secure, authenticated entry point. The initialization section provides nodes that securely bind local canvas memory to distant backend configurations using modern token infrastructure.
 
----
+[ ComfyUI Graph Grid ] ──► (00 API Key Session) ──► Secure Bearer Socket ──► Hosted Silo DB
 
-## Current Status
+### `00 API Key Session` (`ZMongoApiKeySessionNode`)
+The primary cryptographic gateway for your database sessions. It manages persistence, tracks transaction logging, and securely flows your authenticated session downstream to all other operational nodes.
+* **Inputs**:
+  * `base_url`: The address of your backend operational cluster (e.g., `https://businessprocessapplications.com`).
+  * `zai_api_key`: Your private security key fetched from your user management panel.
+  * `username`: Your explicit account identity for logging and telemetry data isolating your personal silo storage.
 
-ComfyUI-ZMongo provides a workflow-data layer for ComfyUI with hosted API support, local file storage, image persistence, mask persistence, prompt/value persistence, flattened dot-path browsing, and dynamic presets.
-
-### Main capabilities
-
-- Save generated or uploaded images to ZMongo-compatible documents.
-- Browse image collections as thumbnail batches directly inside ComfyUI.
-- Select a browsed image by index and reuse its `document_id` in downstream nodes.
-- Load saved images by `collection_name`, `document_id`, and `field_path`.
-- Save masks into the same document as their source image by using a separate mask field path such as `mask_data`.
-- Browse saved masks independently from saved images.
-- Save and retrieve arbitrary prompt or metadata values.
-- Browse collections, list documents, and extract flattened dot-path field names directly inside ComfyUI.
-- Delete selected documents with an explicit document-ID confirmation pattern.
-- Use **Dynamic Presets** to turn ComfyUI node settings into reusable workflow logic.
-- Save presets by node ID and dynamically rebuild output sockets from loaded preset data.
-- Use hosted storage through **BusinessProcessApplications.com** or private local storage through the local file store.
-- Use the ZMongo side panel to make API setup easier for end users.
+### `00 Who Am I` (`ZMongoApiWhoAmINode`)
+A network sanity-check block used to verify connection integrity. It pings the database server, validating active tokens, user access levels, and infrastructure connectivity statuses.
 
 ---
 
-## Installation
+## 📁 01 Collections & 02 Docs
 
-From the ComfyUI custom nodes directory:
+ZMongo groups data sets cleanly into distinct structural boundaries. These management tools provide full control over creating and managing collections (tables) and records directly within the node workspace.
+
+### `01 Create Collection` / `01 Delete Collection`
+Administrative schema nodes that allow you to stand up or drop custom dataset tables dynamically based on programmatic milestones or pipeline logic.
+
+### `02 Create Document` / `02 Delete Document`
+Saves or completely wipes out structured dictionary documents into target collections. Perfect for saving raw prompt structures, negative weights, and runtime configurations without typing a single line of raw code.
+
+---
+
+## 📄 03 Documents
+
+The **03 Documents** suite provides local file scanning, document text parsing across various extensions, sequence selection, and asynchronous server-side OCR processing.
+
+### 🔍 `03 Document File Browser` (`ZMongoDocumentFilePathBrowser`)
+Scans a target machine folder with customized folder depth and extension filters. It formats discovered paths into array lists designed for batch streaming.
+* **Supported Formats**: `.pdf`, `.docx`, `.txt`, `.md`, `.csv`, `.json`, `.log`, and `.rtf`.
+
+### 📥 `03 Ingest Text PDF / DOCX` (`ZMongoDocumentIngestTextFile`)
+Extracts text components from complex document files directly at the local system level. It maps extracted strings, line counts, and metadata configurations cleanly into document payloads.
+* **Layout Engines**: Employs `PyMuPDF` for advanced PDF element mapping and `python-docx` for parsing tabular text configurations.
+
+### 🔀 `03 Document Index Selector` (`ZMongoDocumentIndexSelector`)
+A versatile index-expression compiler that slices and filters multi-document list records with precision.
+* **Selection Syntax Examples**: 
+  * `3` — Extracts index number 3.
+  * `2-7` — Grabs an inclusive series of rows from index 2 to 7.
+  * `0,2,5` — Filters out a specified custom set.
+  * `*` or `all` — Passes the entire sequence uninterrupted.
+
+### 👁️ `03 Queue Document OCR` / `06 Document OCR Status`
+Schedules automated optical character recognition on the server backend for image-heavy documents or scanned media layers, outputting extraction tracking states and raw parsed text.
+
+### 📑 Extended Document Node Registry:
+* **`03 Upload Document File`**: Packages and uploads local asset payloads directly to server storage folders.
+* **`03 Create Text Document`**: Instantiates a fresh document entry populated directly with string variables.
+* **`03 List Documents`**: Returns structured collection metadata matching query arguments.
+* **`03 Get Document Text`**: Retrieves target strings using intelligent structure fallbacks.
+* **`03 Document Field Paths`**: Flattens deeply nested object trees into readable dot-notated list configurations.
+* **`03 Get Document Value` / `06 Save Document Value`**: Targets deep properties directly to mutate or extract specific fields.
+
+---
+
+## 🖼️ 04 Image & 05 Images
+
+These nodes turn your database into a centralized visual asset management layer, eliminating cluttered storage folders and preventing data loss when scaling across multiple machines.
+
+* **`04 Save Image to Field`**: Intercepts active pixel grids directly from rendering nodes, packages them into optimized binary array objects, and saves them within targeted records.
+* **`04 Load Image from Field`**: Resolves remote image pointers or binary fields and converts them into standard image tensors ready for immediate VAE decoding.
+* **`05 Images Batch Upload`**: Collects multiple workflow output frames simultaneously and streams them directly into web platform asset galleries.
+
+---
+
+## 🧠 06 Gemini / AI API
+
+Integrate advanced intelligence directly into your node graph to dynamically build prompt layouts, translate styles, and analyze imagery using state-of-the-art multimodal LLMs.
+
+* **`06 Gemini Chat`**: Establishes conversational prompt logic paths, feeding text fields into deep models to dynamically create high-fidelity generation instructions.
+* **`06 Gemini Flash`**: A lightweight inference option built for fast, low-latency processing tasks like parsing text or cleaning messy clip conditioning parameters.
+
+---
+
+## 📦 07 Text Agents
+
+Turn your text strings into active logic directors. The text agents layer extracts context from your documents to dynamically branch your execution pipeline.
+
+* **`07 Text Agent Router`**: Evaluates incoming text elements against complex logical conditions to automatically direct the active execution flow down different path branches based on string data.
+
+---
+
+## 🎛️ 08 Presets
+
+The **08 Presets** architecture frees your workspace from rigid, tangled parameter connections. Instead of routing endless wires for seeds, steps, samplers, and CFG scales across a massive grid, you can group an entire node's state into a named database preset.
+
+[ Target Node (e.g. KSampler ID: 14) ] ──► [ 08 Save Preset By Node ID ] ──► Unified DB Storage
+                                                                                    │
+[ Downstream Graph Mapping ] ◄── [ 08 Dynamic Preset Outputs ] ◄── [ 08 Load Preset ] ┘
+
+### 💾 `08 Save Preset By Node ID` (`ZMongoSavePresetByNodeID`)
+Inspects active node states at runtime using their unique canvas numeric ID. It captures every active input value, widget choice, slider property, and connection coordinate, saving them as a clean, standardized preset object.
+* **Dynamic Connection Flattening**: If the targeted node gets its values from an upstream link, the save node automatically traces the connection chain back to its source, resolving and saving the actual literal values.
+
+### 📂 `08 Load Preset` (`ZMongoLoadPreset`)
+Retrieves stored configuration configurations. It can read parameters from local JSON files, hosted cloud databases, or direct text block values, formatting them into an active preset payload.
+
+### 🔌 `08 Dynamic Preset Outputs` (`ZMongoDynamicPresetOutputs`)
+An automated output pin factory that parses structural preset entries and exposes them through sequential wildcard sockets (`out_00`, `out_01`, etc.) to map properties directly to downstream inputs.
+
+---
+
+## 🎒 09 Content Packs
+
+Content Packs expand on the preset system by bundling entire multi-node generation environments into unified assets. This allows you to store mixed production data—including images, structural strings, meta flags, and numeric generation configs—into Content Packs that can be easily shared across multiple projects.
+
+* **`09 Export Content Pack`**: Packages active generation parameters, text items, and images into Downloadable Content Packs, which can be dropped into a canvas to rehydrate the saved content.
+* **`09 Dynamic Content Pack Outputs`**: Automatically expands content pack array records back into sequential canvas links, provid a single, highly transportable database collection.ing a clean solution for building template-driven production pipelines.
+
+---
+
+## 🛠️ Message of the Day (MOTD)
+
+* **`Message Of The Day (MOTD)`**: Connects to infrastructure alerts, updating your canvas with package change logs and cluster status announcements.
+
+
+---
+## ⚙️ Installation & Setup
+
+To install the extension along with all advanced document extraction tools, clone the repository into your custom nodes directory and install dependencies inside your ComfyUI Python environment:
 
 ```bash
-cd /home/comfyui/comfy_build/ComfyUI/custom_nodes
-git clone https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git
+cd custom_nodes
+git clone [https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git](https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo.git)
 cd ComfyUI-ZMongo
-pip install -r requirements.txt
-```
 
-Restart ComfyUI after installation.
-
-For development from the project directory:
-
-```bash
-cd /home/comfyui/PycharmProjects/ComfyUI-ZMongo
-```
-
----
-
-## ZMongo Side Panel and API Key Setup
-
-> The ZMongo Side Panel gives users a fast way to connect ComfyUI to hosted ZMongo storage through **BusinessProcessApplications.com**.
-
-The side panel is designed to make API setup approachable for new users while still supporting serious workflow automation. Once connected, workflows can save images, masks, prompts, metadata, presets, documents, and reusable values to hosted ZMongo storage instead of keeping everything trapped inside one local ComfyUI session.
-
-### Why connect an API key?
-
-| Benefit | What it gives you |
-|---|---|
-| Persistent workflow data | Save images, masks, prompts, presets, metadata, and document values across sessions. |
-| Hosted access | Reuse ZMongo data from another ComfyUI install or machine. |
-| Cleaner workflows | Manage login/API setup through the side panel instead of hardcoding credentials. |
-| Better demos | Share workflows without embedding private API keys. |
-| Reusable automation | Store field paths like `image_data`, `mask_data`, `prompt.positive`, and preset names for repeatable pipelines. |
-
-### Recommended setup
-
-1. Open the **ZMongo Side Panel** in ComfyUI.
-2. Register or sign in through **BusinessProcessApplications.com**.
-3. Create or copy your API key.
-4. Connect the workflow to hosted ZMongo storage.
-5. Save images, masks, prompts, presets, and metadata through the API.
-
-For shared workflows, do **not** type a real API key directly into the workflow. Use the secure environment-variable session pattern when available:
-
-```bash
-export ZAI_API_KEY="your_real_api_key"
-export ZTAROT_USERNAME="your_username"
-```
-
-Then start ComfyUI from the same shell.
-
----
-
-## Node Categories
-
-| Category | Purpose | Main Nodes |
-|---|---|---|
-| `00 Auth` | Create local or hosted sessions. | Local File Store Session, API Key Only Session, Secure Env API Session, Close API Session. |
-| `01 Service` | Backend API checks. | Health, Who Am I. |
-| `02 Collections` | Browse and manage collections. | List Collections, Create Collection, Delete Collection. |
-| `03 Docs` | Work with core documents and values. | List Docs, Get Doc, Query Docs, Count Docs, Create Doc, Update Doc, Delete Doc, Save Value, Get Value. |
-| `04 Images` | Save, display, browse, and discover image documents. | Easy Save Image, Display Image from ZMongo, Browse Collection Images, Debug Image Document, Image Field Candidates, Metadata Flattened Paths. |
-| `04 Masks` | Store and browse masks alongside image documents. | Easy Save Image, Display Image from ZMongo, Browse Collection Images, ImageToMask, MaskToImage. |
-| `04 Presets` | Create and hydrate dynamic presets. | Save Preset By Node ID, Load Preset, Dynamic Preset Outputs, Preset Debug Info. |
-| `05 Gemini` | Generate AI prompts and structured responses. | Gemini Key Status, Save/Delete/Test Gemini API Key, Gemini Chat, Gemini JSON, List Models, Count Tokens, Prompt from ZMongo Doc, Chat and Save to ZMongo. |
-| `06 Documents` | Upload files, create text docs, and run OCR. | Document File Browser, Upload Document File, Create Text Document, Get Document Text, Extract Document Text, Queue Document OCR, Document OCR Status. |
-| `07 Image Sequences` | Handle sequential image batches. | Save Image Sequence to ZMongo, Load Image Sequence from ZMongo. |
-| `08 Presets/Convenience` | Quick access to standard presets. | KSampler Preset. |
-| `09 Discovery` | Inspect ComfyUI node schemas. | Discover Workflow Node Settings, Discover Node Schema. |
-| `99 Helpers` | Utility functions for lists, index selection, conditions, and JSON. | Select Nth Item, JSON Pick, Comfy Switch, String Contains. |
-
----
-
-## Core Concepts
-
-### Sessions
-
-Every ZMongo workflow starts with a session. The current example workflows use a session switch so the same graph can run against either hosted API storage or the local file store.
-
-| Session | Best use |
-|---|---|
-| `ZMongoLocalFileStoreSessionNode` | Offline testing, local-only workflows, and demos that should not require credentials. |
-| `ZMongoApiKeyOnlySessionNode` | Hosted API testing with an explicit API key. |
-| Secure environment session | Public/shareable workflows where credentials should come from environment variables instead of serialized widgets. |
-
-### Collections and Documents
-
-A collection is a logical bucket of documents, such as:
-
-```text
-images
-image_sequences
-workflow_presets
-```
-
-A document is a single stored record selected by a unique `document_id`.
-
-### Flattened Dot Paths
-
-ComfyUI-ZMongo uses dot-separated paths to save and retrieve nested values.
-
-Examples:
-
-```text
-image_data
-mask_data
-prompt.positive
-metadata.note
-workflow.status
-```
-
-For image workflows, use the public image field:
-
-```text
-image_data
-```
-
-For mask workflows, use a separate mask field:
-
-```text
-mask_data
-```
-
-Do not use `image_data.data` as the main public field path. That is an internal binary-envelope member.
-
-### Image + Mask Documents
-
-A single document can hold both an image and a mask:
-
-```text
-image_data  -> original or generated image
-mask_data   -> associated mask image
-```
-
-The browse-mask workflow demonstrates saving `mask_data` into the selected image document, then browsing it as a separate visual collection view.
-
-### Local Storage vs API Storage
-
-Use **Local File Store** when testing workflows privately on one machine or working offline.
-
-Use **API Storage** when you want data saved through your hosted Business Process Applications account and available beyond one local ComfyUI install.
-
-### Dynamic Presets
-
-Dynamic presets let a workflow save node settings as named presets, load them later, and rebuild output sockets that can connect back into live ComfyUI nodes.
-
-This allows workflows to switch between settings like:
-
-```text
-draft_fast
-final_quality
-condition_1
-condition_2
-```
-
----
-
-## Official Example Workflows
-
-The repository currently includes **four official example workflows**.
-
-Each screenshot below is clickable and opens/downloads the matching workflow JSON when viewed from GitHub or a Markdown renderer that supports relative links.
-
----
-
-### 1. Generate, Save, Load, Browse, and Verify Image
-
-[![ZMongo Generate, Save, Load, Browse, and Verify Image Workflow](example_workflows/zmongo_generate_save_load_image.jpg)](example_workflows/zmongo_generate_save_load_image.json)
-
-**Workflow file:** [`example_workflows/zmongo_generate_save_load_image.json`](example_workflows/zmongo_generate_save_load_image.json)  
-**Preview image:** [`example_workflows/zmongo_generate_save_load_image.jpg`](example_workflows/zmongo_generate_save_load_image.jpg)
-
-This workflow demonstrates the complete image round trip:
-
-1. Choose **API Storage** or **Local File Store**.
-2. Enter or select the target collection, usually `images`.
-3. Generate an image in ComfyUI.
-4. Save the generated image to ZMongo at `image_data`.
-5. Return the saved `document_id` and `refresh` token.
-6. Browse the collection as an image batch.
-7. Load the saved image back from ZMongo by `document_id` and `field_path`.
-8. Verify the result with a preview and optional local save.
-
-**Primary workflow groups**
-
-| Group | Purpose |
-|---|---|
-| `Instructions` | Explains the workflow purpose, required settings, and recommended use. |
-| `Select API or Local Storage` | Switches between hosted ZMongo and local file storage. |
-| `Enter Collection` | Sets the target collection name. |
-| `Image Generation Backend` | Generates the image using checkpoint, prompt, sampler, latent, and VAE decode nodes. |
-| `Image Save Backend` | Saves the generated image to ZMongo. |
-| `Generate & Save Image` | Shows the save result and returned document data. |
-| `Browse Collection` | Displays saved images from the selected collection. |
-
-**Important settings**
-
-```text
-collection_name: images
-field_path: image_data
-filename: zmongo_demo_generated.png
-doc_key: demo_generated_image
-```
-
----
-
-### 2. Get / Save Value Workflow
-
-[![ZMongo Get and Save Value Workflow](example_workflows/zmongo_get_save_value.jpg)](example_workflows/zmongo_get_save_value.json)
-
-**Workflow file:** [`example_workflows/zmongo_get_save_value.json`](example_workflows/zmongo_get_save_value.json)  
-**Preview image:** [`example_workflows/zmongo_get_save_value.jpg`](example_workflows/zmongo_get_save_value.jpg)
-
-This workflow demonstrates how to use ZMongo as a reusable prompt and metadata store:
-
-1. Choose **Local File Store** or hosted **API Storage**.
-2. List available collections.
-3. Select a collection by index.
-4. Upload or save an image into a new or existing document.
-5. List document IDs.
-6. Select a document ID.
-7. Load the saved image from the selected document.
-8. Save a text value, such as a positive prompt, to a dot-path field.
-9. List flattened field paths.
-10. Select a field path.
-11. Get the saved value and preview it.
-
-**Primary workflow groups**
-
-| Group | Purpose |
-|---|---|
-| `Select API or Local Storage` | Provides the session used by all ZMongo nodes. |
-| `Select Collection` | Lists collections and selects one by index. |
-| `Select document_id` | Lists and selects stored documents. |
-| `Update the image_data` | Saves an uploaded image to `image_data` on the selected document. |
-| `Load Image` | Loads the image from `image_data`. |
-| `Save Value to Positive Prompt` | Saves prompt text to a metadata field. |
-| `Select Value Field Path` | Lists and selects flattened dot-path fields. |
-| `Get Value of positive.prompt` | Retrieves the saved prompt value. |
-
-**Important settings**
-
-```text
-image field_path: image_data
-example value field_path: prompt.positive
-example value: A real life photograph of Scooby Doo and Shaggy! Where are the Scooby Snacks?
-```
-
----
-
-### 3. Browse Image + Mask Collection Workflow
-
-[![ZMongo Browse Image and Mask Collection Workflow](example_workflows/zmongo_browse_image_mask_collection.jpg)](example_workflows/zmongo_browse_image_mask_collection.json)
-
-**Workflow file:** [`example_workflows/zmongo_browse_image_mask_collection.json`](example_workflows/zmongo_browse_image_mask_collection.json)  
-**Preview image:** [`example_workflows/zmongo_browse_image_mask_collection.jpg`](example_workflows/zmongo_browse_image_mask_collection.jpg)
-
-This workflow demonstrates browsing image records, selecting a document, creating a mask from a selected image, saving the mask back into the same document, browsing mask fields, and optionally deleting the selected record.
-
-The workflow uses two field paths:
-
-```text
-image_data
-mask_data
-```
-
-**Primary workflow groups**
-
-| Group | Purpose |
-|---|---|
-| `Set Basic Values` | Defines shared `collection`, `image_field_path`, and `mask_field_path` values. |
-| `Select API or Local Storage` | Selects hosted API storage or local file storage. |
-| `1. Generate & Save New Image` | Generates and stores a new image in the selected collection. |
-| `2. Browse Images` | Displays a browsable thumbnail batch from `image_data`. |
-| `Select Image` | Selects a document from the image list by index. |
-| `Save Mask From Color` | Converts a selected color/channel into a mask and stores it at `mask_data`. |
-| `View Mask` | Loads and previews the saved mask. |
-| `Browse Masks` | Browses documents that contain mask data. |
-| `Delete Entire Record` | Deletes the selected document when the same `document_id` is provided as confirmation. |
-
-**Key nodes demonstrated**
-
-| Node | Purpose |
-|---|---|
-| `ZMongoApiBrowseCollectionImagesNode` | Browses image or mask fields as a visual batch and returns selected document metadata. |
-| `ZMongoDisplayImageNode` | Loads an image or mask field from a selected document. |
-| `ZMongoApiEasySaveImageNode` | Saves generated images and converted mask images to document fields. |
-| `ZMongoApiListDocsNode` | Lists documents and returns selectable IDs. |
-| `ZMongoApiSelectNthItemNode` | Selects a document ID from a list by index. |
-| `ZMongoApiDeleteDocNode` | Deletes a document after explicit confirmation. |
-| `ImageToMask` / `MaskToImage` | Converts between image and mask representations for storage and preview. |
-
-**Important settings**
-
-```text
-collection_name: images
-image field_path: image_data
-mask field_path: mask_data
-browse limit: 64
-thumbnail size: 512x512
-```
-
----
-
-### 4. Dynamic Preset Features Workflow
-
-[![ZMongo Dynamic Preset Features Workflow](example_workflows/zmongo_preset_features.jpg)](example_workflows/zmongo_preset_features.json)
-
-**Workflow file:** [`example_workflows/zmongo_preset_features.json`](example_workflows/zmongo_preset_features.json)  
-**Preview image:** [`example_workflows/zmongo_preset_features.jpg`](example_workflows/zmongo_preset_features.jpg)
-
-This workflow demonstrates dynamic preset storage for ComfyUI node settings. It saves KSampler settings as named presets, loads the selected preset, rebuilds dynamic output sockets, and applies the saved values back into the workflow.
-
-The example uses a text condition to choose between preset names:
-
-```text
-condition_1
-condition_2
-```
-
-The included condition check searches for the word:
-
-```text
-many
-```
-
-This allows a workflow to choose different settings based on plain text, such as switching from a fast render preset to a higher-step preset.
-
-**Primary workflow groups**
-
-| Group | Purpose |
-|---|---|
-| `0. Choose API or Local Storage` | Selects local or hosted preset storage. |
-| `1. Switch Conditions` | Parses text and switches between preset names. |
-| `2. Set KSampler Values for each Condition` | Saves and loads KSampler settings. |
-| `Backend` | Contains the checkpoint, prompts, sampler, latent, and VAE decode chain. |
-| `3. Final Actions` | Loads the preset, previews save/load results, and generates with the selected preset. |
-
-**Preset workflow nodes**
-
-| Node | Purpose |
-|---|---|
-| `ZMongoSavePresetByNodeID` | Saves the selected node's widget/input values as a named preset. |
-| `ZMongoLoadPreset` | Loads a saved preset by name. |
-| `ZMongoDynamicPresetOutputs` | Rebuilds usable dynamic outputs from the saved preset. |
-| `ComfySwitchNode` | Selects one preset name or another based on the parsed condition. |
-| `StringContains` | Checks whether the condition text contains the trigger word. |
-
-**Important settings**
-
-```text
-preset collection: workflow_presets
-example preset names: condition_1, condition_2
-target node example: KSampler
-example condition word: many
-```
-
----
-
-## Workflow Instructions
-
-### Workflow 1: Generate, Save, Load, Browse, and Verify Image
-
-Use this workflow when you want to prove the full ZMongo image loop works.
-
-#### Run order
-
-1. Open `zmongo_generate_save_load_image.json`.
-2. Choose storage mode:
-   - `API = False` for Local File Store.
-   - `API = True` for hosted ZMongo API.
-3. Set the collection name, normally:
-
-   ```text
-   images
-   ```
-
-4. Run the image-generation section.
-5. Run **Save Generated Image to ZMongo**.
-6. Inspect the JSON result and confirm:
-
-   ```text
-   success: true
-   document_id: present
-   ```
-
-7. Use the browse node to refresh and preview the collection.
-8. Run the ZMongo display/load node for the saved document.
-9. Confirm the loaded image matches the generated image.
-
-#### Expected result
-
-The workflow should create or update a document with this public field:
-
-```text
-image_data
-```
-
-The loaded image should appear through the ZMongo display node, and the browse node should show it in the collection thumbnail batch.
-
----
-
-### Workflow 2: Get / Save Value
-
-Use this workflow when you want to save and retrieve prompt text, metadata, tags, review notes, or any other simple document value.
-
-#### Run order
-
-1. Open `zmongo_get_save_value.json`.
-2. Choose Local File Store or hosted API storage.
-3. Run **List Collections**.
-4. Use **Select Collection Index** to pick the target collection.
-5. Choose or create a document.
-6. Use **Set Value to Save** to enter text.
-7. Save the text to:
-
-   ```text
-   prompt.positive
-   ```
-
-8. Run **List Field Paths**.
-9. Use **Select Field Path Index** to choose the saved field.
-10. Run **Get Value**.
-11. Confirm the retrieved value matches the saved value.
-
-#### Expected result
-
-The selected document should contain a stored value like:
-
-```json
-{
-  "prompt": {
-    "positive": "A saved prompt or metadata value."
-  }
-}
-```
-
----
-
-### Workflow 3: Browse Image + Mask Collection
-
-Use this workflow when you want to browse saved image documents, add mask data to selected records, browse masks, and remove selected test records.
-
-#### Run order
-
-1. Open `zmongo_browse_image_mask_collection.json`.
-2. Choose storage mode:
-   - `API = False` for Local File Store.
-   - `API = True` for hosted ZMongo API.
-3. Confirm the basic values:
-
-   ```text
-   collection: images
-   image field_path: image_data
-   mask field_path: mask_data
-   ```
-
-4. Generate and save a new image, or browse existing images.
-5. Use the selected image index to choose a document.
-6. Load the selected image from `image_data`.
-7. Convert the selected image/color region into a mask.
-8. Save the mask back to the same document at:
-
-   ```text
-   mask_data
-   ```
-
-9. Load and preview the mask.
-10. Browse the mask collection view.
-11. To delete a test record, pass the same selected `document_id` into both `document_id` and `confirm_document_id` on the delete node.
-
-#### Expected result
-
-The selected document should contain both the original image and the saved mask:
-
-```text
-image_data: stored image
-mask_data: stored mask
-```
-
-The mask should load through `ZMongoDisplayImageNode` and appear in the browse-mask thumbnail batch.
-
----
-
-### Workflow 4: Dynamic Preset Features
-
-Use this workflow when you want ComfyUI node settings to become reusable presets.
-
-#### Run order
-
-1. Open `zmongo_preset_features.json`.
-2. Choose Local File Store or API storage.
-3. Enter condition text.
-4. Use the `StringContains` node to test for the word:
-
-   ```text
-   many
-   ```
-
-5. Save one preset as:
-
-   ```text
-   condition_1
-   ```
-
-6. Change the target KSampler values.
-7. Save another preset as:
-
-   ```text
-   condition_2
-   ```
-
-8. Run **Load Preset**.
-9. Run **Dynamic Preset Outputs**.
-10. Connect dynamic outputs to matching target node inputs where needed.
-11. Generate the image.
-
-#### Expected result
-
-The workflow should switch between saved KSampler settings based on condition text.
-
-Example:
-
-```text
-"render steps"       -> condition_1
-"render many steps"  -> condition_2
-```
-
----
-
-## Local File Store
-
-`00 Local File Store Session` is intended for offline/private testing and should use the actual local file store backend.
-
-The local file store should support the same ZMongo-style operations used by the normal API session:
-
-```text
-list_collections
-create_collection
-delete_collection
-list_docs
-get_doc
-query_docs
-count_docs
-create_doc
-update_doc
-delete_doc
-save_value
-fetch_image_field
-```
-
-Expected local storage structure:
-
-```text
-ComfyUI-ZMongo/local_store/
-  manifest.json
-  collections/
-    images/
-      local_....document.json
-    workflow_presets/
-      local_....document.json
-```
-
-### Recommended local test
-
-Use `zmongo_generate_save_load_image.json` first.
-
-If the local store is working, the workflow should:
-
-1. Save a generated image into `local_store/collections/images/`.
-2. Return a `document_id`.
-3. Load the image back from the same document.
-4. Show the verified image in the workflow.
-5. Show the saved image in the collection browser.
-
-Use `zmongo_browse_image_mask_collection.json` next to confirm that image and mask fields can coexist in the same stored document.
-
----
-
-## Security Rules
-
-Do **not** type a real API key into a workflow that will be shared, published, or committed to Git.
-
-ComfyUI saves widget values into workflow JSON. If a session node exposes an API key or username as a visible widget, those values can be serialized into the workflow file.
-
-For public workflows, use the secure environment-variable session node when available:
-
-```text
-00 Secure Env API Session
-```
-
-Use the manual API key node only for private debugging.
-
----
-
-## Troubleshooting
-
-### Authentication fails
-
-Confirm your username, API key, and `comfy_zmongo_prefix`.
-
-Recommended prefix:
-
-```text
-/comfy-zmongo
-```
-
-If issues persist, use the ZMongo sidebar panel to re-authenticate and copy a fresh key.
-
-### API key appears in workflow JSON
-
-Use `00 Secure Env API Session` instead of entering credentials into visible widgets. Remove any saved secrets from existing workflows before publishing.
-
-### Local File Store does not save
-
-Check that the workflow uses:
-
-```text
-00 Local File Store Session
-```
-
-Then check for files under:
-
-```text
-ComfyUI-ZMongo/local_store/collections/
-```
-
-If nothing is created, confirm the installed node file is the updated version where `00 Local File Store Session` uses the actual `LocalFileStore` backend.
-
-### Image browse node does not update
-
-Use the `refresh` output from the save node, or manually change the browse node's `refresh_token` value. Also confirm these fields:
-
-```text
-collection_name: images
-field_path: image_data
-```
-
-### Mask browse node does not show anything
-
-Confirm the selected document actually has a mask saved at:
-
-```text
-mask_data
-```
-
-Then run the mask browse node with:
-
-```text
-field_path: mask_data
-```
-
-### Field path save fails
-
-Ensure you are using a writable path such as:
-
-```text
-prompt.positive
-metadata.note
-image_data
-mask_data
-```
-
-Do not write to protected identity fields like:
-
-```text
-_id
-document_id
-created_at
-username
-owner
-```
-
-### Delete record does not run
-
-The delete node uses an intentional confirmation pattern. The selected document ID must be supplied to both fields:
-
-```text
-document_id
-confirm_document_id
-```
-
-This helps prevent accidental deletion while testing browse workflows.
-
-### Workflow image does not show in README
-
-Make sure the image path and workflow path match exactly:
-
-```text
-example_workflows/zmongo_generate_save_load_image.jpg
-example_workflows/zmongo_generate_save_load_image.json
-example_workflows/zmongo_get_save_value.jpg
-example_workflows/zmongo_get_save_value.json
-example_workflows/zmongo_browse_image_mask_collection.jpg
-example_workflows/zmongo_browse_image_mask_collection.json
-example_workflows/zmongo_preset_features.jpg
-example_workflows/zmongo_preset_features.json
-```
-
-Linux paths are case-sensitive.
-
----
-
-## Contributing
-
-- Fork the repository and submit pull requests for bug fixes or new nodes.
-- Follow the node category naming convention: `ZMongo/XX Category`.
-- Add workflow screenshots and clickable workflow links for new example workflows.
-- Keep image, mask, and preset examples in `example_workflows/`.
-- Do not commit real API keys, usernames, or private backend credentials.
-
----
-
-## License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+# Install required processing libraries
+pip install pymupdf python-docx requests python-dotenv
