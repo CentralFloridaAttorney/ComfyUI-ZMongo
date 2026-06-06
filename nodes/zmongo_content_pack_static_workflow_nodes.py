@@ -180,7 +180,12 @@ class AnyType(str):
 ANY_TYPE = AnyType("*")
 MAX_STATIC_OUTPUTS = 64
 SUPPORTED_OUTPUT_TYPES = {"STRING", "INT", "FLOAT", "BOOLEAN", "IMAGE", "JSON", "ANY"}
-
+STATIC_SCHEMA_KIND = "zmongo_static_values_pack"
+CATEGORY = "ZMongo/Content Packs/V3/Static Workflow"
+FUNCTION = "static_outputs"
+RETURN_TYPES = tuple([ANY_TYPE] * MAX_STATIC_OUTPUTS)
+RETURN_NAMES = tuple([f"out_{index:02d}" for index in range(MAX_STATIC_OUTPUTS)])
+OUTPUT_IS_LIST = tuple([False] * MAX_STATIC_OUTPUTS)
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -190,6 +195,32 @@ def _safe_filename_stem(value: Any, fallback: str = "content_pack_static_workflo
     text = _safe_str(value) or fallback
     text = re.sub(r"[^A-Za-z0-9_.-]+", "_", text).strip("._-")
     return text or fallback
+
+
+def _parse_json_local(value: Any, default: Any = None) -> Any:
+    """
+    Local JSON parser used by the static workflow exporter.
+
+    This intentionally stays local to this module because the exporter may be
+    imported with or without the full content-pack builder helpers available.
+    """
+    if default is None:
+        default = {}
+
+    if isinstance(value, (dict, list)):
+        return value
+
+    if value is None:
+        return default
+
+    text = _safe_str(value)
+    if not text:
+        return default
+
+    try:
+        return json.loads(text)
+    except Exception:
+        return default
 
 
 def _empty_image(width: int = 1, height: int = 1) -> Any:
@@ -445,6 +476,7 @@ def _make_static_content_pack_workflow(flat_pack: dict[str, Any], *, node_title:
             {
                 "id": 1,
                 "type": "ZMongoContentPackStaticOutputsV3",
+                "class_type": "ZMongoContentPackStaticOutputsV3",
                 "pos": [640, 360],
                 "size": [520, max(260, 120 + 28 * min(len(flat_pack.get("fields", [])), MAX_STATIC_OUTPUTS))],
                 "flags": {},
@@ -479,14 +511,23 @@ def _make_static_content_pack_workflow(flat_pack: dict[str, Any], *, node_title:
 
 
 class ZMongoContentPackStaticOutputsV3(AlwaysDirtyMixin):
-    """Static workflow node that exposes one output per embedded content-pack field.
+    """
+    Static values-only node.
 
-    The companion JS reads content_pack_json and relabels/hides the fixed backend
-    outputs so the workflow opens with appropriately typed output sockets.
+    The exported workflow embeds a static values_json object containing only:
+
+        values[].name
+        values[].type
+        values[].value
+
+    The backend exposes a fixed number of wildcard outputs so ComfyUI can
+    register the node. The companion JS renames/types/hides outputs from
+    values_json when the workflow opens.
     """
 
     CATEGORY = "ZMongo/Content Packs/V3/Static Workflow"
     FUNCTION = "static_outputs"
+
     RETURN_TYPES = tuple([ANY_TYPE] * MAX_STATIC_OUTPUTS)
     RETURN_NAMES = tuple([f"out_{index:02d}" for index in range(MAX_STATIC_OUTPUTS)])
     OUTPUT_IS_LIST = tuple([False] * MAX_STATIC_OUTPUTS)
@@ -495,30 +536,80 @@ class ZMongoContentPackStaticOutputsV3(AlwaysDirtyMixin):
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "content_pack_json": ("STRING", {"default": "{}", "multiline": True}),
-            },
-            "optional": {
-                "refresh_token": ("STRING", {"default": ""}),
-                "session": ("ZMONGO_API_SESSION",),
-                "master_key_hex": ("STRING", {"default": ""}),
-            },
+                "values_json": ("STRING", {"default": "{}", "multiline": True}),
+            }
         }
 
-    def static_outputs(self, content_pack_json: str = "{}", refresh_token: str = "", session: Any = None, master_key_hex: str = ""):
+    @classmethod
+    def IS_CHANGED(cls, *args: Any, **kwargs: Any) -> float:
+        return time.time()
+
+    def static_outputs(self, values_json: str = "{}"):
         try:
-            flat_pack = _flatten_content_pack_for_static_outputs(content_pack_json)
-            fields = [field for field in flat_pack.get("fields", []) if isinstance(field, dict)]
+            static_pack = _parse_json_local(values_json, default={})
+            values = static_pack.get("values") if isinstance(static_pack, dict) else []
+            if not isinstance(values, list):
+                values = []
 
-            values: list[Any] = []
+            out: list[Any] = []
+
             for index in range(MAX_STATIC_OUTPUTS):
-                if index < len(fields):
-                    values.append(_extract_static_value(fields[index], session=session, master_key_hex=master_key_hex))
-                else:
-                    values.append("")
+                if index >= len(values):
+                    out.append("")
+                    continue
 
-            return tuple(values[:MAX_STATIC_OUTPUTS])
+                item = values[index] if isinstance(values[index], dict) else {}
+                comfy_type = _normalize_type(item.get("type"), "ANY")
+                value = item.get("value")
+
+                if comfy_type == "STRING":
+                    if isinstance(value, str):
+                        out.append(value)
+                    elif isinstance(value, (dict, list)):
+                        out.append(_json_dumps(value, pretty=False))
+                    else:
+                        out.append(_safe_str(value))
+
+                elif comfy_type == "INT":
+                    try:
+                        out.append(int(float(value)))
+                    except Exception:
+                        out.append(0)
+
+                elif comfy_type == "FLOAT":
+                    try:
+                        out.append(float(value))
+                    except Exception:
+                        out.append(0.0)
+
+                elif comfy_type == "BOOLEAN":
+                    if isinstance(value, bool):
+                        out.append(value)
+                    else:
+                        out.append(_safe_str(value).lower() in {"1", "true", "yes", "on"})
+
+                elif comfy_type == "IMAGE":
+                    try:
+                        if isinstance(value, list):
+                            out.append(_image_sequence_to_batch_tensor(value))
+                        else:
+                            out.append(_image_bytes_to_tensor(_decode_image_bytes_from_value(value)))
+                    except Exception:
+                        out.append(_empty_image())
+
+                elif comfy_type == "JSON":
+                    out.append(_json_dumps(value))
+
+                else:
+                    out.append(value)
+
+            return tuple(out[:MAX_STATIC_OUTPUTS])
+
         except Exception:
-            return tuple(_typed_fallback_values_from_content_pack_json(content_pack_json))
+            fallback: list[Any] = []
+            while len(fallback) < MAX_STATIC_OUTPUTS:
+                fallback.append("")
+            return tuple(fallback)
 
 
 class ZMongoContentPackExportStaticWorkflowV3(AlwaysDirtyMixin):

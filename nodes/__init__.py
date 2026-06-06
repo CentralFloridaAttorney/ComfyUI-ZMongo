@@ -122,3 +122,10 @@ __all__ = [
     "NODE_CLASS_MAPPINGS",
     "NODE_DISPLAY_NAME_MAPPINGS",
 ]
+
+try:
+    from .zmongo_comfy_userdata_fallback import register_zmongo_comfy_userdata_fallbacks
+
+    register_zmongo_comfy_userdata_fallbacks()
+except Exception as exc:
+    print(f"[ZMongo] Failed to register userdata fallback routes: {exc}")
