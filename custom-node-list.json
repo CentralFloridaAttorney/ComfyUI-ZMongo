@@ -1,0 +1,10 @@
+{
+  "author": "CentralFloridaAttorney",
+  "title": "ComfyUI-ZMongo",
+  "reference": "https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo",
+  "files": [
+    "https://github.com/CentralFloridaAttorney/ComfyUI-ZMongo"
+  ],
+  "install_type": "git-clone",
+  "description": "ComfyUI-ZMongo provides API-key authenticated ZMongo persistence nodes for secure cloud and local workflow storage, documents, images, presets, Gemini workflows, dot-path saves, and dynamic workflow data loading."
+}
