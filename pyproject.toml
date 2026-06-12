@@ -59,7 +59,7 @@ embeddings = [
     "FlagEmbedding",
     "transformers>=4.40"
 ]
-full = [com
+full = [
     "motor>=3.4",
     "pymongo>=4.6",
     "quart>=0.19",
