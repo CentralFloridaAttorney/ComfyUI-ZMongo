@@ -2284,7 +2284,7 @@
   "groups": [
     {
       "id": 1,
-      "title": "09 \u2014 Prompt workflow integration / ZMongo prompt selector",
+      "title": "09 — Prompt workflow integration / ZMongo prompt selector",
       "bounding": [
         20,
         40,
@@ -2296,7 +2296,7 @@
     },
     {
       "id": 2,
-      "title": "09 \u2014 Advanced text-to-image: starts with no image",
+      "title": "09 — Advanced text-to-image: starts with no image",
       "bounding": [
         20,
         790,
@@ -2308,7 +2308,7 @@
     },
     {
       "id": 3,
-      "title": "09 \u2014 Prompt-based masked image modification / inpaint",
+      "title": "09 — Prompt-based masked image modification / inpaint",
       "bounding": [
         20,
         1480,
