@@ -1,0 +1,3387 @@
+{
+  "id": "373fb069-09d6-4897-ac31-30ec6bcb8b88",
+  "revision": 0,
+  "last_node_id": 44,
+  "last_link_id": 57,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "ZMongoLocalFileStoreSessionNode",
+      "pos": [
+        60,
+        120
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "local_store_root",
+          "name": "local_store_root",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "local_store_root"
+          }
+        },
+        {
+          "localized_name": "test_health",
+          "name": "test_health",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "test_health"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "slot_index": 0,
+          "links": [
+            1
+          ]
+        },
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": []
+        },
+        {
+          "localized_name": "status",
+          "name": "status",
+          "type": "STRING",
+          "slot_index": 2,
+          "links": []
+        }
+      ],
+      "title": "00 Local Store Session",
+      "properties": {
+        "Node name for S&R": "ZMongoLocalFileStoreSessionNode"
+      },
+      "widgets_values": [
+        "",
+        false
+      ]
+    },
+    {
+      "id": 2,
+      "type": "ZMongoApiKeyOnlySessionNode",
+      "pos": [
+        60,
+        300
+      ],
+      "size": [
+        330,
+        110
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "api_key",
+          "name": "api_key",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "api_key"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "slot_index": 0,
+          "links": [
+            2
+          ]
+        },
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": []
+        },
+        {
+          "localized_name": "status",
+          "name": "status",
+          "type": "STRING",
+          "slot_index": 2,
+          "links": []
+        }
+      ],
+      "title": "00 API Key Session - paste key here",
+      "properties": {
+        "Node name for S&R": "ZMongoApiKeyOnlySessionNode"
+      },
+      "widgets_values": [
+        ""
+      ]
+    },
+    {
+      "id": 3,
+      "type": "ComfySwitchNode",
+      "pos": [
+        450,
+        120
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "on_false",
+          "name": "on_false",
+          "type": "ZMONGO_API_SESSION",
+          "link": 1
+        },
+        {
+          "localized_name": "on_true",
+          "name": "on_true",
+          "type": "ZMONGO_API_SESSION",
+          "link": 2
+        },
+        {
+          "localized_name": "switch",
+          "name": "switch",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "switch"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "output",
+          "name": "output",
+          "type": "ZMONGO_API_SESSION",
+          "slot_index": 0,
+          "links": [
+            3,
+            19,
+            25,
+            30,
+            50,
+            55
+          ]
+        }
+      ],
+      "title": "API = True",
+      "properties": {
+        "Node name for S&R": "ComfySwitchNode"
+      },
+      "widgets_values": [
+        true
+      ]
+    },
+    {
+      "id": 4,
+      "type": "PrimitiveString",
+      "pos": [
+        60,
+        500
+      ],
+      "size": [
+        330,
+        90
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            4,
+            26,
+            51,
+            56
+          ]
+        }
+      ],
+      "title": "Prompt collection",
+      "properties": {
+        "Node name for S&R": "PrimitiveString"
+      },
+      "widgets_values": [
+        "prompts"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "ZMongoApiListDocsNode",
+      "pos": [
+        840,
+        120
+      ],
+      "size": [
+        330,
+        230
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 3
+        },
+        {
+          "localized_name": "collection_name",
+          "name": "collection_name",
+          "type": "STRING",
+          "link": 4,
+          "widget": {
+            "name": "collection_name"
+          }
+        },
+        {
+          "localized_name": "query_json",
+          "name": "query_json",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "query_json"
+          }
+        },
+        {
+          "localized_name": "limit",
+          "name": "limit",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "limit"
+          }
+        },
+        {
+          "localized_name": "skip",
+          "name": "skip",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "skip"
+          }
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "refresh_token"
+          },
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            6
+          ]
+        },
+        {
+          "localized_name": "ids",
+          "name": "ids",
+          "type": "*",
+          "slot_index": 1,
+          "links": [
+            5
+          ],
+          "shape": 6
+        },
+        {
+          "localized_name": "indexed",
+          "name": "indexed",
+          "type": "STRING",
+          "slot_index": 2,
+          "links": []
+        }
+      ],
+      "title": "List prompt documents",
+      "properties": {
+        "Node name for S&R": "ZMongoApiListDocsNode"
+      },
+      "widgets_values": [
+        "prompts",
+        "{}",
+        50,
+        0,
+        ""
+      ]
+    },
+    {
+      "id": 6,
+      "type": "ZMongoApiSelectNthItemNode",
+      "pos": [
+        1230,
+        120
+      ],
+      "size": [
+        330,
+        280
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "items_list",
+          "name": "items_list",
+          "type": "*",
+          "link": 5
+        },
+        {
+          "localized_name": "index",
+          "name": "index",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "index"
+          }
+        },
+        {
+          "localized_name": "fallback",
+          "name": "fallback",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "fallback"
+          }
+        },
+        {
+          "localized_name": "selection",
+          "name": "selection",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "selection"
+          }
+        },
+        {
+          "localized_name": "mode",
+          "name": "mode",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "mode"
+          }
+        },
+        {
+          "localized_name": "include_end",
+          "name": "include_end",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "include_end"
+          }
+        },
+        {
+          "localized_name": "dedupe",
+          "name": "dedupe",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "dedupe"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "item",
+          "name": "item",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            27,
+            52,
+            57
+          ]
+        },
+        {
+          "localized_name": "status",
+          "name": "status",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": []
+        },
+        {
+          "localized_name": "selected_items",
+          "name": "selected_items",
+          "type": "*",
+          "slot_index": 2,
+          "links": [],
+          "shape": 6
+        },
+        {
+          "localized_name": "selected_json",
+          "name": "selected_json",
+          "type": "STRING",
+          "slot_index": 3,
+          "links": []
+        },
+        {
+          "localized_name": "indexed_selected_items",
+          "name": "indexed_selected_items",
+          "type": "STRING",
+          "slot_index": 4,
+          "links": []
+        },
+        {
+          "localized_name": "count",
+          "name": "count",
+          "type": "INT",
+          "slot_index": 5,
+          "links": []
+        }
+      ],
+      "title": "Select prompt document_id",
+      "properties": {
+        "Node name for S&R": "ZMongoApiSelectNthItemNode"
+      },
+      "widgets_values": [
+        0,
+        "",
+        "",
+        "auto",
+        true,
+        true
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 7,
+      "type": "PreviewAny",
+      "pos": [
+        840,
+        390
+      ],
+      "size": [
+        420,
+        170
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "Preview prompt docs",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        false
+      ]
+    },
+    {
+      "id": 8,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        60,
+        690
+      ],
+      "size": [
+        420,
+        130
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "Prompt Designer: rough image concept",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "Describe the image you want to generate. Include subject, setting, mood, camera framing, lighting, and any important details."
+      ]
+    },
+    {
+      "id": 9,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        60,
+        860
+      ],
+      "size": [
+        420,
+        130
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "Prompt Designer: style / quality guidance",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "Realistic cinematic SDXL image, detailed environment, natural skin texture, coherent anatomy, strong composition, controlled lighting, no visible text."
+      ]
+    },
+    {
+      "id": 10,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        60,
+        1030
+      ],
+      "size": [
+        480,
+        180
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "Prompt Designer System Prompt",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "You are an expert SDXL / RealVisXL prompt designer for ComfyUI image generation.\n\nThe user will provide a rough image concept and optional quality/style/composition guidance. Your task is to produce one improved positive prompt for a still-image generation workflow using RealVisXL / SDXL.\n\nRules:\n- Output only the final positive prompt.\n- Do not use markdown, headings, JSON, or explanations.\n- Keep the prompt as one clean paragraph.\n- Make the result specific, visually coherent, and easy for SDXL to follow.\n- Include subject, setting, composition, camera/lens cues, lighting, material/texture detail, color palette, mood, and quality language.\n- Avoid contradictions, overloaded token spam, and irrelevant style terms.\n- Do not include negative prompt terms.\n- Do not request text, logos, watermarks, captions, UI elements, or signatures unless explicitly required.\n"
+      ]
+    },
+    {
+      "id": 11,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        600,
+        690
+      ],
+      "size": [
+        450,
+        140
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            7
+          ]
+        }
+      ],
+      "title": "Manual / current positive prompt",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "A cinematic realistic portrait scene, masterpiece, best quality, detailed subject, rich environment, coherent composition, dramatic natural lighting, no text, no watermark"
+      ]
+    },
+    {
+      "id": 12,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        600,
+        870
+      ],
+      "size": [
+        450,
+        130
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            9
+          ]
+        }
+      ],
+      "title": "Manual negative prompt",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "low quality, blurry, distorted anatomy, extra limbs, malformed hands, bad face, text, captions, logo, watermark, signature, UI elements, jpeg artifacts, noisy, oversaturated, underexposed, overexposed, plastic skin, duplicate subject, cropped face"
+      ]
+    },
+    {
+      "id": 13,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        600,
+        1040
+      ],
+      "size": [
+        520,
+        160
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "09 Usage Instructions",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "Run the base image first. The workflow starts from EmptyLatentImage, so no source image is needed. After the base image is produced, the Gemini prompt designer can inspect it and save an improved next-run prompt into the selected prompt document. Use the mask branch by loading a black/white mask image: white edits, black preserves."
+      ]
+    },
+    {
+      "id": 14,
+      "type": "CheckpointLoaderSimple",
+      "pos": [
+        1230,
+        620
+      ],
+      "size": [
+        360,
+        100
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "ckpt_name",
+          "name": "ckpt_name",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "ckpt_name"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            11,
+            42
+          ]
+        },
+        {
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 1,
+          "links": [
+            8,
+            10,
+            36,
+            38
+          ]
+        },
+        {
+          "localized_name": "VAE",
+          "name": "VAE",
+          "type": "VAE",
+          "slot_index": 2,
+          "links": [
+            16,
+            40,
+            47
+          ]
+        }
+      ],
+      "title": "Checkpoint: RealVisXL default",
+      "properties": {
+        "Node name for S&R": "CheckpointLoaderSimple"
+      },
+      "widgets_values": [
+        "realvisxlV50_v50Bakedvae.safetensors"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "CLIPTextEncode",
+      "pos": [
+        1670,
+        610
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "link": 7
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 8
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            12
+          ]
+        }
+      ],
+      "title": "Encode positive prompt",
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 16,
+      "type": "CLIPTextEncode",
+      "pos": [
+        1670,
+        780
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "link": 9
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            13
+          ]
+        }
+      ],
+      "title": "Encode negative prompt",
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 17,
+      "type": "EmptyLatentImage",
+      "pos": [
+        1230,
+        790
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "height"
+          }
+        },
+        {
+          "localized_name": "batch_size",
+          "name": "batch_size",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            14
+          ]
+        }
+      ],
+      "title": "Start with no image: empty latent",
+      "properties": {
+        "Node name for S&R": "EmptyLatentImage"
+      },
+      "widgets_values": [
+        1024,
+        1024,
+        1
+      ]
+    },
+    {
+      "id": 18,
+      "type": "KSampler",
+      "pos": [
+        2080,
+        610
+      ],
+      "size": [
+        330,
+        320
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "localized_name": "steps",
+          "name": "steps",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "steps"
+          }
+        },
+        {
+          "localized_name": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "cfg"
+          }
+        },
+        {
+          "localized_name": "sampler_name",
+          "name": "sampler_name",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "sampler_name"
+          }
+        },
+        {
+          "localized_name": "scheduler",
+          "name": "scheduler",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "scheduler"
+          }
+        },
+        {
+          "localized_name": "denoise",
+          "name": "denoise",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "denoise"
+          }
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 11
+        },
+        {
+          "localized_name": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 12
+        },
+        {
+          "localized_name": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 13
+        },
+        {
+          "localized_name": "latent_image",
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            15
+          ]
+        }
+      ],
+      "title": "Base text-to-image sampler",
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        658545215294335,
+        30,
+        6.5,
+        "euler",
+        "normal",
+        1.0
+      ]
+    },
+    {
+      "id": 19,
+      "type": "VAEDecode",
+      "pos": [
+        2490,
+        610
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "samples",
+          "name": "samples",
+          "type": "LATENT",
+          "link": 15
+        },
+        {
+          "localized_name": "vae",
+          "name": "vae",
+          "type": "VAE",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            17,
+            18,
+            20,
+            31,
+            39
+          ]
+        }
+      ],
+      "title": "Decode base image",
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 20,
+      "type": "PreviewImage",
+      "pos": [
+        2880,
+        580
+      ],
+      "size": [
+        330,
+        220
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 17
+        }
+      ],
+      "outputs": [],
+      "title": "Preview base image",
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 21,
+      "type": "SaveImage",
+      "pos": [
+        2880,
+        830
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 20,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "filename_prefix"
+          }
+        },
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 18
+        }
+      ],
+      "outputs": [],
+      "title": "Save base image",
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "09_zmongo_base_image"
+      ]
+    },
+    {
+      "id": 22,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        1230,
+        1030
+      ],
+      "size": [
+        450,
+        130
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            21
+          ]
+        }
+      ],
+      "title": "Prompt Designer: next-run improvement request",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "Improve the prompt for the next run. Preserve the best parts of this image, correct weak areas, improve composition, lighting, anatomy, detail, realism, and make the result more coherent."
+      ]
+    },
+    {
+      "id": 23,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        1230,
+        1200
+      ],
+      "size": [
+        480,
+        170
+      ],
+      "flags": {},
+      "order": 22,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            22
+          ]
+        }
+      ],
+      "title": "Post-image Prompt Critic System Prompt",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "You are an expert ComfyUI prompt critic and prompt upgrader.\n\nThe user will provide the generated image and the original concept. Analyze whether the image matches the concept, then produce a better next-run positive prompt. Preserve what worked, correct weak composition, improve lighting, anatomy, style consistency, and scene specificity.\n\nRules:\n- Output only the improved next-run positive prompt.\n- Do not output critique, notes, markdown, headings, JSON, or explanations.\n- One paragraph only.\n- Make the prompt suitable for direct use in CLIPTextEncode.\n"
+      ]
+    },
+    {
+      "id": 24,
+      "type": "GeminiImageTextNode",
+      "pos": [
+        1840,
+        1030
+      ],
+      "size": [
+        360,
+        370
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 19
+        },
+        {
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "link": 20
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "link": 21,
+          "widget": {
+            "name": "prompt"
+          }
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "model"
+          }
+        },
+        {
+          "localized_name": "max_output_tokens",
+          "name": "max_output_tokens",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "max_output_tokens"
+          }
+        },
+        {
+          "localized_name": "temperature",
+          "name": "temperature",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "temperature"
+          }
+        },
+        {
+          "localized_name": "max_image_side",
+          "name": "max_image_side",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "max_image_side"
+          }
+        },
+        {
+          "localized_name": "jpeg_quality",
+          "name": "jpeg_quality",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "jpeg_quality"
+          }
+        },
+        {
+          "localized_name": "system_instruction",
+          "name": "system_instruction",
+          "type": "STRING",
+          "link": 22,
+          "widget": {
+            "name": "system_instruction"
+          },
+          "shape": 7
+        },
+        {
+          "localized_name": "gemini_prefix",
+          "name": "gemini_prefix",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "gemini_prefix"
+          },
+          "shape": 7
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "refresh_token"
+          },
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            23
+          ]
+        },
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            24,
+            28
+          ]
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "slot_index": 2,
+          "links": []
+        },
+        {
+          "localized_name": "refresh",
+          "name": "refresh",
+          "type": "STRING",
+          "slot_index": 3,
+          "links": []
+        }
+      ],
+      "title": "Gemini Prompt Designer: improve from base image",
+      "properties": {
+        "Node name for S&R": "GeminiImageTextNode"
+      },
+      "widgets_values": [
+        "Improve the prompt for the next run.",
+        "gemini-3.1-flash-image",
+        3000,
+        0.35,
+        1024,
+        85,
+        "You are an expert ComfyUI prompt critic and prompt upgrader.\n\nThe user will provide the generated image and the original concept. Analyze whether the image matches the concept, then produce a better next-run positive prompt. Preserve what worked, correct weak composition, improve lighting, anatomy, style consistency, and scene specificity.\n\nRules:\n- Output only the improved next-run positive prompt.\n- Do not output critique, notes, markdown, headings, JSON, or explanations.\n- One paragraph only.\n- Make the prompt suitable for direct use in CLIPTextEncode.\n",
+        "/gemini",
+        ""
+      ]
+    },
+    {
+      "id": 25,
+      "type": "PreviewAny",
+      "pos": [
+        2250,
+        1030
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 24,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 23
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "Preview Gemini prompt-designer JSON",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        false
+      ]
+    },
+    {
+      "id": 26,
+      "type": "PreviewAny",
+      "pos": [
+        2250,
+        1200
+      ],
+      "size": [
+        420,
+        200
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 24
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "Copy upgraded positive prompt from here",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        false
+      ]
+    },
+    {
+      "id": 27,
+      "type": "ZMongoApiSaveValueNode",
+      "pos": [
+        2730,
+        1030
+      ],
+      "size": [
+        360,
+        350
+      ],
+      "flags": {},
+      "order": 26,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 25
+        },
+        {
+          "localized_name": "collection_name",
+          "name": "collection_name",
+          "type": "STRING",
+          "link": 26,
+          "widget": {
+            "name": "collection_name"
+          }
+        },
+        {
+          "localized_name": "query_json",
+          "name": "query_json",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "query_json"
+          }
+        },
+        {
+          "localized_name": "document_id",
+          "name": "document_id",
+          "type": "STRING",
+          "link": 27
+        },
+        {
+          "localized_name": "field_path",
+          "name": "field_path",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "field_path"
+          }
+        },
+        {
+          "localized_name": "value_json",
+          "name": "value_json",
+          "type": "STRING",
+          "link": 28
+        },
+        {
+          "localized_name": "parse_value_json",
+          "name": "parse_value_json",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "parse_value_json"
+          }
+        },
+        {
+          "localized_name": "upsert_if_missing",
+          "name": "upsert_if_missing",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "upsert_if_missing"
+          }
+        },
+        {
+          "localized_name": "parse_json_strings",
+          "name": "parse_json_strings",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "parse_json_strings"
+          }
+        },
+        {
+          "localized_name": "normalize_for_storage",
+          "name": "normalize_for_storage",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "normalize_for_storage"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            29
+          ]
+        },
+        {
+          "localized_name": "refresh",
+          "name": "refresh",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": []
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "slot_index": 2,
+          "links": []
+        }
+      ],
+      "title": "Save upgraded positive prompt to selected prompt doc",
+      "properties": {
+        "Node name for S&R": "ZMongoApiSaveValueNode"
+      },
+      "widgets_values": [
+        "prompts",
+        "{}",
+        "",
+        "prompt.image_generation.sdxl.positive.upgraded",
+        "",
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "id": 28,
+      "type": "PreviewAny",
+      "pos": [
+        3140,
+        1030
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 27,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 29
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "Preview upgraded prompt save result",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        false
+      ]
+    },
+    {
+      "id": 29,
+      "type": "LoadImage",
+      "pos": [
+        1230,
+        1530
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 28,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGEUPLOAD",
+          "link": null,
+          "widget": {
+            "name": "image"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": []
+        },
+        {
+          "localized_name": "MASK",
+          "name": "MASK",
+          "type": "MASK",
+          "slot_index": 1,
+          "links": [
+            41
+          ]
+        }
+      ],
+      "title": "Load black/white edit mask",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "clipspace/clipspace-painted-masked.png [input]"
+      ]
+    },
+    {
+      "id": 30,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        1230,
+        1700
+      ],
+      "size": [
+        450,
+        150
+      ],
+      "flags": {},
+      "order": 29,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            32,
+            35
+          ]
+        }
+      ],
+      "title": "Masked edit request / manual edit prompt",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "Modify only the white masked region. Replace the masked area with the requested new detail while preserving all unmasked areas exactly, matching lighting, perspective, texture, color, and style."
+      ]
+    },
+    {
+      "id": 31,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        1230,
+        1890
+      ],
+      "size": [
+        450,
+        130
+      ],
+      "flags": {},
+      "order": 30,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            37
+          ]
+        }
+      ],
+      "title": "Masked edit negative prompt",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "do not alter unmasked areas, visible mask edges, seams, mismatched lighting, mismatched perspective, distorted anatomy, text, watermark, logo, blurry, low quality"
+      ]
+    },
+    {
+      "id": 32,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        1230,
+        2060
+      ],
+      "size": [
+        480,
+        170
+      ],
+      "flags": {},
+      "order": 31,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "value",
+          "name": "value",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            33
+          ]
+        }
+      ],
+      "title": "Masked Prompt Designer System Prompt",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "You are an expert prompt engineer for SDXL inpainting / masked image modification.\n\nThe user will provide the current image and a masked-edit instruction. Produce one inpainting prompt that changes only the masked region and preserves all unmasked areas.\n\nRules:\n- Output only the final masked-edit positive prompt.\n- Do not output markdown, headings, JSON, or explanations.\n- Include preservation language: modify only the masked region, seamless integration, matching lighting, matching perspective, matching texture.\n- Describe the replacement/addition clearly and avoid changing unmasked areas.\n"
+      ]
+    },
+    {
+      "id": 33,
+      "type": "GeminiImageTextNode",
+      "pos": [
+        1840,
+        1530
+      ],
+      "size": [
+        360,
+        370
+      ],
+      "flags": {},
+      "order": 32,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 30
+        },
+        {
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "link": 31
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "link": 32,
+          "widget": {
+            "name": "prompt"
+          }
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "model"
+          }
+        },
+        {
+          "localized_name": "max_output_tokens",
+          "name": "max_output_tokens",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "max_output_tokens"
+          }
+        },
+        {
+          "localized_name": "temperature",
+          "name": "temperature",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "temperature"
+          }
+        },
+        {
+          "localized_name": "max_image_side",
+          "name": "max_image_side",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "max_image_side"
+          }
+        },
+        {
+          "localized_name": "jpeg_quality",
+          "name": "jpeg_quality",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "jpeg_quality"
+          }
+        },
+        {
+          "localized_name": "system_instruction",
+          "name": "system_instruction",
+          "type": "STRING",
+          "link": 33,
+          "widget": {
+            "name": "system_instruction"
+          },
+          "shape": 7
+        },
+        {
+          "localized_name": "gemini_prefix",
+          "name": "gemini_prefix",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "gemini_prefix"
+          },
+          "shape": 7
+        },
+        {
+          "localized_name": "refresh_token",
+          "name": "refresh_token",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "refresh_token"
+          },
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        },
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            34,
+            53
+          ]
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "slot_index": 2,
+          "links": []
+        },
+        {
+          "localized_name": "refresh",
+          "name": "refresh",
+          "type": "STRING",
+          "slot_index": 3,
+          "links": []
+        }
+      ],
+      "title": "Gemini Mask Prompt Designer",
+      "properties": {
+        "Node name for S&R": "GeminiImageTextNode"
+      },
+      "widgets_values": [
+        "Design the masked inpainting prompt.",
+        "gemini-3.1-flash-image",
+        2200,
+        0.35,
+        1024,
+        85,
+        "You are an expert prompt engineer for SDXL inpainting / masked image modification.\n\nThe user will provide the current image and a masked-edit instruction. Produce one inpainting prompt that changes only the masked region and preserves all unmasked areas.\n\nRules:\n- Output only the final masked-edit positive prompt.\n- Do not output markdown, headings, JSON, or explanations.\n- Include preservation language: modify only the masked region, seamless integration, matching lighting, matching perspective, matching texture.\n- Describe the replacement/addition clearly and avoid changing unmasked areas.\n",
+        "/gemini",
+        ""
+      ]
+    },
+    {
+      "id": 34,
+      "type": "PreviewAny",
+      "pos": [
+        2250,
+        1530
+      ],
+      "size": [
+        420,
+        190
+      ],
+      "flags": {},
+      "order": 33,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 34
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "Copy upgraded masked-edit prompt from here",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        false
+      ]
+    },
+    {
+      "id": 35,
+      "type": "CLIPTextEncode",
+      "pos": [
+        2250,
+        1760
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 34,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "link": 35
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 36
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            43
+          ]
+        }
+      ],
+      "title": "Encode masked edit positive",
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 36,
+      "type": "CLIPTextEncode",
+      "pos": [
+        2250,
+        1930
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 35,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "link": 37
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 38
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            44
+          ]
+        }
+      ],
+      "title": "Encode masked edit negative",
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 37,
+      "type": "VAEEncodeForInpaint",
+      "pos": [
+        2730,
+        1530
+      ],
+      "size": [
+        330,
+        170
+      ],
+      "flags": {},
+      "order": 36,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "grow_mask_by",
+          "name": "grow_mask_by",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "grow_mask_by"
+          }
+        },
+        {
+          "localized_name": "pixels",
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 39
+        },
+        {
+          "localized_name": "vae",
+          "name": "vae",
+          "type": "VAE",
+          "link": 40
+        },
+        {
+          "localized_name": "mask",
+          "name": "mask",
+          "type": "MASK",
+          "link": 41
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            45
+          ]
+        }
+      ],
+      "title": "Encode base image with mask",
+      "properties": {
+        "Node name for S&R": "VAEEncodeForInpaint"
+      },
+      "widgets_values": [
+        10
+      ]
+    },
+    {
+      "id": 38,
+      "type": "KSampler",
+      "pos": [
+        3140,
+        1530
+      ],
+      "size": [
+        330,
+        320
+      ],
+      "flags": {},
+      "order": 37,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "localized_name": "steps",
+          "name": "steps",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "steps"
+          }
+        },
+        {
+          "localized_name": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "cfg"
+          }
+        },
+        {
+          "localized_name": "sampler_name",
+          "name": "sampler_name",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "sampler_name"
+          }
+        },
+        {
+          "localized_name": "scheduler",
+          "name": "scheduler",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "scheduler"
+          }
+        },
+        {
+          "localized_name": "denoise",
+          "name": "denoise",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "denoise"
+          }
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 42
+        },
+        {
+          "localized_name": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 43
+        },
+        {
+          "localized_name": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 44
+        },
+        {
+          "localized_name": "latent_image",
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 45
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            46
+          ]
+        }
+      ],
+      "title": "Masked image modification sampler",
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        666748095813970,
+        24,
+        8.0,
+        "dpmpp_2m_sde_gpu",
+        "karras",
+        0.55
+      ]
+    },
+    {
+      "id": 39,
+      "type": "VAEDecode",
+      "pos": [
+        3550,
+        1530
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 38,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "samples",
+          "name": "samples",
+          "type": "LATENT",
+          "link": 46
+        },
+        {
+          "localized_name": "vae",
+          "name": "vae",
+          "type": "VAE",
+          "link": 47
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            48,
+            49
+          ]
+        }
+      ],
+      "title": "Decode masked edit",
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 40,
+      "type": "PreviewImage",
+      "pos": [
+        3940,
+        1510
+      ],
+      "size": [
+        330,
+        220
+      ],
+      "flags": {},
+      "order": 39,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 48
+        }
+      ],
+      "outputs": [],
+      "title": "Preview masked edit",
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 41,
+      "type": "SaveImage",
+      "pos": [
+        3940,
+        1760
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 40,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "filename_prefix"
+          }
+        },
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 49
+        }
+      ],
+      "outputs": [],
+      "title": "Save masked edit",
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "09_zmongo_masked_edit"
+      ]
+    },
+    {
+      "id": 42,
+      "type": "ZMongoApiSaveValueNode",
+      "pos": [
+        2730,
+        1900
+      ],
+      "size": [
+        360,
+        350
+      ],
+      "flags": {},
+      "order": 41,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 50
+        },
+        {
+          "localized_name": "collection_name",
+          "name": "collection_name",
+          "type": "STRING",
+          "link": 51,
+          "widget": {
+            "name": "collection_name"
+          }
+        },
+        {
+          "localized_name": "query_json",
+          "name": "query_json",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "query_json"
+          }
+        },
+        {
+          "localized_name": "document_id",
+          "name": "document_id",
+          "type": "STRING",
+          "link": 52
+        },
+        {
+          "localized_name": "field_path",
+          "name": "field_path",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "field_path"
+          }
+        },
+        {
+          "localized_name": "value_json",
+          "name": "value_json",
+          "type": "STRING",
+          "link": 53
+        },
+        {
+          "localized_name": "parse_value_json",
+          "name": "parse_value_json",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "parse_value_json"
+          }
+        },
+        {
+          "localized_name": "upsert_if_missing",
+          "name": "upsert_if_missing",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "upsert_if_missing"
+          }
+        },
+        {
+          "localized_name": "parse_json_strings",
+          "name": "parse_json_strings",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "parse_json_strings"
+          }
+        },
+        {
+          "localized_name": "normalize_for_storage",
+          "name": "normalize_for_storage",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "normalize_for_storage"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            54
+          ]
+        },
+        {
+          "localized_name": "refresh",
+          "name": "refresh",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": []
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "slot_index": 2,
+          "links": []
+        }
+      ],
+      "title": "Save upgraded masked prompt to selected prompt doc",
+      "properties": {
+        "Node name for S&R": "ZMongoApiSaveValueNode"
+      },
+      "widgets_values": [
+        "prompts",
+        "{}",
+        "",
+        "prompt.image_generation.sdxl.masked_edit.positive.upgraded",
+        "",
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "id": 43,
+      "type": "PreviewAny",
+      "pos": [
+        3140,
+        1900
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 42,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 54
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        }
+      ],
+      "title": "Preview masked prompt save result",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        null,
+        null,
+        false
+      ]
+    },
+    {
+      "id": 44,
+      "type": "ZMongoApiSaveValueNode",
+      "pos": [
+        3140,
+        1200
+      ],
+      "size": [
+        360,
+        350
+      ],
+      "flags": {},
+      "order": 43,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "session",
+          "name": "session",
+          "type": "ZMONGO_API_SESSION",
+          "link": 55
+        },
+        {
+          "localized_name": "collection_name",
+          "name": "collection_name",
+          "type": "STRING",
+          "link": 56,
+          "widget": {
+            "name": "collection_name"
+          }
+        },
+        {
+          "localized_name": "query_json",
+          "name": "query_json",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "query_json"
+          }
+        },
+        {
+          "localized_name": "document_id",
+          "name": "document_id",
+          "type": "STRING",
+          "link": 57
+        },
+        {
+          "localized_name": "field_path",
+          "name": "field_path",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "field_path"
+          }
+        },
+        {
+          "localized_name": "value_json",
+          "name": "value_json",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "value_json"
+          }
+        },
+        {
+          "localized_name": "parse_value_json",
+          "name": "parse_value_json",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "parse_value_json"
+          }
+        },
+        {
+          "localized_name": "upsert_if_missing",
+          "name": "upsert_if_missing",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "upsert_if_missing"
+          }
+        },
+        {
+          "localized_name": "parse_json_strings",
+          "name": "parse_json_strings",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "parse_json_strings"
+          }
+        },
+        {
+          "localized_name": "normalize_for_storage",
+          "name": "normalize_for_storage",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "normalize_for_storage"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "json",
+          "name": "json",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        },
+        {
+          "localized_name": "refresh",
+          "name": "refresh",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": []
+        },
+        {
+          "localized_name": "success",
+          "name": "success",
+          "type": "BOOLEAN",
+          "slot_index": 2,
+          "links": []
+        }
+      ],
+      "title": "Optional save workflow metadata to selected prompt doc",
+      "properties": {
+        "Node name for S&R": "ZMongoApiSaveValueNode"
+      },
+      "widgets_values": [
+        "prompts",
+        "{}",
+        "",
+        "prompt.image_generation.sdxl.workflow_09.notes",
+        "{\"workflow\": \"09_advanced_image_generation_prompt_designer_with_masks\", \"checkpoint\": \"realvisxlV50_v50Bakedvae.safetensors\", \"base_starts_from\": \"EmptyLatentImage\", \"mask_rule\": \"white edits, black preserves\"}",
+        true,
+        false,
+        false,
+        false
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      3,
+      0,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      2,
+      2,
+      0,
+      3,
+      1,
+      "ZMONGO_API_SESSION"
+    ],
+    [
+      3,
+      3,
+      0,
+      5,
+      0,
+      "ZMONGO_SESSION"
+    ],
+    [
+      4,
+      4,
+      0,
+      5,
+      1,
+      "*"
+    ],
+    [
+      5,
+      5,
+      1,
+      6,
+      0,
+      "LIST"
+    ],
+    [
+      6,
+      5,
+      0,
+      7,
+      0,
+      "STRING"
+    ],
+    [
+      7,
+      11,
+      0,
+      15,
+      0,
+      "STRING"
+    ],
+    [
+      8,
+      14,
+      1,
+      15,
+      1,
+      "CLIP"
+    ],
+    [
+      9,
+      12,
+      0,
+      16,
+      0,
+      "STRING"
+    ],
+    [
+      10,
+      14,
+      1,
+      16,
+      1,
+      "CLIP"
+    ],
+    [
+      11,
+      14,
+      0,
+      18,
+      6,
+      "MODEL"
+    ],
+    [
+      12,
+      15,
+      0,
+      18,
+      7,
+      "CONDITIONING"
+    ],
+    [
+      13,
+      16,
+      0,
+      18,
+      8,
+      "CONDITIONING"
+    ],
+    [
+      14,
+      17,
+      0,
+      18,
+      9,
+      "LATENT"
+    ],
+    [
+      15,
+      18,
+      0,
+      19,
+      0,
+      "LATENT"
+    ],
+    [
+      16,
+      14,
+      2,
+      19,
+      1,
+      "VAE"
+    ],
+    [
+      17,
+      19,
+      0,
+      20,
+      0,
+      "IMAGE"
+    ],
+    [
+      18,
+      19,
+      0,
+      21,
+      1,
+      "IMAGE"
+    ],
+    [
+      19,
+      3,
+      0,
+      24,
+      0,
+      "ZMONGO_SESSION"
+    ],
+    [
+      20,
+      19,
+      0,
+      24,
+      1,
+      "IMAGE"
+    ],
+    [
+      21,
+      22,
+      0,
+      24,
+      2,
+      "STRING"
+    ],
+    [
+      22,
+      23,
+      0,
+      24,
+      8,
+      "STRING"
+    ],
+    [
+      23,
+      24,
+      0,
+      25,
+      0,
+      "STRING"
+    ],
+    [
+      24,
+      24,
+      1,
+      26,
+      0,
+      "STRING"
+    ],
+    [
+      25,
+      3,
+      0,
+      27,
+      0,
+      "ZMONGO_SESSION"
+    ],
+    [
+      26,
+      4,
+      0,
+      27,
+      1,
+      "*"
+    ],
+    [
+      27,
+      6,
+      0,
+      27,
+      3,
+      "STRING"
+    ],
+    [
+      28,
+      24,
+      1,
+      27,
+      5,
+      "STRING"
+    ],
+    [
+      29,
+      27,
+      0,
+      28,
+      0,
+      "STRING"
+    ],
+    [
+      30,
+      3,
+      0,
+      33,
+      0,
+      "ZMONGO_SESSION"
+    ],
+    [
+      31,
+      19,
+      0,
+      33,
+      1,
+      "IMAGE"
+    ],
+    [
+      32,
+      30,
+      0,
+      33,
+      2,
+      "STRING"
+    ],
+    [
+      33,
+      32,
+      0,
+      33,
+      8,
+      "STRING"
+    ],
+    [
+      34,
+      33,
+      1,
+      34,
+      0,
+      "STRING"
+    ],
+    [
+      35,
+      30,
+      0,
+      35,
+      0,
+      "STRING"
+    ],
+    [
+      36,
+      14,
+      1,
+      35,
+      1,
+      "CLIP"
+    ],
+    [
+      37,
+      31,
+      0,
+      36,
+      0,
+      "STRING"
+    ],
+    [
+      38,
+      14,
+      1,
+      36,
+      1,
+      "CLIP"
+    ],
+    [
+      39,
+      19,
+      0,
+      37,
+      1,
+      "IMAGE"
+    ],
+    [
+      40,
+      14,
+      2,
+      37,
+      2,
+      "VAE"
+    ],
+    [
+      41,
+      29,
+      1,
+      37,
+      3,
+      "MASK"
+    ],
+    [
+      42,
+      14,
+      0,
+      38,
+      6,
+      "MODEL"
+    ],
+    [
+      43,
+      35,
+      0,
+      38,
+      7,
+      "CONDITIONING"
+    ],
+    [
+      44,
+      36,
+      0,
+      38,
+      8,
+      "CONDITIONING"
+    ],
+    [
+      45,
+      37,
+      0,
+      38,
+      9,
+      "LATENT"
+    ],
+    [
+      46,
+      38,
+      0,
+      39,
+      0,
+      "LATENT"
+    ],
+    [
+      47,
+      14,
+      2,
+      39,
+      1,
+      "VAE"
+    ],
+    [
+      48,
+      39,
+      0,
+      40,
+      0,
+      "IMAGE"
+    ],
+    [
+      49,
+      39,
+      0,
+      41,
+      1,
+      "IMAGE"
+    ],
+    [
+      50,
+      3,
+      0,
+      42,
+      0,
+      "ZMONGO_SESSION"
+    ],
+    [
+      51,
+      4,
+      0,
+      42,
+      1,
+      "*"
+    ],
+    [
+      52,
+      6,
+      0,
+      42,
+      3,
+      "STRING"
+    ],
+    [
+      53,
+      33,
+      1,
+      42,
+      5,
+      "STRING"
+    ],
+    [
+      54,
+      42,
+      0,
+      43,
+      0,
+      "STRING"
+    ],
+    [
+      55,
+      3,
+      0,
+      44,
+      0,
+      "ZMONGO_SESSION"
+    ],
+    [
+      56,
+      4,
+      0,
+      44,
+      1,
+      "*"
+    ],
+    [
+      57,
+      6,
+      0,
+      44,
+      3,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "00 Session + Prompt Document Selector",
+      "bounding": [
+        20,
+        40,
+        1580,
+        540
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "01 Prompt Designer Controls: write / improve / save prompts",
+      "bounding": [
+        20,
+        620,
+        1110,
+        650
+      ],
+      "color": "#8a6f3f",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "02 Base Text-to-Image: starts with no image",
+      "bounding": [
+        1190,
+        560,
+        2050,
+        420
+      ],
+      "color": "#3f8a5f",
+      "flags": {}
+    },
+    {
+      "id": 4,
+      "title": "03 Post-Image Prompt Designer: Gemini improves next run",
+      "bounding": [
+        1190,
+        980,
+        2350,
+        470
+      ],
+      "color": "#6f3f8a",
+      "flags": {}
+    },
+    {
+      "id": 5,
+      "title": "04 Masked Prompt Modification: load mask, edit white area only",
+      "bounding": [
+        1190,
+        1470,
+        3120,
+        800
+      ],
+      "color": "#8a3f3f",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.68,
+      "offset": [
+        -20,
+        20
+      ]
+    },
+    "workflow_note": "Workflow 09: advanced RealVisXL/SDXL text-to-image generation with prompt designer, prompt-doc save integration, post-image prompt upgrading, and masked prompt modification. Starts from EmptyLatentImage; no source image is required.",
+    "shared_paths": {
+      "prompt_collection": "prompts",
+      "base_positive_path": "prompt.image_generation.sdxl.positive.upgraded",
+      "masked_positive_path": "prompt.image_generation.sdxl.masked_edit.positive.upgraded",
+      "checkpoint": "realvisxlV50_v50Bakedvae.safetensors",
+      "mask_rule": "white edits, black preserves"
+    },
+    "source_format": "visual ComfyUI workflow JSON",
+    "zmongo_type_fix": "widgets_values_include_linked_widget_placeholders_v2"
+  },
+  "version": 0.4
+}
