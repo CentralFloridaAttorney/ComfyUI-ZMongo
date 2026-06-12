@@ -1,0 +1,278 @@
+{
+  "243": {
+    "inputs": {
+      "value": "mask_data"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Mask field_path"
+    }
+  },
+  "244": {
+    "inputs": {
+      "value": "image_data"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Image field_path"
+    }
+  },
+  "245": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 50,
+      "skip": 0,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiListDocsNode",
+    "_meta": {
+      "title": "03 List Docs"
+    }
+  },
+  "247": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "field_path": [
+        "243",
+        0
+      ],
+      "filename": "comfy_image.png",
+      "document_id": [
+        "279",
+        0
+      ],
+      "doc_key": "",
+      "metadata_json": "{}",
+      "session": [
+        "261",
+        0
+      ],
+      "image": [
+        "248",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiEasySaveImageNode",
+    "_meta": {
+      "title": "Mask Image Save Controller"
+    }
+  },
+  "248": {
+    "inputs": {
+      "mask": [
+        "274",
+        0
+      ]
+    },
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "Convert Mask to Image"
+    }
+  },
+  "250": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "field_path": [
+        "243",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 64,
+      "skip": 0,
+      "selected_index": 0,
+      "thumbnail_width": 512,
+      "thumbnail_height": 512,
+      "master_key_hex": "",
+      "cache": true,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiBrowseCollectionImagesNode",
+    "_meta": {
+      "title": "04 Browse Collection Images"
+    }
+  },
+  "251": {
+    "inputs": {
+      "local_store_root": "",
+      "test_health": false
+    },
+    "class_type": "ZMongoLocalFileStoreSessionNode",
+    "_meta": {
+      "title": "00 Local File Store Session"
+    }
+  },
+  "254": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "document_id": [
+        "279",
+        0
+      ],
+      "field_path": [
+        "243",
+        0
+      ],
+      "master_key_hex": "",
+      "cache": false,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoDisplayImageNode",
+    "_meta": {
+      "title": "04 Display Image from ZMongo"
+    }
+  },
+  "260": {
+    "inputs": {
+      "api_key": ""
+    },
+    "class_type": "ZMongoApiKeyOnlySessionNode",
+    "_meta": {
+      "title": "00 API Key Session - paste key here"
+    }
+  },
+  "261": {
+    "inputs": {
+      "switch": true,
+      "on_false": [
+        "251",
+        0
+      ],
+      "on_true": [
+        "260",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "API = True"
+    }
+  },
+  "270": {
+    "inputs": {
+      "value": "succubi"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Collection"
+    }
+  },
+  "274": {
+    "inputs": {
+      "channel": "red",
+      "image": [
+        "291",
+        0
+      ]
+    },
+    "class_type": "ImageToMask",
+    "_meta": {
+      "title": "Convert Image to Mask"
+    }
+  },
+  "275": {
+    "inputs": {
+      "source": [
+        "247",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Save Mask"
+    }
+  },
+  "276": {
+    "inputs": {
+      "images": [
+        "254",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "View Saved Mask"
+    }
+  },
+  "277": {
+    "inputs": {
+      "images": [
+        "250",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview All Masks"
+    }
+  },
+  "279": {
+    "inputs": {
+      "index": 12,
+      "fallback": "",
+      "selection": "",
+      "mode": "auto",
+      "include_end": true,
+      "dedupe": true,
+      "items_list": [
+        "245",
+        1
+      ]
+    },
+    "class_type": "ZMongoApiSelectNthItemNode",
+    "_meta": {
+      "title": "Select Image Index"
+    }
+  },
+  "291": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "document_id": [
+        "279",
+        0
+      ],
+      "field_path": [
+        "244",
+        0
+      ],
+      "master_key_hex": "",
+      "cache": false,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoDisplayImageNode",
+    "_meta": {
+      "title": "04 Display Image from ZMongo"
+    }
+  }
+}

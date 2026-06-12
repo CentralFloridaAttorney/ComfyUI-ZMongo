@@ -1,0 +1,283 @@
+{
+  "244": {
+    "inputs": {
+      "value": "image_data"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Image field_path"
+    }
+  },
+  "245": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 50,
+      "skip": 0,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiListDocsNode",
+    "_meta": {
+      "title": "03 List Docs"
+    }
+  },
+  "251": {
+    "inputs": {
+      "local_store_root": "",
+      "test_health": false
+    },
+    "class_type": "ZMongoLocalFileStoreSessionNode",
+    "_meta": {
+      "title": "00 Local File Store Session"
+    }
+  },
+  "260": {
+    "inputs": {
+      "api_key": ""
+    },
+    "class_type": "ZMongoApiKeyOnlySessionNode",
+    "_meta": {
+      "title": "00 API Key Session - paste key here"
+    }
+  },
+  "261": {
+    "inputs": {
+      "switch": true,
+      "on_false": [
+        "251",
+        0
+      ],
+      "on_true": [
+        "260",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "API = True"
+    }
+  },
+  "262": {
+    "inputs": {
+      "value": "prompts"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Prompts collection"
+    }
+  },
+  "267": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 50,
+      "skip": 0,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiListDocsNode",
+    "_meta": {
+      "title": "03 List Docs"
+    }
+  },
+  "270": {
+    "inputs": {
+      "value": "succubi"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Collection"
+    }
+  },
+  "279": {
+    "inputs": {
+      "index": 12,
+      "fallback": "",
+      "selection": "",
+      "mode": "auto",
+      "include_end": true,
+      "dedupe": true,
+      "items_list": [
+        "245",
+        1
+      ]
+    },
+    "class_type": "ZMongoApiSelectNthItemNode",
+    "_meta": {
+      "title": "Select Image Index"
+    }
+  },
+  "283": {
+    "inputs": {
+      "index": 0,
+      "fallback": "",
+      "selection": "",
+      "mode": "auto",
+      "include_end": true,
+      "dedupe": true,
+      "items_list": [
+        "267",
+        1
+      ]
+    },
+    "class_type": "ZMongoApiSelectNthItemNode",
+    "_meta": {
+      "title": "Select prompt document_id"
+    }
+  },
+  "289": {
+    "inputs": {
+      "value": "describe the desired 121-frame LTXV image-to-video motion here"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "User video concept"
+    }
+  },
+  "291": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "document_id": [
+        "279",
+        0
+      ],
+      "field_path": [
+        "244",
+        0
+      ],
+      "master_key_hex": "",
+      "cache": false,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoDisplayImageNode",
+    "_meta": {
+      "title": "04 Display Image from ZMongo"
+    }
+  },
+  "293": {
+    "inputs": {
+      "source": [
+        "301",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Get Chat with Image"
+    }
+  },
+  "294": {
+    "inputs": {
+      "source": [
+        "295",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Generate New Prompt"
+    }
+  },
+  "295": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "query_json": "{}",
+      "document_id": [
+        "283",
+        0
+      ],
+      "field_path": "prompt.ltxv_i2v_121f_16fps_720p.positive",
+      "value_json": [
+        "299",
+        0
+      ],
+      "parse_value_json": false,
+      "upsert_if_missing": false,
+      "parse_json_strings": false,
+      "normalize_for_storage": false,
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiSaveValueNode",
+    "_meta": {
+      "title": "Save Generated LTXV Positive Prompt"
+    }
+  },
+  "299": {
+    "inputs": {
+      "source": [
+        "301",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Get Gemini Chat Image Response"
+    }
+  },
+  "301": {
+    "inputs": {
+      "prompt": [
+        "289",
+        0
+      ],
+      "model": "gemini-3.1-flash-image",
+      "max_output_tokens": 4000,
+      "temperature": 0.45,
+      "max_image_side": 1024,
+      "jpeg_quality": 85,
+      "system_instruction": [
+        "325",
+        0
+      ],
+      "gemini_prefix": "/gemini",
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ],
+      "image": [
+        "291",
+        0
+      ]
+    },
+    "class_type": "GeminiImageTextNode",
+    "_meta": {
+      "title": "Gemini Image-to-LTXV Prompt"
+    }
+  },
+  "325": {
+    "inputs": {
+      "value": "You are an expert LTXV image-to-video prompt engineer for ComfyUI.\n\nThe user will provide:\n1. One reference image.\n2. One rough video concept.\n\nYour task is to analyze the reference image and convert the user's rough concept into one polished, direct, LTXV-ready positive prompt for a 121-frame, 16 FPS, 1280x720 image-to-video generation.\n\nThe clip is approximately 7.56 seconds long. Treat the provided image as the first-frame visual anchor. Preserve the visible subject identity, pose logic, clothing, materials, face, hair, body proportions, colors, lighting, background layout, visual style, and overall mood from the reference image. Do not invent important visual details that are not visible unless the user's concept specifically requires them.\n\nThe generated prompt must describe:\n- the visible subject and environment from the image;\n- the user's requested action;\n- the beginning, middle, and end of the 121-frame motion;\n- a physically plausible camera path for a short 7.56-second clip;\n- subject motion that is smooth and coherent;\n- environmental motion such as hair, cloth, smoke, dust, fire, water, light, or background parallax only when appropriate;\n- stable temporal consistency, stable subject identity, consistent anatomy, consistent lighting, and no scene cuts.\n\nUse LTXV-friendly video language:\nsmooth cinematic motion, coherent temporal consistency, stable subject identity, natural movement, gentle parallax, slow camera drift, consistent lighting, consistent style, no flicker, no warping, no morphing, no sudden cuts, preserve image composition.\n\nImportant prompt rules:\n- Output only the final positive video prompt.\n- Do not output JSON.\n- Do not output markdown.\n- Do not include headings.\n- Do not include a negative prompt.\n- Do not include explanations, notes, or setup tips.\n- Do not mention Gemini.\n- Do not mention the reference image file name.\n- Do not include text, captions, logos, subtitles, watermarks, or UI elements unless the user explicitly requests visible text.\n- Do not add new characters unless the user explicitly asks for them.\n- Do not create a scene cut, time jump, or full transformation unless the user explicitly asks for it.\n- Keep the result as one strong paragraph suitable to paste directly into a ComfyUI CLIP/Text Encode prompt input.\n\nThe prompt should start naturally, for example:\nUsing the provided image as the first frame and visual reference, create a 121-frame 16 FPS 1280x720 cinematic image-to-video clip where...\n\nNow produce only the final prompt based on the user's concept and the supplied image."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "LTXV 121f 16fps Prompt Constructor System Prompt"
+    }
+  }
+}

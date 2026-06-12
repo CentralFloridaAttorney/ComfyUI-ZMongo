@@ -1,0 +1,154 @@
+{
+  "251": {
+    "inputs": {
+      "local_store_root": "",
+      "test_health": false
+    },
+    "class_type": "ZMongoLocalFileStoreSessionNode",
+    "_meta": {
+      "title": "00 Local File Store Session"
+    }
+  },
+  "260": {
+    "inputs": {
+      "api_key": ""
+    },
+    "class_type": "ZMongoApiKeyOnlySessionNode",
+    "_meta": {
+      "title": "00 API Key Session - paste key here"
+    }
+  },
+  "261": {
+    "inputs": {
+      "switch": true,
+      "on_false": [
+        "251",
+        0
+      ],
+      "on_true": [
+        "260",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "API = True"
+    }
+  },
+  "262": {
+    "inputs": {
+      "value": "prompts"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Prompts collection"
+    }
+  },
+  "267": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 50,
+      "skip": 0,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiListDocsNode",
+    "_meta": {
+      "title": "03 List Docs"
+    }
+  },
+  "283": {
+    "inputs": {
+      "index": 0,
+      "fallback": "",
+      "selection": "",
+      "mode": "auto",
+      "include_end": true,
+      "dedupe": true,
+      "items_list": [
+        "267",
+        1
+      ]
+    },
+    "class_type": "ZMongoApiSelectNthItemNode",
+    "_meta": {
+      "title": "Select prompt document_id"
+    }
+  },
+  "284": {
+    "inputs": {
+      "collection_name": "prompts",
+      "document_id": [
+        "283",
+        0
+      ],
+      "field_path": "prompt.positive",
+      "fallback": "",
+      "cache": false,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiGetValueNode",
+    "_meta": {
+      "title": "03 Get Value"
+    }
+  },
+  "285": {
+    "inputs": {
+      "source": [
+        "284",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Preview as Text"
+    }
+  },
+  "296": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "document_id": [
+        "283",
+        0
+      ],
+      "field_path": "prompt.ltxv_i2v_121f_16fps_720p.positive",
+      "fallback": "",
+      "cache": false,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiGetValueNode",
+    "_meta": {
+      "title": "Get Generated LTXV Positive Prompt"
+    }
+  },
+  "297": {
+    "inputs": {
+      "source": [
+        "296",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Loaded LTXV Positive Prompt"
+    }
+  }
+}

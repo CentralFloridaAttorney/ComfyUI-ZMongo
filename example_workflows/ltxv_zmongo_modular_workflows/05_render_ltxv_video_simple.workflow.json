@@ -1,0 +1,404 @@
+{
+  "6": {
+    "inputs": {
+      "text": [
+        "297",
+        0
+      ],
+      "clip": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Loaded Positive Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "worst quality, low quality, low resolution, blurry, noisy, jpeg artifacts, compression artifacts, text, watermark, logo, signature, subtitles, captions, UI elements, deformed, distorted, disfigured, bad anatomy, wrong anatomy, extra limbs, missing limbs, fused limbs, floating limbs, malformed hands, fused fingers, extra fingers, missing fingers, broken wrists, twisted arms, broken legs, distorted face, changing face, inconsistent eyes, duplicated subject, duplicate body, subject cloning, morphing, warping, melting, flickering, temporal inconsistency, identity drift, clothing drift, changing outfit, changing background, unstable lighting, sudden cuts, jump cuts, camera shake, excessive motion blur, motion smear, frame tearing, artifacts",
+      "clip": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Universal Negative Prompt)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "72",
+        0
+      ],
+      "vae": [
+        "44",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "38": {
+    "inputs": {
+      "clip_name": "t5xxl_fp16.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "44": {
+    "inputs": {
+      "ckpt_name": "ltx-video-2b-v0.9.5.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "69": {
+    "inputs": {
+      "frame_rate": 16,
+      "positive": [
+        "77",
+        0
+      ],
+      "negative": [
+        "77",
+        1
+      ]
+    },
+    "class_type": "LTXVConditioning",
+    "_meta": {
+      "title": "LTXVConditioning"
+    }
+  },
+  "71": {
+    "inputs": {
+      "steps": 50,
+      "max_shift": 2.14,
+      "base_shift": 0.9,
+      "stretch": true,
+      "terminal": 0.16,
+      "latent": [
+        "77",
+        2
+      ]
+    },
+    "class_type": "LTXVScheduler",
+    "_meta": {
+      "title": "LTXVScheduler"
+    }
+  },
+  "72": {
+    "inputs": {
+      "add_noise": true,
+      "noise_seed": 644106814368765,
+      "cfg": 7.5,
+      "model": [
+        "44",
+        0
+      ],
+      "positive": [
+        "69",
+        0
+      ],
+      "negative": [
+        "69",
+        1
+      ],
+      "sampler": [
+        "73",
+        0
+      ],
+      "sigmas": [
+        "71",
+        0
+      ],
+      "latent_image": [
+        "77",
+        2
+      ]
+    },
+    "class_type": "SamplerCustom",
+    "_meta": {
+      "title": "SamplerCustom"
+    }
+  },
+  "73": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "77": {
+    "inputs": {
+      "width": 1280,
+      "height": 736,
+      "length": 121,
+      "batch_size": 1,
+      "strength": 0.1,
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "vae": [
+        "44",
+        2
+      ],
+      "image": [
+        "291",
+        0
+      ]
+    },
+    "class_type": "LTXVImgToVideo",
+    "_meta": {
+      "title": "LTXVImgToVideo"
+    }
+  },
+  "80": {
+    "inputs": {
+      "fps": 16,
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "81": {
+    "inputs": {
+      "filename_prefix": "video/LTXV_121f_16fps_1280x720",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "80",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  },
+  "244": {
+    "inputs": {
+      "value": "image_data"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Image field_path"
+    }
+  },
+  "245": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 50,
+      "skip": 0,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiListDocsNode",
+    "_meta": {
+      "title": "03 List Docs"
+    }
+  },
+  "251": {
+    "inputs": {
+      "local_store_root": "",
+      "test_health": false
+    },
+    "class_type": "ZMongoLocalFileStoreSessionNode",
+    "_meta": {
+      "title": "00 Local File Store Session"
+    }
+  },
+  "260": {
+    "inputs": {
+      "api_key": ""
+    },
+    "class_type": "ZMongoApiKeyOnlySessionNode",
+    "_meta": {
+      "title": "00 API Key Session - paste key here"
+    }
+  },
+  "261": {
+    "inputs": {
+      "switch": true,
+      "on_false": [
+        "251",
+        0
+      ],
+      "on_true": [
+        "260",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "API = True"
+    }
+  },
+  "262": {
+    "inputs": {
+      "value": "prompts"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Prompts collection"
+    }
+  },
+  "267": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 50,
+      "skip": 0,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiListDocsNode",
+    "_meta": {
+      "title": "03 List Docs"
+    }
+  },
+  "270": {
+    "inputs": {
+      "value": "succubi"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Collection"
+    }
+  },
+  "279": {
+    "inputs": {
+      "index": 12,
+      "fallback": "",
+      "selection": "",
+      "mode": "auto",
+      "include_end": true,
+      "dedupe": true,
+      "items_list": [
+        "245",
+        1
+      ]
+    },
+    "class_type": "ZMongoApiSelectNthItemNode",
+    "_meta": {
+      "title": "Select Image Index"
+    }
+  },
+  "283": {
+    "inputs": {
+      "index": 0,
+      "fallback": "",
+      "selection": "",
+      "mode": "auto",
+      "include_end": true,
+      "dedupe": true,
+      "items_list": [
+        "267",
+        1
+      ]
+    },
+    "class_type": "ZMongoApiSelectNthItemNode",
+    "_meta": {
+      "title": "Select prompt document_id"
+    }
+  },
+  "291": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "document_id": [
+        "279",
+        0
+      ],
+      "field_path": [
+        "244",
+        0
+      ],
+      "master_key_hex": "",
+      "cache": false,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoDisplayImageNode",
+    "_meta": {
+      "title": "04 Display Image from ZMongo"
+    }
+  },
+  "296": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "document_id": [
+        "283",
+        0
+      ],
+      "field_path": "prompt.ltxv_i2v_121f_16fps_720p.positive",
+      "fallback": "",
+      "cache": false,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiGetValueNode",
+    "_meta": {
+      "title": "Get Generated LTXV Positive Prompt"
+    }
+  },
+  "297": {
+    "inputs": {
+      "source": [
+        "296",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Loaded LTXV Positive Prompt"
+    }
+  }
+}

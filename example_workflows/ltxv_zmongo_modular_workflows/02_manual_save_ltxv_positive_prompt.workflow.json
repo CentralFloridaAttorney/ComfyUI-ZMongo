@@ -1,0 +1,136 @@
+{
+  "251": {
+    "inputs": {
+      "local_store_root": "",
+      "test_health": false
+    },
+    "class_type": "ZMongoLocalFileStoreSessionNode",
+    "_meta": {
+      "title": "00 Local File Store Session"
+    }
+  },
+  "260": {
+    "inputs": {
+      "api_key": ""
+    },
+    "class_type": "ZMongoApiKeyOnlySessionNode",
+    "_meta": {
+      "title": "00 API Key Session - paste key here"
+    }
+  },
+  "261": {
+    "inputs": {
+      "switch": true,
+      "on_false": [
+        "251",
+        0
+      ],
+      "on_true": [
+        "260",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "API = True"
+    }
+  },
+  "262": {
+    "inputs": {
+      "value": "prompts"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Prompts collection"
+    }
+  },
+  "267": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 50,
+      "skip": 0,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiListDocsNode",
+    "_meta": {
+      "title": "03 List Docs"
+    }
+  },
+  "283": {
+    "inputs": {
+      "index": 0,
+      "fallback": "",
+      "selection": "",
+      "mode": "auto",
+      "include_end": true,
+      "dedupe": true,
+      "items_list": [
+        "267",
+        1
+      ]
+    },
+    "class_type": "ZMongoApiSelectNthItemNode",
+    "_meta": {
+      "title": "Select prompt document_id"
+    }
+  },
+  "294": {
+    "inputs": {
+      "source": [
+        "295",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Preview Manual Prompt Save Result"
+    }
+  },
+  "295": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "query_json": "{}",
+      "document_id": [
+        "283",
+        0
+      ],
+      "field_path": "prompt.ltxv_i2v_121f_16fps_720p.positive",
+      "value_json": [
+        "900",
+        0
+      ],
+      "parse_value_json": false,
+      "upsert_if_missing": false,
+      "parse_json_strings": false,
+      "normalize_for_storage": false,
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiSaveValueNode",
+    "_meta": {
+      "title": "Save Manual LTXV Positive Prompt"
+    }
+  },
+  "900": {
+    "inputs": {
+      "value": "Using the provided image as the first frame and visual reference, create a 121-frame 16 FPS 1280x720 cinematic image-to-video clip where ..."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Manual LTXV positive prompt to save"
+    }
+  }
+}

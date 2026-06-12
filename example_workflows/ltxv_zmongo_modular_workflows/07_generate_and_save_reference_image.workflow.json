@@ -1,0 +1,315 @@
+{
+  "236": {
+    "inputs": {
+      "ckpt_name": "sd3.5_large_fp8_scaled.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "237": {
+    "inputs": {
+      "width": 1280,
+      "height": 720,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "238": {
+    "inputs": {
+      "text": "worst quality, low quality, low resolution, blurry, noisy, jpeg artifacts, compression artifacts, text, watermark, logo, signature, subtitles, captions, UI elements, deformed, distorted, disfigured, bad anatomy, wrong anatomy, extra limbs, missing limbs, fused limbs, floating limbs, malformed hands, fused fingers, extra fingers, missing fingers, broken wrists, twisted arms, broken legs, distorted face, changing face, inconsistent eyes, duplicated subject, duplicate body, subject cloning, morphing, warping, melting, flickering, temporal inconsistency, identity drift, clothing drift, changing outfit, changing background, unstable lighting, sudden cuts, jump cuts, camera shake, excessive motion blur, motion smear, frame tearing, artifacts",
+      "clip": [
+        "236",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Universal Image Negative Prompt)"
+    }
+  },
+  "239": {
+    "inputs": {
+      "samples": [
+        "280",
+        0
+      ],
+      "vae": [
+        "236",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "240": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "field_path": [
+        "244",
+        0
+      ],
+      "filename": "comfy_image.png",
+      "document_id": "",
+      "doc_key": "",
+      "metadata_json": "{}",
+      "session": [
+        "261",
+        0
+      ],
+      "image": [
+        "239",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiEasySaveImageNode",
+    "_meta": {
+      "title": "04 Easy Save Image"
+    }
+  },
+  "241": {
+    "inputs": {
+      "collection_name": [
+        "270",
+        0
+      ],
+      "field_path": [
+        "244",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 64,
+      "skip": 0,
+      "selected_index": 0,
+      "thumbnail_width": 512,
+      "thumbnail_height": 512,
+      "master_key_hex": "",
+      "cache": true,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiBrowseCollectionImagesNode",
+    "_meta": {
+      "title": "04 Browse Collection Images"
+    }
+  },
+  "244": {
+    "inputs": {
+      "value": "image_data"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Image field_path"
+    }
+  },
+  "251": {
+    "inputs": {
+      "local_store_root": "",
+      "test_health": false
+    },
+    "class_type": "ZMongoLocalFileStoreSessionNode",
+    "_meta": {
+      "title": "00 Local File Store Session"
+    }
+  },
+  "260": {
+    "inputs": {
+      "api_key": ""
+    },
+    "class_type": "ZMongoApiKeyOnlySessionNode",
+    "_meta": {
+      "title": "00 API Key Session - paste key here"
+    }
+  },
+  "261": {
+    "inputs": {
+      "switch": true,
+      "on_false": [
+        "251",
+        0
+      ],
+      "on_true": [
+        "260",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "API = True"
+    }
+  },
+  "262": {
+    "inputs": {
+      "value": "prompts"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Prompts collection"
+    }
+  },
+  "267": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "query_json": "{}",
+      "limit": 50,
+      "skip": 0,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiListDocsNode",
+    "_meta": {
+      "title": "03 List Docs"
+    }
+  },
+  "270": {
+    "inputs": {
+      "value": "succubi"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Collection"
+    }
+  },
+  "278": {
+    "inputs": {
+      "text": [
+        "297",
+        0
+      ],
+      "clip": [
+        "236",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "280": {
+    "inputs": {
+      "seed": 697691810903487,
+      "steps": 50,
+      "cfg": 2.5,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": [
+        "236",
+        0
+      ],
+      "positive": [
+        "278",
+        0
+      ],
+      "negative": [
+        "238",
+        0
+      ],
+      "latent_image": [
+        "237",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "281": {
+    "inputs": {
+      "source": [
+        "240",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Generate & Save New Image"
+    }
+  },
+  "282": {
+    "inputs": {
+      "images": [
+        "241",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview All Images"
+    }
+  },
+  "283": {
+    "inputs": {
+      "index": 0,
+      "fallback": "",
+      "selection": "",
+      "mode": "auto",
+      "include_end": true,
+      "dedupe": true,
+      "items_list": [
+        "267",
+        1
+      ]
+    },
+    "class_type": "ZMongoApiSelectNthItemNode",
+    "_meta": {
+      "title": "Select prompt document_id"
+    }
+  },
+  "296": {
+    "inputs": {
+      "collection_name": [
+        "262",
+        0
+      ],
+      "document_id": [
+        "283",
+        0
+      ],
+      "field_path": "prompt.ltxv_i2v_121f_16fps_720p.positive",
+      "fallback": "",
+      "cache": false,
+      "refresh_token": "",
+      "session": [
+        "261",
+        0
+      ]
+    },
+    "class_type": "ZMongoApiGetValueNode",
+    "_meta": {
+      "title": "Get Generated LTXV Positive Prompt"
+    }
+  },
+  "297": {
+    "inputs": {
+      "source": [
+        "296",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Loaded LTXV Positive Prompt"
+    }
+  }
+}
