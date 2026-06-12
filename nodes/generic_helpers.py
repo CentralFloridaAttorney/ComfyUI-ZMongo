@@ -125,15 +125,45 @@ def _session_get_doc(session: Any, collection_name: str, document_id: str, cache
     return {}
 
 
-def _session_api_request(session: Any, method: str, path: str, json_body: dict[str, Any] | None = None) -> dict[
-    str, Any]:
-    if hasattr(session, "api_request") and callable(session.api_request):
-        try:
-            payload = session.api_request(method, path, json=json_body)
-            return _ensure_payload_dict(payload)
-        except Exception:
-            pass
-    return {"success": False, "message": "API request failed", "data": None}
+def _session_api_request(
+    session: Any,
+    method: str,
+    path: str,
+    json_body: dict[str, Any] | None = None,
+    *,
+    params: dict[str, Any] | None = None,
+    gemini_prefix: str | None = None,
+) -> dict[str, Any]:
+    """
+    Backwards-compatible API helper used by older nodes.
+
+    Hosted ZMongo routes currently resolve as:
+        /comfy-zmongo/api/...
+
+    Newer ZMongoApiSession.request() expects prefix='/api' and a route path
+    such as '/collections'.  Older nodes sometimes pass path='/api/query'
+    plus gemini_prefix='/comfy-zmongo'.  Delegate to session_api_request(),
+    which normalizes those combinations and avoids stale /api/comfy-zmongo
+    and /api/manager route shapes.
+    """
+    try:
+        prefix = gemini_prefix if gemini_prefix is not None else DEFAULT_COMFY_ZMONGO_PREFIX
+        return session_api_request(
+            session,
+            method,
+            path,
+            json_body=json_body,
+            params=params,
+            gemini_prefix=prefix,
+        )
+    except NameError:
+        if hasattr(session, "api_request") and callable(session.api_request):
+            try:
+                payload = session.api_request(method, path, json=json_body)
+                return _ensure_payload_dict(payload)
+            except Exception:
+                pass
+        return {"success": False, "message": "API request failed", "data": None}
 
 
 def _clean_field_path(value: str, default: str = "image_data") -> str:
@@ -1127,9 +1157,16 @@ def session_api_request(
     api_key = str(getattr(session, "zai_api_key", "") or getattr(session, "api_key", "") or "").strip()
     username = str(getattr(session, "username", "") or "").strip()
     if api_key:
+        # Production accepts API keys through explicit API-key headers.
+        # Do not coerce an API key into Authorization: Bearer; /api/auth/verify
+        # treats Bearer as a JWT and correctly rejects raw API keys.
         headers["ZAI_API_KEY"] = api_key
+        headers["X-API-Key"] = api_key
+        headers["X-ZAI-API-Key"] = api_key
+        headers["X-ZMongo-API-Key"] = api_key
     if username:
         headers["ZAI_USER"] = username
+        headers["X-ZAI-User"] = username
     bearer = str(getattr(session, "bearer_token", "") or getattr(session, "jwt_token", "") or "").strip()
     if bearer and "Authorization" not in headers:
         headers["Authorization"] = f"Bearer {bearer}"

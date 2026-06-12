@@ -141,8 +141,12 @@ class ZMongoApiSession:
         cleaned = (base_url or "").strip() or DEFAULT_BASE_URL
         cleaned = cleaned.rstrip("/")
 
-        if cleaned.endswith(cls.COMFY_PREFIX):
-            cleaned = cleaned[: -len(cls.COMFY_PREFIX)]
+        # Accept users pasting either the site root or a deployed API URL.
+        # The session internally builds /comfy-zmongo/api/... routes.
+        for suffix in ("/api/comfy-zmongo", "/comfy-zmongo/api", cls.COMFY_PREFIX):
+            if cleaned.endswith(suffix):
+                cleaned = cleaned[: -len(suffix)]
+                break
 
         return cleaned.rstrip("/")
 
@@ -187,7 +191,16 @@ class ZMongoApiSession:
             return int(default)
 
     def _join_path(self, prefix: str, path: str) -> str:
-        clean_prefix = (prefix or "").strip()
+        """Build the deployed production URL path.
+
+        Verified working Comfy-ZMongo routes are under:
+            /comfy-zmongo/api/...
+
+        This method accepts all node-era variants and normalizes them without
+        creating bad paths such as /comfy-zmongo/comfy-zmongo/api/... or the
+        undeployed /api/comfy-zmongo/... prefix.
+        """
+        clean_prefix = (prefix or "").strip().rstrip("/")
         clean_path = (path or "").strip()
 
         if clean_prefix and not clean_prefix.startswith("/"):
@@ -196,7 +209,29 @@ class ZMongoApiSession:
         if clean_path and not clean_path.startswith("/"):
             clean_path = "/" + clean_path
 
-        return f"{self.COMFY_PREFIX}{clean_prefix}{clean_path}"
+        # Canonical but not currently deployed: map to deployed prefix.
+        if clean_prefix == "/api/comfy-zmongo":
+            clean_prefix = f"{self.COMFY_PREFIX}{self.API_PREFIX}"
+
+        # Already a deployed absolute prefix.
+        if clean_prefix == f"{self.COMFY_PREFIX}{self.API_PREFIX}":
+            if clean_path.startswith("/api/"):
+                clean_path = clean_path[len("/api"):]
+            return f"{clean_prefix}{clean_path}"
+
+        # Standard ZMongo API prefix used by session methods.
+        if clean_prefix == self.API_PREFIX:
+            if clean_path.startswith("/api/"):
+                clean_path = clean_path[len("/api"):]
+            return f"{self.COMFY_PREFIX}{self.API_PREFIX}{clean_path}"
+
+        # Older nodes may pass prefix='/comfy-zmongo' with path='/api/...'.
+        if clean_prefix == self.COMFY_PREFIX:
+            return f"{self.COMFY_PREFIX}{clean_path}"
+
+        # Non-ZMongo services such as /gemini should not be nested under
+        # /comfy-zmongo unless their prefix explicitly says so.
+        return f"{clean_prefix}{clean_path}"
 
     def _build_url(self, prefix: str, path: str) -> str:
         return f"{self.base_url}{self._join_path(prefix, path)}"
@@ -205,12 +240,24 @@ class ZMongoApiSession:
         self.session.close()
 
     def _headers(self) -> dict[str, str]:
-        return {
+        headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.zai_api_key}",
-            "ZAI_API_KEY": self.zai_api_key,
         }
+
+        if self.zai_api_key:
+            # Use explicit API-key headers.  Raw API keys are not JWT bearer
+            # tokens; sending them as Bearer causes /api/auth/verify-style
+            # JWT validation to reject otherwise valid API-key calls.
+            headers["ZAI_API_KEY"] = self.zai_api_key
+            headers["X-API-Key"] = self.zai_api_key
+            headers["X-ZAI-API-Key"] = self.zai_api_key
+            headers["X-ZMongo-API-Key"] = self.zai_api_key
+
+        if self.username:
+            headers["X-ZAI-User"] = self.username
+
+        return headers
 
     def _json_response(self, response: requests.Response) -> dict[str, Any]:
         try:

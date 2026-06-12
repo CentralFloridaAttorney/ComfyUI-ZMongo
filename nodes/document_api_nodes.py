@@ -20,7 +20,7 @@ from .generic_helpers import AlwaysDirtyMixin, SELECTABLE_RETURN_TYPES, SELECTAB
     _coerce_document_id_link, _document_summary, ZMONGO_TEXT, _read_file_as_base64, _list_document_files, \
     _session_get_doc, _session_api_request, _session_save_value
 
-DEFAULT_DOCUMENT_PREFIX = os.getenv("ZMONGO_DOCUMENT_API_PREFIX", "/documents").strip().rstrip("/") or "/documents"
+DEFAULT_DOCUMENT_PREFIX = os.getenv("ZMONGO_DOCUMENT_API_PREFIX", "/comfy-zmongo").strip().rstrip("/") or "/comfy-zmongo"
 DEFAULT_DOCUMENT_COLLECTION = os.getenv("ZMONGO_DOCUMENT_COLLECTION", "documents").strip() or "documents"
 DEFAULT_MAX_UPLOAD_BYTES = int(os.getenv("ZMONGO_DOCUMENT_NODE_MAX_UPLOAD_BYTES", str(64 * 1024 * 1024)))
 

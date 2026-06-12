@@ -26,7 +26,14 @@ class ZMongoMotdDisplayNode(AlwaysDirtyMixin):
     @staticmethod
     async def display_motd(api_key: str):
         BASE_URL = "https://businessprocessapplications.com/comfy-zmongo"
-        HEADERS = {"ZAI_API_KEY": api_key, "Content-Type": "application/json"}
+        clean_key = (api_key or "").strip()
+        HEADERS = {
+            "Content-Type": "application/json",
+            "ZAI_API_KEY": clean_key,
+            "X-API-Key": clean_key,
+            "X-ZAI-API-Key": clean_key,
+            "X-ZMongo-API-Key": clean_key,
+        }
 
         try:
             resp = requests.get(f"{BASE_URL}/api/motd", headers=HEADERS, timeout=10)
