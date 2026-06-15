@@ -18,6 +18,15 @@ from . import zmongo_helper_nodes
 from . import motd_node
 from . import zmongo_content_pack_static_workflow_nodes
 
+try:
+    from .zmongo_endpoint_compat import register_bpa_endpoint_compat
+
+    if register_bpa_endpoint_compat():
+        print("[ComfyUI-ZMongo] BPA endpoint compatibility patch registered.")
+except Exception as exc:
+    print(f"[ComfyUI-ZMongo] Failed to register BPA endpoint compatibility patch: {exc}")
+
+
 def _merge_node_mappings(
     *mapping_sets: Tuple[str, Dict[str, object], Dict[str, str]]
 ) -> tuple[Dict[str, object], Dict[str, str]]:
@@ -98,7 +107,7 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         zmongo_content_pack_v3_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
     # 09 Content Packs
-        (
+    (
         "zmongo_content_pack_static_workflow_nodes",
         zmongo_content_pack_static_workflow_nodes.NODE_CLASS_MAPPINGS,
         zmongo_content_pack_static_workflow_nodes.NODE_DISPLAY_NAME_MAPPINGS,
