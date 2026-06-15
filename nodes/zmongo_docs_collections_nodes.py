@@ -17,6 +17,188 @@ import json
 from typing import Any, Optional
 from .generic_helpers import AlwaysDirtyMixin, _json_text, _error_payload
 
+# -----------------------------------------------------------------------------
+# Field path discovery helpers
+# -----------------------------------------------------------------------------
+
+_IMAGE_MARKERS_FOR_FIELD_PATHS = (
+    "image",
+    "preview",
+    "thumbnail",
+    "thumb",
+    "poster",
+    "mask",
+    "asset",
+    "file_id",
+    "content_type",
+    "storage_policy",
+    "storage_mode",
+)
+
+
+def _coerce_document_from_payload_or_json(value: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Accept either:
+      - a raw document object
+      - a normal ZMongo API payload containing data.document
+      - a JSON string for either shape
+
+    Returns (document, normalized_payload).
+    """
+    if value is None:
+        return {}, {}
+
+    parsed: Any = value
+
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return {}, {}
+        try:
+            parsed = json.loads(raw)
+        except Exception as exc:
+            return {}, _error_payload(f"source_json is not valid JSON: {exc}")
+
+    if not isinstance(parsed, dict):
+        return {}, _error_payload("source_json must decode to a JSON object.")
+
+    doc = _extract_document_from_payload(parsed)
+    if isinstance(doc, dict) and doc:
+        return doc, parsed
+
+    data = parsed.get("data")
+    if isinstance(data, dict):
+        doc = data.get("doc")
+        if isinstance(doc, dict):
+            return doc, parsed
+        docs = data.get("documents") or data.get("results")
+        if isinstance(docs, list) and docs and isinstance(docs[0], dict):
+            return docs[0], parsed
+
+    if parsed.get("_id") is not None or parsed.get("document_id") is not None:
+        return parsed, {
+            "success": True,
+            "message": "source_json was treated as a raw document.",
+            "data": {"document": parsed},
+            "error": None,
+            "status_code": 200,
+        }
+
+    return {}, parsed
+
+
+def _field_value_preview(value: Any, max_chars: int = 160) -> str:
+    if isinstance(value, str):
+        text = value
+    elif value is None or isinstance(value, (bool, int, float)):
+        text = json.dumps(value)
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False, default=str)
+        except Exception:
+            text = str(value)
+    text = " ".join(str(text or "").replace("\r", " ").replace("\n", " ").split())
+    if len(text) > max_chars:
+        return text[:max_chars] + "..."
+    return text
+
+
+def _looks_like_image_field_path(path: str, value: Any) -> bool:
+    clean_path = str(path or "").lower()
+    if any(marker in clean_path for marker in ("image", "preview", "thumbnail", "mask", "poster")):
+        return True
+
+    if isinstance(value, dict):
+        content_type = str(value.get("content_type") or value.get("mime_type") or "").lower()
+        filename = str(value.get("filename") or value.get("name") or "").lower()
+        if content_type.startswith("image/"):
+            return True
+        if filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff")):
+            return True
+        if any(key in value for key in ("file_id", "asset_id", "image_id", "preview", "original", "storage_policy", "storage_mode", "local_path")):
+            return True
+
+    return False
+
+
+def _field_path_type(value: Any) -> str:
+    if isinstance(value, dict):
+        return "dict"
+    if isinstance(value, list):
+        return "list"
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return "int"
+    if isinstance(value, float):
+        return "float"
+    if isinstance(value, str):
+        return "str"
+    return type(value).__name__
+
+
+def _discover_field_path_rows(document: dict[str, Any], include_containers: bool = True) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    def walk(value: Any, prefix: str = "") -> None:
+        value_type = _field_path_type(value)
+        is_container = isinstance(value, (dict, list))
+
+        if prefix and (include_containers or not is_container):
+            rows.append(
+                {
+                    "index": len(rows),
+                    "path": prefix,
+                    "type": value_type,
+                    "is_container": is_container,
+                    "is_image_candidate": _looks_like_image_field_path(prefix, value),
+                    "preview": _field_value_preview(value),
+                }
+            )
+
+        if isinstance(value, dict):
+            for key in sorted(value.keys(), key=lambda item: str(item)):
+                child_path = f"{prefix}.{key}" if prefix else str(key)
+                walk(value.get(key), child_path)
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                child_path = f"{prefix}.{index}" if prefix else str(index)
+                walk(item, child_path)
+
+    if isinstance(document, dict):
+        walk(document, "")
+
+    image_rows = [row for row in rows if row.get("is_image_candidate")]
+    normal_rows = [row for row in rows if not row.get("is_image_candidate")]
+    ordered = image_rows + normal_rows
+
+    for index, row in enumerate(ordered):
+        row["index"] = index
+
+    return ordered
+
+
+def _indexed_field_path_rows(rows: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for row in rows:
+        marker = " IMAGE" if row.get("is_image_candidate") else ""
+        preview = row.get("preview") or ""
+        if preview:
+            preview = " // " + str(preview)
+        lines.append(f"{row.get('index', 0)}: {row.get('path', '')} [{row.get('type', 'unknown')}{marker}]{preview}")
+    return "\n".join(lines)
+
+
+def _selected_field_value(document: dict[str, Any], rows: list[dict[str, Any]], selected_index: int) -> tuple[str, Any, str]:
+    if not rows:
+        return "", None, "missing"
+    safe_index = max(0, min(int(selected_index or 0), len(rows) - 1))
+    selected_path = str(rows[safe_index].get("path") or "")
+    value = safe_get_by_path(document, selected_path, default=None)
+    return selected_path, value, _field_path_type(value)
+
 class LocalZMongoSession:
     """
     Local file-backed ZMongo-compatible session acting as an exact proxy.
@@ -1422,6 +1604,217 @@ class ZMongoApiGetValueNode(AlwaysDirtyMixin):
             return (_json_text(payload), cleaned_fallback, False, "error", refresh)
 
 
+class ZMongoApiDiscoverFieldPathsNode(AlwaysDirtyMixin):
+    """
+    Discover indexed dot-paths for a loaded ZMongo document.
+
+    Use cases:
+      - Connect the json output from "03 Get Doc" into source_json.
+      - Or provide collection_name + document_id and let the node fetch/discover paths.
+      - Use selected_index to output one selected field_path and its current value.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "source_json": ("STRING", {"default": "", "multiline": True}),
+                "selected_index": ("INT", {"default": 0, "min": 0, "max": 1000000}),
+                "include_containers": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "session": ("ZMONGO_API_SESSION",),
+                "collection_name": ("STRING", {"default": ""}),
+                "document_id": ("STRING", {"default": ""}),
+                "cache": ("BOOLEAN", {"default": False}),
+                "refresh_token": ("STRING", {"default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "*", "STRING", "STRING", "STRING", "STRING", "INT", "BOOLEAN", "STRING")
+    RETURN_NAMES = (
+        "json",
+        "field_paths",
+        "indexed_field_paths",
+        "selected_field_path",
+        "selected_value_json",
+        "selected_value_type",
+        "count",
+        "success",
+        "refresh",
+    )
+    OUTPUT_IS_LIST = (False, True, False, False, False, False, False, False, False)
+    FUNCTION = "discover_field_paths"
+    CATEGORY = "ZMongo/02 Docs"
+
+    @staticmethod
+    def _clean_scalar(value: Any) -> str:
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else ""
+        if value is None:
+            return ""
+        text = str(value).strip()
+        for _ in range(4):
+            before = text
+            if text.startswith("[") and text.endswith("]"):
+                text = text[1:-1].strip()
+            if text.startswith("(") and text.endswith(")"):
+                text = text[1:-1].strip()
+            if text.endswith(","):
+                text = text[:-1].strip()
+            if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+                text = text[1:-1].strip()
+            if text == before:
+                break
+        return text.strip()
+
+    @staticmethod
+    def _value_json(value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        try:
+            return json.dumps(value, indent=2, ensure_ascii=False, default=str)
+        except Exception:
+            return str(value)
+
+    def _load_document_from_session(
+        self,
+        *,
+        session,
+        collection_name: str,
+        document_id: str,
+        include_containers: bool,
+        cache: bool,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if session is None:
+            return {}, _error_payload("No source_json provided and no session connected.")
+
+        if not collection_name:
+            return {}, _error_payload("collection_name is required when source_json is empty.")
+
+        if not document_id:
+            return {}, _error_payload("document_id is required when source_json is empty.")
+
+        # Prefer the new backend field-path discovery endpoint if the session exposes it.
+        doc_field_paths = getattr(session, "doc_field_paths", None)
+        if callable(doc_field_paths):
+            try:
+                route_payload = doc_field_paths(
+                    collection=collection_name,
+                    document_id=document_id,
+                    include_containers=include_containers,
+                )
+                data = route_payload.get("data") if isinstance(route_payload, dict) else {}
+                rows = data.get("paths") or data.get("field_path_rows") or []
+                if route_payload.get("success") and isinstance(rows, list) and rows and isinstance(rows[0], dict):
+                    # The route already found paths. Fetch the doc too only for selected value.
+                    doc_payload = session.get_doc(collection=collection_name, document_id=document_id, cache=cache)
+                    doc = _extract_document_from_payload(doc_payload)
+                    if not isinstance(doc, dict):
+                        doc = {}
+                    route_payload.setdefault("data", {})
+                    route_payload["data"]["document"] = doc
+                    route_payload["data"]["route_field_rows"] = rows
+                    return doc, route_payload
+            except Exception:
+                pass
+
+        payload = session.get_doc(collection=collection_name, document_id=document_id, cache=cache)
+        document = _extract_document_from_payload(payload)
+        if isinstance(document, dict) and document:
+            return document, payload
+
+        return {}, payload if isinstance(payload, dict) else _error_payload("Document fetch failed.")
+
+    def discover_field_paths(
+        self,
+        source_json: str,
+        selected_index: int,
+        include_containers: bool,
+        session=None,
+        collection_name: str = "",
+        document_id: str = "",
+        cache: bool = False,
+        refresh_token: str = "",
+    ):
+        cleaned_collection = self._clean_scalar(collection_name)
+        cleaned_document_id = self._clean_scalar(document_id)
+        refresh = _dirty_token("discover_field_paths", cleaned_collection, cleaned_document_id, selected_index, refresh_token)
+
+        document, source_payload = _coerce_document_from_payload_or_json(source_json)
+
+        if not document:
+            document, source_payload = self._load_document_from_session(
+                session=session,
+                collection_name=cleaned_collection,
+                document_id=cleaned_document_id,
+                include_containers=include_containers,
+                cache=cache,
+            )
+
+        if not isinstance(document, dict) or not document:
+            payload = {
+                "success": False,
+                "message": "No document was available for field path discovery.",
+                "data": {
+                    "collection_name": cleaned_collection,
+                    "document_id": cleaned_document_id,
+                    "source_json_present": bool(str(source_json or "").strip()),
+                    "api_payload": source_payload,
+                    "refresh": refresh,
+                    "checks": [
+                        "Connect json output from 03 Get Doc to source_json.",
+                        "Or connect a ZMongo API Session and provide collection_name + document_id.",
+                        "Confirm the document_id belongs to the selected collection.",
+                    ],
+                },
+                "error": {"msg": "missing_document"},
+                "status_code": 404,
+            }
+            return (_json_text(payload), [], "", "", "", "missing", 0, False, refresh)
+
+        rows = _discover_field_path_rows(document, include_containers=include_containers)
+        paths = [str(row.get("path") or "") for row in rows if row.get("path")]
+        selected_path, selected_value, selected_type = _selected_field_value(document, rows, selected_index)
+        selected_value_json = self._value_json(selected_value)
+
+        payload = {
+            "success": True,
+            "message": f"Discovered {len(paths)} field paths.",
+            "data": {
+                "collection_name": cleaned_collection,
+                "document_id": cleaned_document_id or str(document.get("_id") or document.get("document_id") or ""),
+                "field_paths": paths,
+                "paths": rows,
+                "field_path_rows": rows,
+                "indexed_field_paths": _indexed_field_path_rows(rows),
+                "selected_index": max(0, min(int(selected_index or 0), max(len(rows) - 1, 0))) if rows else 0,
+                "selected_field_path": selected_path,
+                "selected_value": selected_value,
+                "selected_value_json": selected_value_json,
+                "selected_value_type": selected_type,
+                "count": len(paths),
+                "include_containers": bool(include_containers),
+                "image_candidate_paths": [str(row.get("path") or "") for row in rows if row.get("is_image_candidate")],
+                "refresh": refresh,
+            },
+            "error": None,
+            "status_code": 200,
+        }
+
+        return (
+            _json_text(payload),
+            _as_comfy_list(paths),
+            _indexed_field_path_rows(rows),
+            selected_path,
+            selected_value_json,
+            selected_type,
+            len(paths),
+            True,
+            refresh,
+        )
+
+
 class ZMongoApiSaveValueNode(AlwaysDirtyMixin):
     @classmethod
     def INPUT_TYPES(cls):
@@ -1752,6 +2145,7 @@ NODE_CLASS_MAPPINGS = {
     "ZMongoApiUpdateDocNode": ZMongoApiUpdateDocNode,
     "ZMongoApiDeleteDocNode": ZMongoApiDeleteDocNode,
     "ZMongoApiGetValueNode": ZMongoApiGetValueNode,
+    "ZMongoApiDiscoverFieldPathsNode": ZMongoApiDiscoverFieldPathsNode,
     "ZMongoApiSaveValueNode": ZMongoApiSaveValueNode,
 }
 
@@ -1779,6 +2173,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ZMongoApiUpdateDocNode": "03 Update Doc",
     "ZMongoApiDeleteDocNode": "03 Delete Doc",
     "ZMongoApiGetValueNode": "03 Get Value",
+    "ZMongoApiDiscoverFieldPathsNode": "03 Discover Field Paths",
     "ZMongoApiSaveValueNode": "03 Save Value",
 }
 
