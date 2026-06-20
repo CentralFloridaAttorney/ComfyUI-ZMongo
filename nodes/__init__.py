@@ -10,6 +10,7 @@ from . import zmongo_images_nodes
 from . import gemini_api_nodes
 from . import zmongo_preset_nodes
 from . import zmongo_content_pack_v3_nodes
+from . import zmongo_content_pack_get_images_v3_nodes
 from . import zmongo_content_pack_sequence_nodes
 from . import zmongo_content_pack_audio_nodes
 from . import zmongo_text_agent_nodes
@@ -93,6 +94,11 @@ NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS = _merge_node_mappings(
         "zmongo_content_pack_v3_nodes",
         zmongo_content_pack_v3_nodes.NODE_CLASS_MAPPINGS,
         zmongo_content_pack_v3_nodes.NODE_DISPLAY_NAME_MAPPINGS,
+    ),
+    (
+        "zmongo_content_pack_get_images_v3_nodes",
+        zmongo_content_pack_get_images_v3_nodes.NODE_CLASS_MAPPINGS,
+        zmongo_content_pack_get_images_v3_nodes.NODE_DISPLAY_NAME_MAPPINGS,
     ),
     (
         "zmongo_content_pack_sequence_nodes",
